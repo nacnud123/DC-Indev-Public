@@ -17,17 +17,17 @@ DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using Ope
 
 ## Controls
 
-W A S D - Move around
-Left click - Break block
-Right click - Place block
-Scroll wheel - Change selected block
-1 - 0 - Also change selected block
-Space - Jump
-E - Toggle Inventory
-F - Toggle fly mode
-X - Toggle wireframe mode
-I - Toggle inventory
-Esc - Pause / Exit inventory
+W A S D - Move around  
+Left click - Break block  
+Right click - Place block  
+Scroll wheel - Change selected block  
+1 - 0 - Also change selected block  
+Space - Jump  
+E - Toggle Inventory  
+F - Toggle fly mode  
+X - Toggle wireframe mode  
+I - Toggle inventory  
+Esc - Pause / Exit inventory  
 
 ### Disclaimer
 
