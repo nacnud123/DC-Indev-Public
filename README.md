@@ -32,3 +32,9 @@ Esc - Pause / Exit inventory
 ### Disclaimer
 
 I still consider this project to be in active development, so expect a few bugs here and there. If you find one, please report it as an issue. Thanks!
+
+
+<img width="1885" height="967" alt="InGame1" src="https://github.com/user-attachments/assets/355db55a-c65d-4cdc-9c9a-c11838f2830c" />
+<img width="1900" height="1010" alt="InGame2" src="https://github.com/user-attachments/assets/febd5e02-9256-4668-93fe-66a94046da59" />
+<img width="1871" height="982" alt="InGame3" src="https://github.com/user-attachments/assets/37855101-b197-48bd-9ad3-ccb2733fb277" />
+<img width="1887" height="965" alt="InGame4" src="https://github.com/user-attachments/assets/2d7de010-9f04-4112-b375-5ab19cc88744" />
