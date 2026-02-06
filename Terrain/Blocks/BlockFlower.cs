@@ -1,0 +1,19 @@
+using VoxelEngine.Rendering;
+using VoxelEngine.Utils;
+
+namespace VoxelEngine.Terrain.Blocks;
+
+public class BlockFlower : Block
+{
+    public override BlockType Type => BlockType.Flower;
+    public override string Name => "Flower";
+    public override RenderingType RenderType => RenderingType.Cross;
+    public override bool IsSolid => false;
+    public override int LightOpacity => 0;
+    public override float Hardness => 2.0f;
+    public override bool SuffocatesBeneath => true;
+
+    public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(4, 1);
+    public override TextureCoords BottomTextureCoords => TopTextureCoords;
+    public override TextureCoords SideTextureCoords => TopTextureCoords;
+}
