@@ -102,7 +102,7 @@ public class MainMenuScreen
 
         ImGui.SetCursorPos(new Vector2(10, 10));
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text("Version 2.0A pre release - RAM usage may be a little high");
+        ImGui.Text("Version 5.0A");
 
 
         // Controls Text\
