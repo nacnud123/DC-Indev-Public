@@ -23,25 +23,12 @@ public class InventoryScreen
         ImGuiWindowFlags.NoBringToFrontOnFocus |
         ImGuiWindowFlags.NoFocusOnAppearing;
 
-    private static readonly BlockType[] KInventoryOrder =
-    {
-        BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.Sand, BlockType.Gravel,
-        BlockType.Wood, BlockType.Planks, BlockType.Leaves,
-        BlockType.CoalOre, BlockType.IronOre, BlockType.GoldOre, BlockType.DiamondOre,
-        BlockType.Bricks, BlockType.Glass, BlockType.Sponge,
-        BlockType.Flower, BlockType.GrassTuft, BlockType.BrownMushroom, BlockType.RedMushroom,
-        BlockType.Torch, BlockType.Glowstone,
-        BlockType.White, BlockType.Black, BlockType.Red, BlockType.Green, BlockType.Blue,
-        BlockType.DuncanBlock, BlockType.Bedrock
-    };
-
     private readonly List<Block> mSelectableBlocks;
     private readonly IntPtr mTexturePtr;
 
     public InventoryScreen(Texture blockAtlasTexture)
     {
-        mSelectableBlocks = KInventoryOrder
-            .Select(BlockRegistry.Get)
+        mSelectableBlocks = BlockRegistry.GetAll()
             .Where(b => b.ShowInInventory)
             .ToList();
         mTexturePtr = new IntPtr(blockAtlasTexture.Handle);
@@ -118,6 +105,7 @@ public class InventoryScreen
         if (clicked)
         {
             player.SelectedBlock = block.Type;
+            Game.Instance.Hotbar?.SetBlockInCurrentSlot(block.Type);
             Game.Instance.CloseInventory();
         }
 

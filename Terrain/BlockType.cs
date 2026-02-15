@@ -3,40 +3,88 @@ namespace VoxelEngine.Terrain;
 
 public enum BlockType : byte
 {
-    Air,
+    Air = 0,
+
+    // Natural / Surface
     Grass,
     Dirt,
+    Sand,
+    Gravel,
+    GrassTuft,
+    YellowFlower,
+    RedFlower,
+    BrownMushroom,
+    RedMushroom,
+    Sapling,
+    Clay,
+
+    // Stone / Underground
     Stone,
+    CobbleStone,
+    MossyCobblestone,
+    Bedrock,
+    SpiderWeb,
+
+    // Ores
+    CoalOre,
+    IronOre,
+    GoldOre,
+    DiamondOre,
+
+    // Wood / Trees
     Wood,
     Leaves,
-    Sand,
-    Glowstone,
-    Flower,
-    Torch,
+    Planks,
+    WoodSlab,
+
+    // Building
     Glass,
-    Bedrock,
+    Bricks,
+    Glowstone,
+    Sponge,
+
+    // Colored Blocks
     Black,
     Blue,
-    Bricks,
-    BrownMushroom,
-    CoalOre,
-    DiamondOre,
-    DuncanBlock,
-    GoldOre,
-    GrassTuft,
-    Gravel,
     Green,
-    IronOre,
-    Planks,
     Red,
-    RedMushroom,
-    Sponge,
-    White
+    White,
+
+    // Torches
+    Torch,
+    TorchNorth,
+    TorchSouth,
+    TorchEast,
+    TorchWest,
+
+    // Fluids
+    Water,
+
+    // Special
+    DuncanBlock,
+    
+
+    All = 255
 }
 
 public enum RenderingType : byte
 {
     Normal,
     Cross,
-    Torch
+    Torch,
+    Slab
+}
+
+public enum BlockBreakMaterial : byte
+{
+    None,
+    Dirt,
+    Grass,
+    Stone,
+    Glass,
+    Wool,
+    Sand,
+    Gravel,
+    Wooden,
+    Water
 }

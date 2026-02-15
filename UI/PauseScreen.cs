@@ -2,6 +2,7 @@
 using ImGuiNET;
 using System;
 using System.Numerics;
+using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 public class PauseScreen
@@ -61,6 +62,7 @@ public class PauseScreen
 
         if (ImGui.Button("Resume Game", new Vector2(buttonWidth, buttonHeight)))
         {
+            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
             OnResumeGame?.Invoke();
         }
 
@@ -72,6 +74,7 @@ public class PauseScreen
 
         if (ImGui.Button("Quit", new Vector2(buttonWidth, buttonHeight)))
         {
+            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
             OnPauseQuitGame?.Invoke();
         }
 

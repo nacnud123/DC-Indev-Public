@@ -1,5 +1,6 @@
-// Main world file, used to hold reference to lighting system, chunks, frustum, and stuff needed for world rendering. Also, has functions for the tick system and raycasts | DA | 2/5/26
+// Main file that manages the world. Has functions the do world ticks, rebuild dirty chunk's meshes, render entities, initial generation, and get / set blocks | DA | 2/14/26
 using OpenTK.Mathematics;
+using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain.Blocks;
@@ -20,12 +21,8 @@ public struct RaycastHit
     public static readonly RaycastHit Miss = new() { Type = RaycastHitType.None, Distance = float.MaxValue };
 }
 
-public class World
+public partial class World
 {
-    private const int RANDOM_DISPLAY_RADIUS = 16;
-    private const int RANDOM_DISPLAY_ITERATIONS = 1000;
-    private const int RANDOM_TICKS_PER_CHUNK = 3;
-
     public int SizeInChunks = 8;
 
     public static World? Current { get; private set; }
@@ -34,8 +31,9 @@ public class World
     private readonly LightingEngine mLightingEngine;
     private readonly Frustum mFrustum = new();
     private readonly List<Entity> mEntities = new();
-    private readonly Random mRand;
-    
+    private readonly Queue<(int x, int y, int z)> mBlockTickQueue = new();
+    private readonly Random mWorldRand;
+
     private int mRandomTickSeed;
 
     public TerrainGen TerrainGen;
@@ -52,8 +50,8 @@ public class World
 
         TerrainGen = new TerrainGen();
 
-        mRand = new Random();
-        mRandomTickSeed = mRand.Next();
+        mWorldRand = new Random();
+        mRandomTickSeed = mWorldRand.Next();
 
         for (int x = 0; x < SizeInChunks; x++)
         {
@@ -62,8 +60,18 @@ public class World
                 mChunks[x, z] = new Chunk(x, z, this);
             }
         }
+
+        int seed = DateTime.Now.Second;
+        for (int x = 0; x < SizeInChunks; x++)
+        {
+            for (int z = 0; z < SizeInChunks; z++)
+            {
+                TerrainGen.GenerateChunk(this, x, z, seed);
+            }
+        }
     }
 
+    // Build all the initial chunks lighting and meshes
     public void BuildAllMeshes()
     {
         for (int x = 0; x < SizeInChunks; x++)
@@ -75,6 +83,7 @@ public class World
         }
 
         mLightingEngine.PropagateAllSunlight();
+        mLightingEngine.PropagateAllBlockLight();
 
         for (int x = 0; x < SizeInChunks; x++)
         {
@@ -85,6 +94,7 @@ public class World
         }
     }
 
+    // Process lighting ticks, rebuild the mesh if dirty, and does random ticks.
     public void Update()
     {
         if (mLightingEngine.HasPendingUpdates)
@@ -94,31 +104,12 @@ public class World
         {
             for (int z = 0; z < SizeInChunks; z++)
             {
-                mChunks[x, z].RebuildMeshIfDirty();
+                if (mChunks[x, z].IsLoaded)
+                    mChunks[x, z].RebuildMeshIfDirty();
             }
         }
 
         DoRandomTick();
-    }
-
-    public void RandomDisplayUpdates(Vector3 playerPos)
-    {
-        int px = (int)playerPos.X;
-        int py = (int)playerPos.Y;
-        int pz = (int)playerPos.Z;
-
-        for (int i = 0; i < RANDOM_DISPLAY_ITERATIONS; i++)
-        {
-            int x = px + mRand.Next(-RANDOM_DISPLAY_RADIUS, RANDOM_DISPLAY_RADIUS + 1);
-            int y = py + mRand.Next(-RANDOM_DISPLAY_RADIUS, RANDOM_DISPLAY_RADIUS + 1);
-            int z = pz + mRand.Next(-RANDOM_DISPLAY_RADIUS, RANDOM_DISPLAY_RADIUS + 1);
-
-            var blockType = GetBlock(x, y, z);
-            if (blockType != BlockType.Air)
-            {
-                BlockRegistry.Get(blockType).RandomDisplayTick(x, y, z, mRand);
-            }
-        }
     }
 
     public void TickEntities()
@@ -145,34 +136,7 @@ public class World
         entity.Dispose();
     }
 
-    public RaycastHit Raycast(Vector3 origin, Vector3 direction, float maxDist = 8f)
-    {
-        var blockHit = RaycastBlocks(origin, direction, maxDist);
-        var entityHit = RaycastEntitiesInternal(origin, direction, maxDist);
-
-        return entityHit.Distance < blockHit.Distance ? entityHit : blockHit;
-    }
-
-    private RaycastHit RaycastEntitiesInternal(Vector3 origin, Vector3 direction, float maxDistance)
-    {
-        var result = RaycastHit.Miss;
-
-        foreach (var entity in mEntities)
-        {
-            if (entity.IsLookedAt(origin, direction, maxDistance, out float dist) && dist < result.Distance)
-            {
-                result = new RaycastHit
-                {
-                    Type = RaycastHitType.Entity,
-                    Distance = dist,
-                    Entity = entity
-                };
-            }
-        }
-
-        return result;
-    }
-
+    // Render all the entities
     public void RenderEntities(Matrix4 view, Matrix4 projection, Vector3 cameraPos, float renderDistance)
     {
         float renderDistSq = renderDistance * renderDistance;
@@ -191,7 +155,8 @@ public class World
 
     public static BlockType GetBlockGlobal(int x, int y, int z) => Current?.GetBlock(x, y, z) ?? BlockType.Air;
     public static void SetBlockGlobal(int x, int y, int z, BlockType type) => Current?.SetBlock(x, y, z, type);
-    public static int GetLightGlobal(int x, int y, int z) => Current?.GetLight(x, y, z) ?? 15;
+    public static int GetSkyLightGlobal(int x, int y, int z) => Current?.GetSkyLight(x, y, z) ?? 15;
+    public static int GetBlockLightGlobal(int x, int y, int z) => Current?.GetBlockLight(x, y, z) ?? 0;
 
     public Vector3 FindSpawnPosition(int x, int z)
     {
@@ -210,7 +175,7 @@ public class World
 
     public BlockType GetBlock(int worldX, int worldY, int worldZ)
     {
-        if (worldY < 0 || worldY >= Chunk.HEIGHT) 
+        if (worldY is < 0 or >= Chunk.HEIGHT)
             return BlockType.Air;
 
         int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
@@ -221,17 +186,19 @@ public class World
 
         int localX = worldX - chunkX * Chunk.WIDTH;
         int localZ = worldZ - chunkZ * Chunk.DEPTH;
-        
+
         return mChunks[chunkX, chunkZ].GetBlock(localX, worldY, localZ);
     }
 
-    public int GetLight(int worldX, int worldY, int worldZ)
+    public int GetSkyLight(int worldX, int worldY, int worldZ)
     {
-        if (worldY < 0) 
-            return 0;
-        
-        if (worldY >= Chunk.HEIGHT) 
-            return 15;
+        switch (worldY)
+        {
+            case < 0:
+                return 0;
+            case >= Chunk.HEIGHT:
+                return 15;
+        }
 
         int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
         int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
@@ -241,12 +208,12 @@ public class World
 
         int localX = worldX - chunkX * Chunk.WIDTH;
         int localZ = worldZ - chunkZ * Chunk.DEPTH;
-        return mChunks[chunkX, chunkZ].GetLight(localX, worldY, localZ);
+        return mChunks[chunkX, chunkZ].GetSkyLight(localX, worldY, localZ);
     }
 
-    public void SetLightDirect(int worldX, int worldY, int worldZ, byte level)
+    public void SetSkyLightDirect(int worldX, int worldY, int worldZ, byte level)
     {
-        if (worldY < 0 || worldY >= Chunk.HEIGHT) 
+        if (worldY is < 0 or >= Chunk.HEIGHT)
             return;
 
         int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
@@ -257,15 +224,48 @@ public class World
 
         int localX = worldX - chunkX * Chunk.WIDTH;
         int localZ = worldZ - chunkZ * Chunk.DEPTH;
-        
-        mChunks[chunkX, chunkZ].SetLightDirect(localX, worldY, localZ, level);
+
+        mChunks[chunkX, chunkZ].SetSkyLightDirect(localX, worldY, localZ, level);
+    }
+
+    public int GetBlockLight(int worldX, int worldY, int worldZ)
+    {
+        if (worldY is < 0 or >= Chunk.HEIGHT)
+            return 0;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return 0;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+        return mChunks[chunkX, chunkZ].GetBlockLight(localX, worldY, localZ);
+    }
+
+    public void SetBlockLightDirect(int worldX, int worldY, int worldZ, byte level)
+    {
+        if (worldY is < 0 or >= Chunk.HEIGHT)
+            return;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+
+        mChunks[chunkX, chunkZ].SetBlockLightDirect(localX, worldY, localZ, level);
     }
 
     public Chunk? GetChunk(int chunkX, int chunkZ)
     {
         if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
             return null;
-        
+
         return mChunks[chunkX, chunkZ];
     }
 
@@ -274,13 +274,44 @@ public class World
         int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
         int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
 
-        if (chunkX >= 0 && chunkX < SizeInChunks && chunkZ >= 0 && chunkZ < SizeInChunks)
-            mChunks[chunkX, chunkZ].MarkDirty();
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return;
+
+        mChunks[chunkX, chunkZ].MarkDirty();
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+
+        if (localX == 0 && chunkX > 0)
+            mChunks[chunkX - 1, chunkZ].MarkDirty();
+        if (localX == Chunk.WIDTH - 1 && chunkX < SizeInChunks - 1)
+            mChunks[chunkX + 1, chunkZ].MarkDirty();
+        if (localZ == 0 && chunkZ > 0)
+            mChunks[chunkX, chunkZ - 1].MarkDirty();
+        if (localZ == Chunk.DEPTH - 1 && chunkZ < SizeInChunks - 1)
+            mChunks[chunkX, chunkZ + 1].MarkDirty();
+    }
+
+    public void SetBlockDirect(int worldX, int worldY, int worldZ, BlockType type)
+    {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT)
+            return;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+
+        mChunks[chunkX, chunkZ].SetBlock(localX, worldY, localZ, type);
     }
 
     public void SetBlock(int worldX, int worldY, int worldZ, BlockType type)
     {
-        if (worldY < 0 || worldY >= Chunk.HEIGHT) 
+        if (worldY < 0 || worldY >= Chunk.HEIGHT)
             return;
 
         int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
@@ -295,10 +326,26 @@ public class World
         var oldBlock = mChunks[chunkX, chunkZ].GetBlock(localX, worldY, localZ);
         mChunks[chunkX, chunkZ].SetBlock(localX, worldY, localZ, type);
 
-        if (oldBlock != BlockType.Air && type == BlockType.Air)
+        if (oldBlock != BlockType.Air)
+        {
             mLightingEngine.OnBlockRemoved(worldX, worldY, worldZ, oldBlock);
-        else if (type != BlockType.Air)
+            if (type == BlockType.Air)
+                BlockRegistry.Get(oldBlock).OnRemoved(this, worldX, worldY, worldZ);
+        }
+
+        if (type != BlockType.Air)
+        {
             mLightingEngine.OnBlockPlaced(worldX, worldY, worldZ, type);
+        }
+
+        if (type != BlockType.Air)
+            BlockRegistry.Get(type).OnPlaced(this, worldX, worldY, worldZ);
+
+        if (BlockRegistry.TicksRandomly(type))
+            ScheduleBlockTick(worldX, worldY, worldZ);
+
+        if (type == BlockType.Air)
+            ScheduleNeighborTicks(worldX, worldY, worldZ);
 
         if (localX == 0 && chunkX > 0)
             mChunks[chunkX - 1, chunkZ].MarkDirty();
@@ -308,108 +355,64 @@ public class World
             mChunks[chunkX, chunkZ - 1].MarkDirty();
         if (localZ == Chunk.DEPTH - 1 && chunkZ < SizeInChunks - 1)
             mChunks[chunkX, chunkZ + 1].MarkDirty();
-    }
 
-    private RaycastHit RaycastBlocks(Vector3 origin, Vector3 direction, float maxDist)
-    {
-        Vector3 dir = direction.Normalized();
-        Vector3i current = new((int)MathF.Floor(origin.X), (int)MathF.Floor(origin.Y), (int)MathF.Floor(origin.Z));
-        Vector3i step = new(dir.X >= 0 ? 1 : -1, dir.Y >= 0 ? 1 : -1, dir.Z >= 0 ? 1 : -1);
-
-        Vector3 tDelta = new(
-            dir.X != 0 ? MathF.Abs(1f / dir.X) : float.MaxValue,
-            dir.Y != 0 ? MathF.Abs(1f / dir.Y) : float.MaxValue,
-            dir.Z != 0 ? MathF.Abs(1f / dir.Z) : float.MaxValue
-        );
-
-        Vector3 tMax = new(
-            dir.X != 0 ? (dir.X > 0 ? current.X + 1 - origin.X : origin.X - current.X) * tDelta.X : float.MaxValue,
-            dir.Y != 0 ? (dir.Y > 0 ? current.Y + 1 - origin.Y : origin.Y - current.Y) * tDelta.Y : float.MaxValue,
-            dir.Z != 0 ? (dir.Z > 0 ? current.Z + 1 - origin.Z : origin.Z - current.Z) * tDelta.Z : float.MaxValue
-        );
-
-        float dist = 0;
-        Vector3i? prev = null;
-
-        while (dist < maxDist)
+        if (oldBlock != BlockType.Air && type == BlockType.Air)
         {
-            var block = GetBlock(current.X, current.Y, current.Z);
-            if (block != BlockType.Air)
+            var above = GetBlock(worldX, worldY + 1, worldZ);
+            if (above != BlockType.Air && BlockRegistry.NeedsSupportBelow(above))
             {
-                var pos = new Vector3(current.X, current.Y, current.Z);
-                var min = BlockRegistry.GetBoundsMin(block) + pos;
-                var max = BlockRegistry.GetBoundsMax(block) + pos;
-
-                if (RayIntersectsAabb(origin, dir, min, max, out float hitDist) && hitDist <= maxDist)
-                {
-                    return new RaycastHit
-                    {
-                        Type = RaycastHitType.Block,
-                        Distance = hitDist,
-                        BlockPos = current,
-                        PlacePos = prev,
-                        BlockType = block
-                    };
-                }
+                SetBlock(worldX, worldY + 1, worldZ, BlockType.Air);
+                Game.Instance?.ParticleSystem?.SpawnBlockBreakParticles(
+                    new Vector3(worldX, worldY + 1, worldZ), above);
             }
 
-            prev = current;
-
-            if (tMax.X < tMax.Y && tMax.X < tMax.Z)
-            {
-                current.X += step.X;
-                dist = tMax.X;
-                tMax.X += tDelta.X;
-            }
-            else if (tMax.Y < tMax.Z)
-            {
-                current.Y += step.Y;
-                dist = tMax.Y;
-                tMax.Y += tDelta.Y;
-            }
-            else
-            {
-                current.Z += step.Z;
-                dist = tMax.Z;
-                tMax.Z += tDelta.Z;
-            }
+            BreakUnsupportedWallTorch(worldX - 1, worldY, worldZ, BlockType.TorchEast);
+            BreakUnsupportedWallTorch(worldX + 1, worldY, worldZ, BlockType.TorchWest);
+            BreakUnsupportedWallTorch(worldX, worldY, worldZ - 1, BlockType.TorchSouth);
+            BreakUnsupportedWallTorch(worldX, worldY, worldZ + 1, BlockType.TorchNorth);
         }
-
-        return RaycastHit.Miss;
     }
 
-    private static bool RayIntersectsAabb(Vector3 origin, Vector3 dir, Vector3 min, Vector3 max, out float hitDist)
+    private void BreakUnsupportedWallTorch(int x, int y, int z, BlockType expectedTorch)
     {
-        float tmin = 0, tmax = float.MaxValue;
-        hitDist = float.MaxValue;
-
-        if (!SlabIntersect(origin.X, dir.X, min.X, max.X, ref tmin, ref tmax)) return false;
-        if (!SlabIntersect(origin.Y, dir.Y, min.Y, max.Y, ref tmin, ref tmax)) return false;
-        if (!SlabIntersect(origin.Z, dir.Z, min.Z, max.Z, ref tmin, ref tmax)) return false;
-
-        hitDist = tmin;
-        return true;
+        var block = GetBlock(x, y, z);
+        if (block == expectedTorch)
+        {
+            SetBlock(x, y, z, BlockType.Air);
+            Game.Instance?.ParticleSystem?.SpawnBlockBreakParticles(new Vector3(x, y, z), block);
+        }
     }
 
-    private static bool SlabIntersect(float origin, float dir, float min, float max, ref float tmin, ref float tmax)
+    public void GrowTree(int x, int y, int z)
     {
-        if (MathF.Abs(dir) < 1e-6f)
-            return origin >= min && origin <= max;
+        const int trunkHeight = 6;
+        const int leavesRadius = 2;
+        const int leavesMinY = 4;
+        const int leavesMaxY = 8;
 
-        float t1 = (min - origin) / dir;
-        float t2 = (max - origin) / dir;
+        for (int lx = -leavesRadius; lx <= leavesRadius; lx++)
+            for (int ly = leavesMinY; ly <= leavesMaxY; ly++)
+                for (int lz = -leavesRadius; lz <= leavesRadius; lz++)
+                    if (GetBlock(x + lx, y + ly, z + lz) == BlockType.Air)
+                        SetBlock(x + lx, y + ly, z + lz, BlockType.Leaves);
 
-        if (t1 > t2) (t1, t2) = (t2, t1);
-
-        tmin = MathF.Max(tmin, t1);
-        tmax = MathF.Min(tmax, t2);
-
-        return tmin <= tmax;
+        for (int ty = 0; ty < trunkHeight; ty++)
+            SetBlock(x, y + ty, z, BlockType.Wood);
     }
 
     public void Render(Camera camera)
     {
         mFrustum.Update(camera.GetViewMatrix() * camera.GetProjectionMatrix());
+        RenderChunks(camera, static chunk => chunk.Render());
+    }
+
+    public void RenderTransparent(Camera camera)
+    {
+        RenderChunks(camera, static chunk => chunk.RenderTransparent());
+    }
+
+    private void RenderChunks(Camera camera, Action<Chunk> renderAction)
+    {
         float renderDistSq = camera.RenderDistance * camera.RenderDistance;
 
         for (int x = 0; x < SizeInChunks; x++)
@@ -424,42 +427,18 @@ public class World
                 float dz = cz - camera.Position.Z;
 
                 if (dx * dx + dz * dz > renderDistSq)
+                {
+                    chunk.IsLoaded = false;
                     continue;
+                }
+
+                chunk.IsLoaded = true;
 
                 Vector3 min = new(chunk.ChunkX * Chunk.WIDTH, 0, chunk.ChunkZ * Chunk.DEPTH);
                 Vector3 max = new(min.X + Chunk.WIDTH, Chunk.HEIGHT, min.Z + Chunk.DEPTH);
 
                 if (mFrustum.IsBoxVisible(min, max))
-                    chunk.Render();
-            }
-        }
-    }
-    
-    private void DoRandomTick()
-    {
-        for (int cx = 0; cx < SizeInChunks; cx++)
-        {
-            for (int cz = 0; cz < SizeInChunks; cz++)
-            {
-                var chunk = mChunks[cx, cz];
-
-                for (int i = 0; i < RANDOM_TICKS_PER_CHUNK; i++)
-                {
-                    mRandomTickSeed = mRandomTickSeed * 3 + 1013904223;
-
-                    int rX = (mRandomTickSeed >> 2) & (Chunk.WIDTH - 1);
-                    int rZ = (mRandomTickSeed >> 6) & (Chunk.DEPTH - 1);
-                    int rY = (mRandomTickSeed >> 10) & (Chunk.HEIGHT - 1);
-
-                    BlockType blockType = chunk.GetBlock(rX, rY, rZ);
-
-                    if (blockType != BlockType.Air && BlockRegistry.TicksRandomly(blockType))
-                    {
-                        int worldX = cx * Chunk.WIDTH + rX;
-                        int worldZ = cz * Chunk.DEPTH + rZ;
-                        BlockRegistry.Get(blockType).RandomTick(this, worldX, rY, worldZ, mRand);
-                    }
-                }
+                    renderAction(chunk);
             }
         }
     }

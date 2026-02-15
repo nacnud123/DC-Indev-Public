@@ -1,4 +1,4 @@
-// Main class physics file, does physics and collision stuff that I don't really understand | DA | 2/5/26
+// Main class physics file, does physics and collision stuff | DA | 2/5/26
 using OpenTK.Mathematics;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
@@ -6,23 +6,54 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.GameEntity;
 public static class Physics
 {
+    // Consts
     public const float GRAVITY = 32f;
     public const float TERMINAL_VEL = 78.4f;
     public const float JUMP_VEL = 9f;
     private const float COLLISION_EPSILON = 0.0001f;
 
-    public static Vector3 MoveWithCollision(World world, Aabb box, Vector3 velocity)
+    public const float STEP_HEIGHT = 0.6f;
+    
+    // Resolves collisions using a swept axis resolution
+    public static Vector3 MoveWithCollision(World world, Aabb box, Vector3 velocity, float stepHeight = 0f)
     {
-        var blocks = GetCollidingBlocks(world, box.Expand(velocity));
+        // Build the search area
+        // Take the entity AABB, expand it by the entity's velocity to get a bounding box that covers the entire movement path.
+        var searchBox = box.Expand(velocity);
+        if (stepHeight > 0)
+            searchBox = searchBox.Expand(new Vector3(0, stepHeight, 0));
+        
+        // Scans every block position in the search area. If a block is solid, create an AABB using block's min and max bounds.
+        var blocks = GetCollidingBlocks(world, searchBox);
 
+        // Done first because vertical collisions are the most important to gravity
         velocity.Y = ResolveAxis(box, blocks, velocity.Y, 1);
         box = box.Offset(new Vector3(0, velocity.Y, 0));
 
-        velocity.X = ResolveAxis(box, blocks, velocity.X, 0);
-        box = box.Offset(new Vector3(velocity.X, 0, 0));
+        // Then try moving on the X and Z
+        float normalX = ResolveAxis(box, blocks, velocity.X, 0);
+        var boxAfterX = box.Offset(new Vector3(normalX, 0, 0));
+        float normalZ = ResolveAxis(boxAfterX, blocks, velocity.Z, 2);
 
-        velocity.Z = ResolveAxis(box, blocks, velocity.Z, 2);
+        // If X or Z movement was blocked see if you can step up a block
+        if (stepHeight > 0 && (MathF.Abs(normalX) < MathF.Abs(velocity.X) - COLLISION_EPSILON || MathF.Abs(normalZ) < MathF.Abs(velocity.Z) - COLLISION_EPSILON))
+        {
+            float up = ResolveAxis(box, blocks, stepHeight, 1);
+            var steppedBox = box.Offset(new Vector3(0, up, 0));
 
+            float stepX = ResolveAxis(steppedBox, blocks, velocity.X, 0);
+            steppedBox = steppedBox.Offset(new Vector3(stepX, 0, 0));
+            float stepZ = ResolveAxis(steppedBox, blocks, velocity.Z, 2);
+            steppedBox = steppedBox.Offset(new Vector3(0, 0, stepZ));
+
+            float down = ResolveAxis(steppedBox, blocks, -up, 1);
+
+            if (stepX * stepX + stepZ * stepZ > normalX * normalX + normalZ * normalZ)
+                return new Vector3(stepX, velocity.Y + up + down, stepZ);
+        }
+
+        velocity.X = normalX;
+        velocity.Z = normalZ;
         return velocity;
     }
 
@@ -39,6 +70,7 @@ public static class Physics
         return false;
     }
 
+    // For each block in the collision list, check if the entity overlaps the block on the other two axes, if so clamp the velocity. Subtract COLLISION_EPSILON to prevent resting exactly on the surface
     private static float ResolveAxis(Aabb box, List<Aabb> blocks, float vel, int axis)
     {
         foreach (var block in blocks)
@@ -82,8 +114,13 @@ public static class Physics
             {
                 for (int z = minZ; z <= maxZ; z++)
                 {
-                    if (BlockRegistry.IsSolid(world.GetBlock(x, y, z)))
-                        result.Add(Aabb.BlockAabb(x, y, z));
+                    var bt = world.GetBlock(x, y, z);
+                    if (BlockRegistry.IsSolid(bt))
+                    {
+                        var bMin = BlockRegistry.GetBoundsMin(bt);
+                        var bMax = BlockRegistry.GetBoundsMax(bt);
+                        result.Add(new Aabb(new Vector3(x, y, z) + bMin, new Vector3(x, y, z) + bMax));
+                    }
                 }
             }
         }

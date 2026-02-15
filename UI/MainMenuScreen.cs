@@ -2,6 +2,7 @@
 using ImGuiNET;
 using System;
 using System.Numerics;
+using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 public class MainMenuScreen
@@ -10,9 +11,44 @@ public class MainMenuScreen
     private const int MAX_WORLD_SIZE = 4096;
 
     private int mWorldSize = 8;
+    private int mVolSFX = 85;
+    private int mVolMusic = 25;
 
     public event Action OnTitleQuitGame;
-    public event Action<int> OnStartGame;
+    public event Action<int, int, int> OnStartGame;
+
+    private List<string> SplashText = new()
+    {
+        "Try not to crash!",
+        "Pigs scare me",
+        "Don't forget to eat your vegetables",
+        "Hi Dillon",
+        "Also try DuncanCraft 2000!",
+        "Microsoft don't sue",
+        "Minecraft but worse",
+        "New and original game",
+        "Spong",
+        "Hire me",
+        "This is a splash text",
+        "I hope you like it",
+        "Star the GitHub repo",
+        "Also try Project Soup!",
+        "DA_RL on steam soon",
+        "Thanks ARoachIFoundOnMyPillow for textures!",
+        "Thanks TheQuantumBlaze for textures!",
+        "Will it ever leave Alpha? No",
+        "Rip other DuncanCraft projects",
+        "All the animals move at the same time",
+        "It's a feature not a bug",
+        "I have no idea what I'm doing"
+    };
+
+    string currentSplash = "";
+
+    public MainMenuScreen()
+    {
+        currentSplash = SplashText[Game.Instance.GameRandom.Next(0, SplashText.Count)];
+    }
 
     public void Render()
     {
@@ -53,12 +89,20 @@ public class MainMenuScreen
 
         ImGui.PopFont();
 
+        var spashText = currentSplash;
+
+        var splashSize = ImGui.CalcTextSize(spashText);
+        ImGui.SetCursorPos(new Vector2(centerX - splashSize.X * 0.5f, centerY - 90f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
+        ImGui.Text(spashText);
+        ImGui.PopStyleColor();
+
         // Version text
         ImGui.PopStyleColor();
 
         ImGui.SetCursorPos(new Vector2(10, 10));
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text("Version 1.0A - RAM usage may be a little high");
+        ImGui.Text("Version 2.0A pre release - RAM usage may be a little high");
 
 
         // Controls Text\
@@ -91,11 +135,11 @@ public class MainMenuScreen
         ImGui.SetWindowFontScale(1.0f); // Set back to default
 
         // World Size
-        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 80f));
+        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 70f));
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
         ImGui.Text("World Size:");
 
-        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 60f));
+        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 50f));
         ImGui.SetNextItemWidth(400f);
 
         var previous = mWorldSize;
@@ -119,6 +163,24 @@ public class MainMenuScreen
         }
         ImGui.SameLine();
         ImGui.TextDisabled("(snaps to even)");
+
+        // Volume Controls (same line)
+        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 15f));
+        ImGui.Text("SFX:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(120f);
+        
+        if (ImGui.InputInt("##sfxvolume", ref mVolSFX))
+            mVolSFX = Math.Clamp(mVolSFX, 0, 100);
+        
+        ImGui.SameLine();
+        ImGui.Text("Music:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(120f);
+        
+        if (ImGui.InputInt("##musicvolume", ref mVolMusic))
+            mVolMusic = Math.Clamp(mVolMusic, 0, 100);
+
         ImGui.PopStyleColor();
 
         // Buttons
@@ -134,7 +196,8 @@ public class MainMenuScreen
 
         if (ImGui.Button("Start Game", new Vector2(buttonWidth, buttonHeight)))
         {
-            OnStartGame?.Invoke(mWorldSize);
+            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", mVolSFX);
+            OnStartGame?.Invoke(mWorldSize, mVolSFX, mVolMusic);
         }
 
         // Quit button
@@ -145,6 +208,7 @@ public class MainMenuScreen
 
         if (ImGui.Button("Quit", new Vector2(buttonWidth, buttonHeight)))
         {
+            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", mVolSFX);
             OnTitleQuitGame?.Invoke();
         }
 

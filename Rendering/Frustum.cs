@@ -1,4 +1,4 @@
-// Main frustrum culling file | DA | 2/5/26
+// Main Frustum culling file | DA | 2/5/26
 using OpenTK.Mathematics;
 
 namespace VoxelEngine.Rendering;
@@ -26,6 +26,7 @@ public class Frustum
         }
     }
 
+    // Is the cube visible in the Frustum box, if it is render it
     public bool IsBoxVisible(Vector3 min, Vector3 max)
     {
         for (int i = 0; i < PLANE_COUNT; i++)

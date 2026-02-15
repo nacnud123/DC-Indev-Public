@@ -1,4 +1,5 @@
 // Main class for particle system, holds reference to particle rendering and movement | DA | 2/5/26
+// Both smoke and regular particles use instance rendering, making there is one draw call that renders all particles of the type.
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using System.Runtime.InteropServices;
@@ -27,6 +28,7 @@ public class ParticleSystem : IDisposable
     private readonly int mSmokeInstanceVbo;
     private readonly Shader mSmokeShader;
 
+    // Vertices for the particle, it's a flat square
     private static readonly float[] QuadVertices = {
         -0.5f, -0.5f, 0f,  0f, 0f,
          0.5f, -0.5f, 0f,  1f, 0f,
@@ -98,6 +100,7 @@ public class ParticleSystem : IDisposable
         public float Alpha;
     }
 
+    // Init, load shader, set up GL stuff
     public ParticleSystem()
     {
         mShader = new Shader( File.ReadAllText("Shaders/ParticleVert.glsl"), File.ReadAllText("Shaders/ParticleFrag.glsl"));
@@ -146,22 +149,25 @@ public class ParticleSystem : IDisposable
         GL.BindVertexArray(0);
     }
 
+    // Set up the regular particle instance attributes. GL stuff. Matrix4 (position/scale) + Vector4 (UV region)
     private void SetupInstanceAttributes()
     {
         int stride = Marshal.SizeOf<InstanceData>();
 
+        // Matrix4
         for (int i = 0; i < 4; i++)
         {
             GL.VertexAttribPointer(2 + i, 4, VertexAttribPointerType.Float, false, stride, i * 16);
             GL.EnableVertexAttribArray(2 + i);
             GL.VertexAttribDivisor(2 + i, 1);
         }
-
+        // Vector4
         GL.VertexAttribPointer(6, 4, VertexAttribPointerType.Float, false, stride, 64);
         GL.EnableVertexAttribArray(6);
         GL.VertexAttribDivisor(6, 1);
     }
 
+    // Set up the smoke particle instance attributes. GL stuff. Matrix4 (position/scale) + float (alpha)
     private void SetupSmokeInstanceAttributes()
     {
         int stride = Marshal.SizeOf<SmokeInstanceData>();
@@ -180,6 +186,7 @@ public class ParticleSystem : IDisposable
         GL.VertexAttribDivisor(6, 1);
     }
 
+    // Spawn new block breaking particles at blockPos, uses BlockType to get particle textures
     public void SpawnBlockBreakParticles(Vector3 blockPos, BlockType type)
     {
         var blockUv = BlockRegistry.GetParticleTexture(type);
@@ -202,6 +209,7 @@ public class ParticleSystem : IDisposable
         }
     }
 
+    // Spawn new smoke particles at position. No texture because smoke particles are black.
     public void SpawnSmokeParticle(Vector3 position)
     {
         float lifetime = RandomRange(1.0f, 2.0f);
@@ -216,20 +224,29 @@ public class ParticleSystem : IDisposable
         });
     }
 
+    // Update the particles, their gravity, position, and velocity. Also check to see if they collide with a block, if they do, stop moving them.
     public void Update(float deltaTime, World world)
     {
         for (int i = mParticles.Count - 1; i >= 0; i--)
         {
             var p = mParticles[i];
+            
+            bool inWater = world.GetBlock((int)MathF.Floor(p.Pos.X), (int)MathF.Floor(p.Pos.Y), (int)MathF.Floor(p.Pos.Z)) == BlockType.Water;
+            float gravity = inWater ? p.Gravity * 0.15f : p.Gravity;
 
-            p.Vel.Y -= p.Gravity * deltaTime;
+            p.Vel.Y -= gravity * deltaTime;
+
+            if (inWater)
+                p.Vel *= MathF.Pow(0.6f, deltaTime * 20f);
+
             var newPos = p.Pos + p.Vel * deltaTime;
 
             int bx = (int)MathF.Floor(newPos.X);
             int by = (int)MathF.Floor(newPos.Y);
             int bz = (int)MathF.Floor(newPos.Z);
+            var blockAtNew = world.GetBlock(bx, by, bz);
 
-            if (world.GetBlock(bx, by, bz) != BlockType.Air)
+            if (blockAtNew != BlockType.Air && blockAtNew != BlockType.Water)
                 p.Vel = Vector3.Zero;
             else
                 p.Pos = newPos;
@@ -243,6 +260,7 @@ public class ParticleSystem : IDisposable
         }
     }
 
+    // Update smoke particles, move them up and make them more transparent as they move up.
     public void UpdateSmoke(float deltaTime, World world)
     {
         for (int i = mSmokeParticles.Count - 1; i >= 0; i--)
@@ -260,6 +278,7 @@ public class ParticleSystem : IDisposable
         }
     }
 
+    // Actually render the particles.
     public void Render(Matrix4 view, Matrix4 projection, Texture worldTexture)
     {
         if (mParticles.Count == 0)
@@ -297,6 +316,7 @@ public class ParticleSystem : IDisposable
         GL.Disable(EnableCap.Blend);
     }
 
+    // Render the smoke particles
     public void RenderSmoke(Matrix4 view, Matrix4 projection)
     {
         if (mSmokeParticles.Count == 0)
@@ -331,6 +351,7 @@ public class ParticleSystem : IDisposable
         GL.Disable(EnableCap.Blend);
     }
 
+    // Helper function to get a random float between min and max
     private float RandomRange(float min, float max) => (float)mRandom.NextDouble() * (max - min) + min;
 
     public void Dispose()

@@ -1,29 +1,40 @@
-// Main entity class, holds reference to entity model, position, and velocity. Along with other code related to Entities | DA | 2/5/26
+// Main entity class, holds reference to entity model, position, and velocity. Along with other code related to Entities | DA | 2/5/26 - 2/14/26
+// Updated with lighting, now entities will become darker or lighter depending on the lighting. Also, added functions to draw certain body parts. Finally, added in audio integration.
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity.AI;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
+using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.GameEntity;
 
 public class Entity
 {
-    private static Shader? _shader;
+    protected static Shader? _shader;
     private static bool _shaderInitialized;
+
+    public static Vector3 LightDir = new(-0.5f, -1f, -0.3f);
+    public static float AmbientStrength = 0.4f;
+    public static float SunlightLevel = 1f;
 
     public virtual int Health { get; set; } = 100;
     public virtual float Width { get; set; } = 0.6f;
     public virtual float Height { get; set; } = 1.8f;
     public virtual float EyeHeight { get; set; } = 1.62f;
     public virtual float WalkSpeed { get; set; } = 4.317f;
+    public virtual float SlowWalkSpeed { get; set; } = 2.1585f;
     public virtual float Scale { get; set; } = 1f;
     public virtual float JumpForce { get; set; }
     public float Yaw { get; set; }
     public bool IsOnGround { get; protected set; }
     public bool IsAlive { get; set; } = true;
-    
+    private float hitFlashTimer = 0;
+    const float HIT_FLASH_DURATION = 0.3f;
+    private float mStepTimer;
+    private const float STEP_INTERVAL = 0.5f;
+
     protected EntityModel? Model { get; set; }
 
     private Vector3 mPos;
@@ -72,21 +83,73 @@ public class Entity
         {
             IsOnGround = Physics.IsOnGround(world, GetBoundingBox());
         }
+
+        if(hitFlashTimer > 0)
+            hitFlashTimer -= dt;
+
+        // Footstep sounds
+        float hSpeed = MathF.Sqrt(actual.X * actual.X + actual.Z * actual.Z) / dt;
+        if (IsOnGround && hSpeed > 0.1f)
+        {
+
+            
+            mStepTimer -= dt;
+            if (mStepTimer <= 0f)
+            {
+                mStepTimer = STEP_INTERVAL;
+                var bx = (int)MathF.Floor(mPos.X);
+                var by = (int)MathF.Floor(mPos.Y - 0.05f);
+                var bz = (int)MathF.Floor(mPos.Z);
+                var mat = BlockRegistry.GetBlockBreakMaterial(world.GetBlock(bx, by, bz));
+
+                int volume = Proximity((Game.Instance.GetPlayer.Position - this.Position).Length ,20f, Game.Instance.AudioManager.SfxVol);
+                
+                Game.Instance.AudioManager.PlayBlockContactSound(mat, volume);
+            }
+        }
+        else
+        {
+            mStepTimer = 0;
+        }
     }
 
-    public virtual void Render(Matrix4 view, Matrix4 projection)
+    public void Render(Matrix4 view, Matrix4 projection)
     {
-        if (!IsAlive || Model == null) 
+        if (!IsAlive)
             return;
 
-        Matrix4 model = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) * Matrix4.CreateTranslation(Position);
-        Matrix4 mvp = model * view * projection;
+        int bx = (int)MathF.Floor(mPos.X);
+        int by = (int)MathF.Floor(mPos.Y + Height * 0.5f);
+        int bz = (int)MathF.Floor(mPos.Z);
+        float skyLight = World.GetSkyLightGlobal(bx, by, bz) / (float)Terrain.Chunk.MAX_LIGHT;
+        float blockLight = World.GetBlockLightGlobal(bx, by, bz) / (float)Terrain.Chunk.MAX_LIGHT;
 
         _shader?.Use();
+        _shader?.SetVector3("lightDir", LightDir);
+        _shader?.SetFloat("ambientStrength", AmbientStrength);
+        _shader?.SetFloat("uHitFlash", GetFlashIntensity());
+        _shader?.SetFloat("sunlightLevel", SunlightLevel);
+        _shader?.SetFloat("skyLight", skyLight);
+        _shader?.SetFloat("blockLight", blockLight);
+
+        DrawModel(view, projection);
+    }
+
+    protected virtual void DrawModel(Matrix4 view, Matrix4 projection)
+    {
+        if (Model == null)
+            return;
+
+        Matrix4 mvp = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) * Matrix4.CreateTranslation(Position) * view * projection;
+        DrawPart(Model, mvp);
+    }
+
+    protected static void DrawPart(EntityModel model, Matrix4 mvp)
+    {
         _shader?.SetMatrix4("mvp", mvp);
-        Model.Texture.Use(TextureUnit.Texture0);
-        GL.BindVertexArray(Model.Vao);
-        GL.DrawArrays(PrimitiveType.Triangles, 0, Model.VertexCount);
+        model.Texture.Use(TextureUnit.Texture0);
+        GL.BindVertexArray(model.Vao);
+        GL.DrawArrays(PrimitiveType.Triangles, 0, model.VertexCount);
     }
 
     public virtual void TakeDamage(int amount)
@@ -94,11 +157,21 @@ public class Entity
         Health -= amount;
         CurrentAI?.OnHurt();
 
+        hitFlashTimer = HIT_FLASH_DURATION;
+
         if (Health <= 0)
             IsAlive = false;
     }
 
     public virtual void Dispose() { }
+    
+    public int Proximity(float d, float maxDistance, int maxVolume) =>
+        (int)(MathF.Pow(Math.Clamp(1f - d / maxDistance, 0f, 1f), 2f) * maxVolume);
+
+    public float GetFlashIntensity()
+    {
+        return Math.Clamp(hitFlashTimer / HIT_FLASH_DURATION, 0, 1);
+    }
 
     public static void DisposeShader()
     {

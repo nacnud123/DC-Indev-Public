@@ -8,6 +8,7 @@ public class TickSystem
 
     private float mAccumulator;
 
+    // Adds each frame's delta time to accumulator, when it goes above TICK_DURATION it returns how many ticks should be processed. Capped at 10 tps
     public int Accumulate(float deltaTime)
     {
         mAccumulator += deltaTime;

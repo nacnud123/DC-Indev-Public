@@ -7,3 +7,5 @@ obj/
 Building/
 /.idea
 /Properties
+Block Art/
+*.xcf

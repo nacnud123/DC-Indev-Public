@@ -12,54 +12,91 @@ namespace VoxelEngine.GameEntity.AI.Pathfinding;
 /// </summary>
 public class AStarPathfinder
 {
-    private readonly Dictionary<Vector3i, PathNode> mNodeCache = new();
-    private readonly HashSet<PathNode> mOpenList = new();
-    private readonly HashSet<PathNode> mClosedList = new();
+    private const int MAX_ITERATIONS = 200;
 
-    private PathNode? mCurrentNode;
+    private readonly Dictionary<Vector3i, PathNode> mNodeCache = new();
+    private readonly HashSet<Vector3i> mClosedSet = new();
+    private readonly PriorityQueue<PathNode, int> mOpenQueue = new();
+    private readonly HashSet<Vector3i> mOpenSet = new();
+    private readonly List<PathNode> mNeighbourBuffer = new(6);
+
+    private static readonly int[] DX = { -1, 1, 0, 0 };
+    private static readonly int[] DZ = { 0, 0, -1, 1 };
 
     /// <summary>
     /// Finds the shortest path between two positions in the world.
     /// </summary>
-    /// <param name="world">The world to pathfind in</param>
-    /// <param name="start">Start position (block coordinates)</param>
-    /// <param name="goal">Goal position (block coordinates)</param>
-    /// <returns>Stack of positions representing the path, or null if no path found</returns>
     public Stack<Vector3i>? FindPath(World world, Vector3i start, Vector3i goal)
     {
-        mCurrentNode = GetOrCreateNode(start);
-        mOpenList.Clear();
-        mClosedList.Clear();
-        mOpenList.Add(mCurrentNode);
+        mNodeCache.Clear();
+        mClosedSet.Clear();
+        mOpenQueue.Clear();
+        mOpenSet.Clear();
 
-        Stack<Vector3i>? path = null;
+        var startNode = GetOrCreateNode(start);
+        startNode.H = CalculateHeuristic(start, goal);
+        startNode.F = startNode.H;
+        mOpenQueue.Enqueue(startNode, startNode.F);
+        mOpenSet.Add(start);
 
-        while (mOpenList.Count > 0 && path == null)
+        int iterations = 0;
+
+        while (mOpenSet.Count > 0 && iterations < MAX_ITERATIONS)
         {
-            List<PathNode> neighbours = FindNeighbours(world, mCurrentNode.Position, start);
-            ExamineNeighbours(neighbours, mCurrentNode, goal);
-            UpdateCurrentNode();
-            path = GeneratePath(mCurrentNode, start, goal);
+            iterations++;
+
+            var current = mOpenQueue.Dequeue();
+            mOpenSet.Remove(current.Position);
+
+            if (current.Position == goal)
+                return BuildPath(current, start);
+
+            mClosedSet.Add(current.Position);
+
+            FindNeighbours(world, current.Position, start);
+
+            foreach (var neighbour in mNeighbourBuffer)
+            {
+                if (mClosedSet.Contains(neighbour.Position))
+                    continue;
+
+                int tentativeG = current.G + CalculateGScore(neighbour.Position, current.Position);
+
+                if (mOpenSet.Contains(neighbour.Position))
+                {
+                    if (tentativeG < neighbour.G)
+                    {
+                        neighbour.Parent = current;
+                        neighbour.G = tentativeG;
+                        neighbour.F = neighbour.G + neighbour.H;
+                        // Re-enqueue with updated priority (old entry becomes stale)
+                        mOpenQueue.Enqueue(neighbour, neighbour.F);
+                    }
+                }
+                else
+                {
+                    neighbour.Parent = current;
+                    neighbour.G = tentativeG;
+                    neighbour.H = CalculateHeuristic(neighbour.Position, goal);
+                    neighbour.F = neighbour.G + neighbour.H;
+                    mOpenQueue.Enqueue(neighbour, neighbour.F);
+                    mOpenSet.Add(neighbour.Position);
+                }
+            }
         }
 
-        return path;
+        return null;
     }
 
     /// <summary>
     /// Computes the next movement direction to reach the goal.
     /// </summary>
-    /// <param name="world">The world to pathfind in</param>
-    /// <param name="start">Start position (block coordinates)</param>
-    /// <param name="goal">Goal position (block coordinates)</param>
-    /// <returns>Direction vector to move, or zero if no path</returns>
     public Vector3 ComputeDirection(World world, Vector3i start, Vector3i goal)
     {
         var path = FindPath(world, start, goal);
 
         if (path == null || path.Count == 0)
-        {
             return Vector3.Zero;
-        }
 
         Vector3i nextPos = path.Peek();
         return new Vector3(
@@ -71,22 +108,18 @@ public class AStarPathfinder
 
     /// <summary>
     /// Finds valid neighbouring nodes for pathfinding.
-    /// Only considers horizontal movement (X and Z) for ground-based entities.
+    /// Writes results into mNeighbourBuffer to avoid allocation.
     /// </summary>
-    private List<PathNode> FindNeighbours(World world, Vector3i parentPosition, Vector3i start)
+    private void FindNeighbours(World world, Vector3i parentPosition, Vector3i start)
     {
-        List<PathNode> neighbours = new();
-
-        // Check 8 horizontal directions (no diagonal for now, just cardinal)
-        int[] dx = { -1, 1, 0, 0 };
-        int[] dz = { 0, 0, -1, 1 };
+        mNeighbourBuffer.Clear();
 
         for (int i = 0; i < 4; i++)
         {
             Vector3i neighbourPos = new(
-                parentPosition.X + dx[i],
+                parentPosition.X + DX[i],
                 parentPosition.Y,
-                parentPosition.Z + dz[i]
+                parentPosition.Z + DZ[i]
             );
 
             if (neighbourPos == start)
@@ -94,36 +127,27 @@ public class AStarPathfinder
 
             if (IsWalkable(world, neighbourPos))
             {
-                PathNode neighbour = GetOrCreateNode(neighbourPos);
-                neighbours.Add(neighbour);
+                mNeighbourBuffer.Add(GetOrCreateNode(neighbourPos));
             }
             else
             {
                 // Check if we can step up one block
                 Vector3i stepUpPos = new(neighbourPos.X, neighbourPos.Y + 1, neighbourPos.Z);
                 if (IsWalkable(world, stepUpPos))
-                {
-                    PathNode neighbour = GetOrCreateNode(stepUpPos);
-                    neighbours.Add(neighbour);
-                }
+                    mNeighbourBuffer.Add(GetOrCreateNode(stepUpPos));
 
                 // Check if we can step down one block
                 Vector3i stepDownPos = new(neighbourPos.X, neighbourPos.Y - 1, neighbourPos.Z);
                 if (IsWalkable(world, stepDownPos))
-                {
-                    PathNode neighbour = GetOrCreateNode(stepDownPos);
-                    neighbours.Add(neighbour);
-                }
+                    mNeighbourBuffer.Add(GetOrCreateNode(stepDownPos));
             }
         }
-
-        return neighbours;
     }
 
     /// <summary>
     /// Checks if a position is walkable (has ground below and space for entity).
     /// </summary>
-    private bool IsWalkable(World world, Vector3i position)
+    private static bool IsWalkable(World world, Vector3i position)
     {
         // Need solid ground below
         BlockType groundBlock = world.GetBlock(position.X, position.Y - 1, position.Z);
@@ -144,94 +168,42 @@ public class AStarPathfinder
     }
 
     /// <summary>
-    /// Examines neighbours and updates their costs.
-    /// </summary>
-    private void ExamineNeighbours(List<PathNode> neighbours, PathNode current, Vector3i goal)
-    {
-        foreach (var neighbour in neighbours)
-        {
-            int gScore = CalculateGScore(neighbour.Position, current.Position);
-
-            if (mOpenList.Contains(neighbour))
-            {
-                if (current.G + gScore < neighbour.G)
-                {
-                    CalculateNodeValues(current, neighbour, gScore, goal);
-                }
-            }
-            else if (!mClosedList.Contains(neighbour))
-            {
-                CalculateNodeValues(current, neighbour, gScore, goal);
-                mOpenList.Add(neighbour);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Calculates F, G, H values for a node.
-    /// </summary>
-    private void CalculateNodeValues(PathNode parent, PathNode neighbour, int cost, Vector3i goal)
-    {
-        neighbour.Parent = parent;
-        neighbour.G = parent.G + cost;
-        neighbour.H = CalculateHeuristic(neighbour.Position, goal);
-        neighbour.F = neighbour.G + neighbour.H;
-    }
-
-    /// <summary>
     /// Calculates the movement cost between two positions.
     /// </summary>
-    private int CalculateGScore(Vector3i neighbour, Vector3i current)
+    private static int CalculateGScore(Vector3i neighbour, Vector3i current)
     {
-        int dx = Math.Abs(current.X - neighbour.X);
-        int dy = Math.Abs(current.Y - neighbour.Y);
-        int dz = Math.Abs(current.Z - neighbour.Z);
-
-        // Base cost for movement
         int gScore = 10;
-
-        // Extra cost for vertical movement (climbing/falling)
+        int dy = Math.Abs(current.Y - neighbour.Y);
         if (dy > 0)
             gScore += 5;
-
         return gScore;
     }
 
     /// <summary>
     /// Calculates Manhattan distance heuristic for 3D.
     /// </summary>
-    private int CalculateHeuristic(Vector3i from, Vector3i to)
+    private static int CalculateHeuristic(Vector3i from, Vector3i to)
     {
         return (Math.Abs(from.X - to.X) + Math.Abs(from.Y - to.Y) + Math.Abs(from.Z - to.Z)) * 10;
     }
 
     /// <summary>
-    /// Updates the current node to the one with lowest F score.
+    /// Builds the final path from goal node back to start.
     /// </summary>
-    private void UpdateCurrentNode()
+    private static Stack<Vector3i> BuildPath(PathNode goalNode, Vector3i start)
     {
-        if (mCurrentNode != null)
+        Stack<Vector3i> path = new();
+        var current = goalNode;
+
+        while (current.Position != start)
         {
-            mOpenList.Remove(mCurrentNode);
-            mClosedList.Add(mCurrentNode);
+            path.Push(current.Position);
+            if (current.Parent == null)
+                break;
+            current = current.Parent;
         }
 
-        if (mOpenList.Count > 0)
-        {
-            PathNode? minNode = null;
-            int minF = int.MaxValue;
-
-            foreach (PathNode node in mOpenList)
-            {
-                if (node.F < minF)
-                {
-                    minF = node.F;
-                    minNode = node;
-                }
-            }
-
-            mCurrentNode = minNode;
-        }
+        return path;
     }
 
     /// <summary>
@@ -240,42 +212,11 @@ public class AStarPathfinder
     private PathNode GetOrCreateNode(Vector3i position)
     {
         if (mNodeCache.TryGetValue(position, out PathNode? node))
-        {
-            node.Reset();
             return node;
-        }
 
         node = new PathNode(position);
         mNodeCache[position] = node;
         return node;
-    }
-
-    /// <summary>
-    /// Generates the final path from current node back to start.
-    /// </summary>
-    private Stack<Vector3i>? GeneratePath(PathNode? current, Vector3i start, Vector3i goal)
-    {
-        if (current == null)
-            return null;
-
-        if (current.Position == goal)
-        {
-            Stack<Vector3i> finalPath = new();
-
-            while (current.Position != start)
-            {
-                finalPath.Push(current.Position);
-
-                if (current.Parent == null)
-                    break;
-
-                current = current.Parent;
-            }
-
-            return finalPath;
-        }
-
-        return null;
     }
 
     /// <summary>
