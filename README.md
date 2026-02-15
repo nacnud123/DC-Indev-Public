@@ -8,12 +8,15 @@ DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using Ope
 - Chunk-based rendering with frustum culling
 - Sunlight and block light propagation
 - 28+ block types including ores, plants, and decoratives
-- Pig entities with A* pathfinding and wandering AI
+- Pig and Sheep entities with A* pathfinding and wandering AI
 - Block breaking/placing with particle effects
 - Smoke particles
 - ImGui-based UI with main menu, pause screen, and inventory
 - Fly mode and survival mode
 - Configurable world size
+- Day night cycle
+- Structures
+- Water
 
 ## Controls
 
@@ -24,7 +27,7 @@ Scroll wheel - Change selected block
 1 - 0 - Also change selected block  
 Space - Jump  
 E - Toggle Inventory  
-F - Toggle fly mode  
+F - Toggle fly mode / instant break mode  
 X - Toggle wireframe mode  
 I - Toggle inventory  
 Esc - Pause / Exit inventory  
@@ -33,8 +36,8 @@ Esc - Pause / Exit inventory
 
 I still consider this project to be in active development, so expect a few bugs here and there. If you find one, please report it as an issue. Thanks!
 
-
-<img width="1885" height="967" alt="InGame1" src="https://github.com/user-attachments/assets/355db55a-c65d-4cdc-9c9a-c11838f2830c" />
-<img width="1900" height="1010" alt="InGame2" src="https://github.com/user-attachments/assets/febd5e02-9256-4668-93fe-66a94046da59" />
-<img width="1871" height="982" alt="InGame3" src="https://github.com/user-attachments/assets/37855101-b197-48bd-9ad3-ccb2733fb277" />
-<img width="1887" height="965" alt="InGame4" src="https://github.com/user-attachments/assets/2d7de010-9f04-4112-b375-5ab19cc88744" />
+<img width="1903" height="993" alt="InGame1" src="https://github.com/user-attachments/assets/da563935-31e0-4fad-b96b-e5aa19f38132" />
+<img width="1903" height="993" alt="InGame2" src="https://github.com/user-attachments/assets/02452caf-2583-40d3-9519-31811d9bc669" />
+<img width="1903" height="993" alt="InGame3" src="https://github.com/user-attachments/assets/24746282-a118-4a85-8635-9350d861f648" />
+<img width="1903" height="993" alt="InGame7" src="https://github.com/user-attachments/assets/6dcecc39-1031-41dd-93d7-cb1d3d16c906" />
+<img width="1903" height="993" alt="InGame6" src="https://github.com/user-attachments/assets/a1d9bef1-eddf-44b3-9735-73eccd618e0e" />
