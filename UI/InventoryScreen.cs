@@ -1,221 +1,114 @@
-// Main main menu class, holds stuff related to rendering the main menu. | DA | 2/5/26
-using ImGuiNET;
-using System;
+// Main inventory screen file, holds stuff related to rendering main menu. Also, the inventory order, which is a stupid way to do it, but it works | DA | 2/5/26
 using System.Numerics;
+using ImGuiNET;
 using VoxelEngine.Core;
+using VoxelEngine.Rendering;
+using VoxelEngine.Terrain;
+using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.UI;
-public class MainMenuScreen
+
+public class InventoryScreen
 {
-    private const int MIN_WORLD_SIZE = 8;
-    private const int MAX_WORLD_SIZE = 4096;
+    private const int BUTTONS_PER_ROW = 6;
+    private const float BUTTON_SIZE = 64.0f;
+    private static readonly Vector2 KWindowPadding = new(50, 80);
+    private static readonly Vector2 KContentPadding = new(20, 30);
 
-    private int mWorldSize = 8;
-    private int mVolSFX = 85;
-    private int mVolMusic = 25;
+    private const ImGuiWindowFlags K_WINDOW_FLAGS =
+        ImGuiWindowFlags.NoTitleBar |
+        ImGuiWindowFlags.NoResize |
+        ImGuiWindowFlags.NoMove |
+        ImGuiWindowFlags.NoCollapse |
+        ImGuiWindowFlags.NoBringToFrontOnFocus |
+        ImGuiWindowFlags.NoFocusOnAppearing;
 
-    public event Action OnTitleQuitGame;
-    public event Action<int, int, int> OnStartGame;
+    private readonly List<Block> mSelectableBlocks;
+    private readonly IntPtr mTexturePtr;
 
-    private List<string> SplashText = new()
+    public InventoryScreen(Texture blockAtlasTexture)
     {
-        "Try not to crash!",
-        "Pigs scare me",
-        "Don't forget to eat your vegetables",
-        "Hi Dillon",
-        "Also try DuncanCraft 2000!",
-        "Microsoft don't sue",
-        "Minecraft but worse",
-        "New and original game",
-        "Spong",
-        "Hire me",
-        "This is a splash text",
-        "I hope you like it",
-        "Star the GitHub repo",
-        "Also try Project Soup!",
-        "DA_RL on steam soon",
-        "Thanks ARoachIFoundOnMyPillow for textures!",
-        "Thanks TheQuantumBlaze for textures!",
-        "Will it ever leave Alpha? No",
-        "Rip other DuncanCraft projects",
-        "All the animals move at the same time",
-        "It's a feature not a bug",
-        "I have no idea what I'm doing"
-    };
-
-    string currentSplash = "";
-
-    public MainMenuScreen()
-    {
-        currentSplash = SplashText[Game.Instance.GameRandom.Next(0, SplashText.Count)];
+        mSelectableBlocks = BlockRegistry.GetAll()
+            .Where(b => b.ShowInInventory)
+            .ToList();
+        mTexturePtr = new IntPtr(blockAtlasTexture.Handle);
     }
 
     public void Render()
     {
-        var io = ImGui.GetIO();
-        var displaySize = io.DisplaySize;
+        var displaySize = ImGui.GetIO().DisplaySize;
+        var windowPos = KWindowPadding;
+        var windowSize = displaySize - KWindowPadding * 2;
 
-        ImGui.SetNextWindowPos(Vector2.Zero);
-        ImGui.SetNextWindowSize(displaySize);
+        ImGui.SetNextWindowPos(windowPos);
+        ImGui.SetNextWindowSize(windowSize);
+        ImGui.Begin("Block Selection Menu", K_WINDOW_FLAGS);
 
-        ImGuiWindowFlags windowFlags = ImGuiWindowFlags.NoTitleBar |
-                                         ImGuiWindowFlags.NoResize |
-                                         ImGuiWindowFlags.NoMove |
-                                         ImGuiWindowFlags.NoCollapse |
-                                         ImGuiWindowFlags.NoScrollbar |
-                                         ImGuiWindowFlags.NoScrollWithMouse |
-                                         ImGuiWindowFlags.NoBringToFrontOnFocus |
-                                         ImGuiWindowFlags.NoFocusOnAppearing;
+        ImGui.Dummy(new Vector2(0, KContentPadding.Y));
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1f));
+        float contentWidth = ImGui.GetContentRegionAvail().X - KContentPadding.X * 2;
+        float itemSpacing = ImGui.GetStyle().ItemSpacing.X;
+        int numRows = (int)Math.Ceiling((double)mSelectableBlocks.Count / BUTTONS_PER_ROW);
 
-        ImGui.Begin("MainMenu", windowFlags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var contentWidth = 400f;
-
-        var centerX = windowSize.X * 0.5f;
-        var centerY = windowSize.Y * 0.5f;
-
-        // Title
-        var titleText = "DC Indev";
-        ImGui.PushFont(ImGuiController.fontLarge);
-
-        var titleSize = ImGui.CalcTextSize(titleText);
-        ImGui.SetCursorPos(new Vector2(centerX - titleSize.X * 0.5f, centerY - 120f));
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text(titleText);
-        ImGui.PopStyleColor();
-
-        ImGui.PopFont();
-
-        var spashText = currentSplash;
-
-        var splashSize = ImGui.CalcTextSize(spashText);
-        ImGui.SetCursorPos(new Vector2(centerX - splashSize.X * 0.5f, centerY - 90f));
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text(spashText);
-        ImGui.PopStyleColor();
-
-        // Version text
-        ImGui.PopStyleColor();
-
-        ImGui.SetCursorPos(new Vector2(10, 10));
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text("Version 5.0A");
-
-
-        // Controls Text\
-        var controlsText = @"
-            W A S D = Move
-            LMB = Break block / Kill entity
-            RMB = Place block
-            0-9 = Choose blocks
-            R = Reset position
-            X = Toggle wireframe
-            P = Spawn pig
-            Esc = Pause
-            Tab = Toggle cursor lock
-            F = Toggle fly mode / instant break mode
-            E = Toggle inventory
-            Space = Jump / Fly up
-            Ctrl = Fly down
-            Shift = Sprint
-            + / - = Increase / decrease render distance
-            Mouse = Look
-            ";
-        ImGui.SetWindowFontScale(1.0f); // 2X size
-
-        var controlsSize = ImGui.CalcTextSize(controlsText);
-        ImGui.SetCursorPos(new Vector2(-70f, windowSize.Y - controlsSize.Y - 10));
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text(controlsText);
-        ImGui.PopStyleColor();
-
-        ImGui.SetWindowFontScale(1.0f); // Set back to default
-
-        // World Size
-        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 70f));
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.2f, 0.8f, 0.2f, 1.0f));
-        ImGui.Text("World Size:");
-
-        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 50f));
-        ImGui.SetNextItemWidth(400f);
-
-        var previous = mWorldSize;
-        if (ImGui.InputInt("##worldsize", ref mWorldSize))
+        for (int row = 0; row < numRows; row++)
         {
-            mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
+            int startIndex = row * BUTTONS_PER_ROW;
+            int endIndex = Math.Min(startIndex + BUTTONS_PER_ROW, mSelectableBlocks.Count);
+            int buttonsInRow = endIndex - startIndex;
 
-            if ((mWorldSize & 1) != 0)
+            float rowWidth = buttonsInRow * BUTTON_SIZE + (buttonsInRow - 1) * itemSpacing;
+            float centerOffset = Math.Max(0, (contentWidth - rowWidth) * 0.5f);
+
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + KContentPadding.X + centerOffset);
+
+            for (int i = startIndex; i < endIndex; i++)
             {
-                if (mWorldSize > previous)
-                {
-                    mWorldSize += 1;
-                }
-                else
-                {
-                    mWorldSize -= 1;
-                }
+                if (i > startIndex)
+                    ImGui.SameLine();
 
-                mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
+                var block = mSelectableBlocks[i];
+                RenderBlockButton(i, block);
             }
         }
-        ImGui.SameLine();
-        ImGui.TextDisabled("(snaps to even)");
 
-        // Volume Controls (same line)
-        ImGui.SetCursorPos(new Vector2(centerX - 200f, centerY - 15f));
-        ImGui.Text("SFX:");
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(120f);
-        
-        if (ImGui.InputInt("##sfxvolume", ref mVolSFX))
-            mVolSFX = Math.Clamp(mVolSFX, 0, 100);
-        
-        ImGui.SameLine();
-        ImGui.Text("Music:");
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(120f);
-        
-        if (ImGui.InputInt("##musicvolume", ref mVolMusic))
-            mVolMusic = Math.Clamp(mVolMusic, 0, 100);
-
-        ImGui.PopStyleColor();
-
-        // Buttons
-        var buttonWidth = 150f;
-        var buttonHeight = 40f;
-        var buttonSpacing = 20f;
-        var totalButtonWidth = (buttonWidth * 2) + buttonSpacing;
-        var buttonStartX = centerX - totalButtonWidth * 0.5f;
-        var buttonY = centerY + 30f;
-
-        // Resume button
-        ImGui.SetCursorPos(new Vector2(buttonStartX, buttonY));
-
-        if (ImGui.Button("Start Game", new Vector2(buttonWidth, buttonHeight)))
-        {
-            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", mVolSFX);
-            OnStartGame?.Invoke(mWorldSize, mVolSFX, mVolMusic);
-        }
-
-        // Quit button
-        ImGui.SetCursorPos(new Vector2(buttonStartX + buttonWidth + buttonSpacing, buttonY));
-        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.9f, 0.3f, 0.3f, 1.0f));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.7f, 0.1f, 0.1f, 1.0f));
-
-        if (ImGui.Button("Quit", new Vector2(buttonWidth, buttonHeight)))
-        {
-            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", mVolSFX);
-            OnTitleQuitGame?.Invoke();
-        }
-
-        ImGui.PopStyleColor(3);
-
+        ImGui.Dummy(new Vector2(0, KContentPadding.Y));
         ImGui.End();
+    }
 
-        ImGui.PopStyleColor();
+    private void RenderBlockButton(int index, Block block)
+    {
+        var texCoords = block.InventoryTextureCoords;
+        var player = Game.Instance.GetPlayer;
+
+        ImGui.PushID(index);
+
+        if (player.SelectedBlock == block.Type)
+        {
+            var drawList = ImGui.GetWindowDrawList();
+            var pos = ImGui.GetCursorScreenPos() + new Vector2(3, 2);
+            uint borderColor = ImGui.ColorConvertFloat4ToU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
+            drawList.AddRect(
+                pos - Vector2.One * 2,
+                pos + new Vector2(BUTTON_SIZE + 4, BUTTON_SIZE + 4),
+                borderColor, 0, 0, 3.0f);
+        }
+
+        bool clicked = ImGui.ImageButton(
+            $"block_{block.Type}",
+            mTexturePtr,
+            new Vector2(BUTTON_SIZE, BUTTON_SIZE),
+            new Vector2(texCoords.TopLeft.X, texCoords.BottomRight.Y),
+            new Vector2(texCoords.BottomRight.X, texCoords.TopLeft.Y),
+            new Vector4(0, 0, 0, 0),
+            new Vector4(1, 1, 1, 1));
+
+        if (clicked)
+        {
+            player.SelectedBlock = block.Type;
+            Game.Instance.Hotbar?.SetBlockInCurrentSlot(block.Type);
+            Game.Instance.CloseInventory();
+        }
+
+        ImGui.PopID();
     }
 }
