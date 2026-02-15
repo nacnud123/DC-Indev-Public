@@ -116,7 +116,7 @@ public class MainMenuScreen
             P = Spawn pig
             Esc = Pause
             Tab = Toggle cursor lock
-            F = Toggle fly mode
+            F = Toggle fly mode / instant break mode
             E = Toggle inventory
             Space = Jump / Fly up
             Ctrl = Fly down

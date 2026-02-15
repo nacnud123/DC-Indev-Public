@@ -1,4 +1,4 @@
-// Main inventory screen file, holds stuff related to rendering main menu. Also, the inventory order, which is a stupid way to do it, but it works | DA | 2/5/26
+// Main inventory screen file, holds stuff related to rendering main menu. | DA | 2/5/26
 using System.Numerics;
 using ImGuiNET;
 using VoxelEngine.Core;
