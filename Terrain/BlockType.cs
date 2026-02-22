@@ -17,6 +17,9 @@ public enum BlockType : byte
     RedMushroom,
     Sapling,
     Clay,
+    Sandstone,
+    Stoneslab,
+    DoubleStoneslab,
 
     // Stone / Underground
     Stone,
@@ -24,6 +27,7 @@ public enum BlockType : byte
     MossyCobblestone,
     Bedrock,
     SpiderWeb,
+    StoneStair,
 
     // Ores
     CoalOre,
@@ -36,12 +40,23 @@ public enum BlockType : byte
     Leaves,
     Planks,
     WoodSlab,
+    DoubleWoodSlab,
+    WoodenStair,
 
     // Building
     Glass,
     Bricks,
     Glowstone,
     Sponge,
+    Obsidian,
+    Bookcase,
+    DiamondBlock,
+    GoldBlock,
+    IronBlock,
+    TNT,
+    WorkBench,
+    Furnace,
+    Chest,
 
     // Colored Blocks
     Black,
@@ -52,15 +67,13 @@ public enum BlockType : byte
 
     // Torches
     Torch,
-    TorchNorth,
-    TorchSouth,
-    TorchEast,
-    TorchWest,
 
     // Fluids
     Water,
+    Lava,
 
     // Special
+    Fire,
     DuncanBlock,
     
 
@@ -72,7 +85,9 @@ public enum RenderingType : byte
     Normal,
     Cross,
     Torch,
-    Slab
+    Slab,
+    Stair,
+    Fire
 }
 
 public enum BlockBreakMaterial : byte
@@ -86,5 +101,6 @@ public enum BlockBreakMaterial : byte
     Sand,
     Gravel,
     Wooden,
-    Water
+    Water,
+    Lava
 }

@@ -1,4 +1,4 @@
-// Main inventory screen file, holds stuff related to rendering main menu. | DA | 2/5/26
+// Main inventory screen file, holds stuff related to rendering main menu. Also, the inventory order, which is a stupid way to do it, but it works | DA | 2/5/26
 using System.Numerics;
 using ImGuiNET;
 using VoxelEngine.Core;
@@ -24,14 +24,14 @@ public class InventoryScreen
         ImGuiWindowFlags.NoFocusOnAppearing;
 
     private readonly List<Block> mSelectableBlocks;
-    private readonly IntPtr mTexturePtr;
+    private readonly BlockIconRenderer mIconRenderer;
 
-    public InventoryScreen(Texture blockAtlasTexture)
+    public InventoryScreen(BlockIconRenderer iconRenderer)
     {
         mSelectableBlocks = BlockRegistry.GetAll()
             .Where(b => b.ShowInInventory)
             .ToList();
-        mTexturePtr = new IntPtr(blockAtlasTexture.Handle);
+        mIconRenderer = iconRenderer;
     }
 
     public void Render()
@@ -77,8 +77,8 @@ public class InventoryScreen
 
     private void RenderBlockButton(int index, Block block)
     {
-        var texCoords = block.InventoryTextureCoords;
         var player = Game.Instance.GetPlayer;
+        var iconPtr = mIconRenderer.GetIcon(block.Type);
 
         ImGui.PushID(index);
 
@@ -95,12 +95,39 @@ public class InventoryScreen
 
         bool clicked = ImGui.ImageButton(
             $"block_{block.Type}",
-            mTexturePtr,
+            iconPtr,
             new Vector2(BUTTON_SIZE, BUTTON_SIZE),
-            new Vector2(texCoords.TopLeft.X, texCoords.BottomRight.Y),
-            new Vector2(texCoords.BottomRight.X, texCoords.TopLeft.Y),
+            new Vector2(0, 0),
+            new Vector2(1, 1),
             new Vector4(0, 0, 0, 0),
             new Vector4(1, 1, 1, 1));
+
+
+        if (ImGui.IsItemHovered())
+        {
+            var mousePos = ImGui.GetMousePos();
+            var textSize = ImGui.CalcTextSize(block.Name);
+            var popupSize = textSize + new Vector2(16, 16); // 8px padding on each side
+
+            ImGui.SetNextWindowPos(mousePos + new Vector2(12, -popupSize.Y / 2f));
+            ImGui.SetNextWindowSize(popupSize);
+            ImGui.SetNextWindowBgAlpha(0.85f);
+
+            ImGui.Begin("##block_tooltip",
+                ImGuiWindowFlags.NoTitleBar |
+                ImGuiWindowFlags.NoResize |
+                ImGuiWindowFlags.NoMove |
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoSavedSettings |
+                ImGuiWindowFlags.NoFocusOnAppearing |
+                ImGuiWindowFlags.NoNav |
+                ImGuiWindowFlags.NoInputs);
+
+            ImGui.SetCursorPos((popupSize - textSize) * 0.5f);
+            ImGui.Text(block.Name);
+
+            ImGui.End();
+        }
 
         if (clicked)
         {

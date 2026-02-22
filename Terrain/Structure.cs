@@ -1,4 +1,4 @@
-// Main function that handles loading in functions from the JSON file. Also, placing and exporting blocks as a structure JSON | DA | 2/14/26
+// Structure loading, placement and exporting from/to JSON files | DA | 2/14/26
 using Newtonsoft.Json.Linq;
 using OpenTK.Mathematics;
 
@@ -23,6 +23,11 @@ public class StructureLoader
 
     private readonly Dictionary<string, Structure> mCache = new();
     private Random strucutreRandom = new Random();
+
+    public void SeedRandom(int seed)
+    {
+        strucutreRandom = new Random(seed);
+    }
 
     public Structure Load(string fileName)
     {
@@ -78,9 +83,10 @@ public class StructureLoader
         }
     }
 
+    private const int SEA_LEVEL = 64;
+
     public void PlaceRandomly(World world, Structure structure, Vector3i offset)
     {
-        var random = new Random();
         int worldWidth = world.SizeInChunks * Chunk.WIDTH;
         int worldDepth = world.SizeInChunks * Chunk.DEPTH;
 
@@ -89,20 +95,30 @@ public class StructureLoader
         if (maxX < 0 || maxZ < 0)
             return;
 
-        int x = random.Next(0, maxX + 1);
-        int z = random.Next(0, maxZ + 1);
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            int x = strucutreRandom.Next(0, maxX + 1);
+            int z = strucutreRandom.Next(0, maxZ + 1);
 
-        int groundY = (int)world.FindSpawnPosition(x, z).Y;
+            int groundY = (int)world.FindSpawnPosition(x, z).Y;
 
-        if (groundY + structure.SizeY > Chunk.HEIGHT)
-            groundY = Chunk.HEIGHT - structure.SizeY;
+            if (groundY < SEA_LEVEL)
+                continue;
 
-        Place(world, structure, x - offset.X, (groundY - 1) - offset.Y, z - offset.Z);
+            var groundBlock = world.GetBlock(x, groundY - 1, z);
+            if (groundBlock == BlockType.Water || groundBlock == BlockType.Air)
+                continue;
+
+            if (groundY + structure.SizeY > Chunk.HEIGHT)
+                groundY = Chunk.HEIGHT - structure.SizeY;
+
+            Place(world, structure, x - offset.X, (groundY - 1) - offset.Y, z - offset.Z);
+            return;
+        }
     }
 
     public void PlaceUnderground(World world, Structure structure, int minY = 10, int maxY = 40,  bool changeRandomBlocks = false, BlockType rndOriginalType = BlockType.Air, BlockType rndNewType = BlockType.Air, float rndChance = 0.0f)
     {
-        var random = new Random();
         int worldWidth = world.SizeInChunks * Chunk.WIDTH;
         int worldDepth = world.SizeInChunks * Chunk.DEPTH;
 
@@ -110,17 +126,25 @@ public class StructureLoader
         int maxZ = worldDepth - structure.SizeZ;
         if (maxX < 0 || maxZ < 0)
             return;
-
-        int x = random.Next(0, maxX + 1);
-        int z = random.Next(0, maxZ + 1);
 
         int topY = maxY - structure.SizeY;
         if (topY < minY)
             topY = minY;
 
-        int y = random.Next(minY, topY + 1);
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            int x = strucutreRandom.Next(0, maxX + 1);
+            int z = strucutreRandom.Next(0, maxZ + 1);
 
-        Place(world, structure, x, y, z, changeRandomBlocks, rndOriginalType, rndNewType, rndChance);
+            int groundY = (int)world.FindSpawnPosition(x, z).Y;
+            if (groundY < SEA_LEVEL)
+                continue;
+
+            int y = strucutreRandom.Next(minY, topY + 1);
+
+            Place(world, structure, x, y, z, changeRandomBlocks, rndOriginalType, rndNewType, rndChance);
+            return;
+        }
     }
 
     public static string Export(World world, Vector3i corner1, Vector3i corner2)

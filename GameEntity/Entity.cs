@@ -12,7 +12,7 @@ namespace VoxelEngine.GameEntity;
 
 public class Entity
 {
-    protected static Shader? _shader;
+    internal static Shader? _shader;
     private static bool _shaderInitialized;
 
     public static Vector3 LightDir = new(-0.5f, -1f, -0.3f);
@@ -54,9 +54,9 @@ public class Entity
 
     public EntityAi? CurrentAI;
 
-    protected static void InitShader()
+    internal static void InitShader()
     {
-        if (_shaderInitialized) 
+        if (_shaderInitialized)
             return;
         _shader = new Shader(File.ReadAllText("Shaders/EntityVertex.glsl"), File.ReadAllText("Shaders/EntityFragment.glsl"));
         _shaderInitialized = true;

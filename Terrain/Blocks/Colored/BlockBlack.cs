@@ -8,6 +8,7 @@ public class BlockBlack : Block
     public override BlockType Type => BlockType.Black;
     public override string Name => "Black";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wool;
+    public override bool IsFlamable => true;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(3, 4);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

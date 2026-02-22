@@ -21,11 +21,11 @@ internal class Hotbar
 
     private int mSelectedSlot;
     private readonly BlockType?[] mSlots = new BlockType?[HOTBAR_SLOTS];
-    private readonly IntPtr mAtlasTexturePtr;
+    private readonly BlockIconRenderer mIconRenderer;
 
-    public Hotbar(Texture blockAtlasTexture)
+    public Hotbar(BlockIconRenderer iconRenderer)
     {
-        mAtlasTexturePtr = new IntPtr(blockAtlasTexture.Handle);
+        mIconRenderer = iconRenderer;
     }
 
     public void SetHotbarSlot(int slot)
@@ -97,17 +97,34 @@ internal class Hotbar
             var block = mSlots[i];
             if (block.HasValue)
             {
-                var texCoords = BlockRegistry.GetParticleTexture(block.Value);
+                var iconPtr = mIconRenderer.GetIcon(block.Value);
                 float itemX = slotX + ITEM_PADDING;
                 float itemY = slotY + ITEM_PADDING;
 
                 drawList.AddImage(
-                    mAtlasTexturePtr,
+                    iconPtr,
                     new Vector2(itemX, itemY),
                     new Vector2(itemX + ITEM_SIZE, itemY + ITEM_SIZE),
-                    new Vector2(texCoords.TopLeft.X, texCoords.BottomRight.Y),
-                    new Vector2(texCoords.BottomRight.X, texCoords.TopLeft.Y));
+                    new Vector2(0, 0),
+                    new Vector2(1, 1));
             }
+        }
+
+        // Block name label
+        var selectedBlock = mSlots[mSelectedSlot];
+        if (selectedBlock.HasValue)
+        {
+            var block = BlockRegistry.Get(selectedBlock.Value);
+            string name = block.Name;
+
+            var textSize = ImGui.CalcTextSize(name);
+            float textX = (displaySize.X - textSize.X) / 2f;
+            float textY = hotbarY - textSize.Y - 8f;
+
+            uint shadow = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.6f));
+            drawList.AddText(new Vector2(textX + 1, textY + 1), shadow, name);
+            uint white = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 1f));
+            drawList.AddText(new Vector2(textX, textY), white, name);
         }
     }
 }

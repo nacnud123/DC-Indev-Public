@@ -22,4 +22,6 @@ public class TickSystem
 
         return Math.Min(ticks, 10);
     }
+
+    public float GetPartialTick() => mAccumulator / TICK_DURATION;
 }

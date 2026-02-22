@@ -54,7 +54,38 @@ public static class Physics
 
         velocity.X = normalX;
         velocity.Z = normalZ;
+
+        // Step-down: if on ground (stepHeight > 0), moving horizontally, and Y velocity is
+        // only gravity (not jumping), try snapping down to maintain ground contact on stairs
+        if (stepHeight > 0 && velocity.Y <= 0 &&
+            (MathF.Abs(velocity.X) > COLLISION_EPSILON || MathF.Abs(velocity.Z) > COLLISION_EPSILON))
+        {
+            var afterMove = box.Offset(velocity);
+            if (!IsOnGround(null!, afterMove, blocks))
+            {
+                float down = ResolveAxis(afterMove, blocks, -stepHeight, 1);
+                if (MathF.Abs(down) > COLLISION_EPSILON && MathF.Abs(down) < stepHeight)
+                {
+                    // Verify we actually land on something
+                    var downBox = afterMove.Offset(new Vector3(0, down, 0));
+                    if (IsOnGround(null!, downBox, blocks))
+                        velocity.Y += down;
+                }
+            }
+        }
+
         return velocity;
+    }
+
+    private static bool IsOnGround(World? _ignored, Aabb box, List<Aabb> blocks)
+    {
+        Aabb below = box.Offset(new Vector3(0, -0.01f, 0));
+        foreach (var block in blocks)
+        {
+            if (below.Intersects(block))
+                return true;
+        }
+        return false;
     }
 
     public static bool IsOnGround(World world, Aabb box)
@@ -117,14 +148,41 @@ public static class Physics
                     var bt = world.GetBlock(x, y, z);
                     if (BlockRegistry.IsSolid(bt))
                     {
-                        var bMin = BlockRegistry.GetBoundsMin(bt);
-                        var bMax = BlockRegistry.GetBoundsMax(bt);
-                        result.Add(new Aabb(new Vector3(x, y, z) + bMin, new Vector3(x, y, z) + bMax));
+                        if (BlockRegistry.GetRenderType(bt) == RenderingType.Stair)
+                        {
+                            AddStairCollisionBoxes(result, x, y, z, bt);
+                        }
+                        else
+                        {
+                            var bMin = BlockRegistry.GetBoundsMin(bt);
+                            var bMax = BlockRegistry.GetBoundsMax(bt);
+                            result.Add(new Aabb(new Vector3(x, y, z) + bMin, new Vector3(x, y, z) + bMax));
+                        }
                     }
                 }
             }
         }
 
         return result;
+    }
+
+    private static void AddStairCollisionBoxes(List<Aabb> result, int x, int y, int z, BlockType bt)
+    {
+        // Box 1: bottom slab (full X/Z, bottom half)
+        result.Add(new Aabb(new Vector3(x, y, z), new Vector3(x + 1, y + 0.5f, z + 1)));
+
+        // Box 2: back step (half extent based on facing)
+        int facing = World.Current?.GetMetadata(x, y, z) ?? 0;
+
+        Aabb backStep = facing switch
+        {
+            0 => new Aabb(new Vector3(x, y + 0.5f, z), new Vector3(x + 1, y + 1, z + 0.5f)),
+            1 => new Aabb(new Vector3(x, y + 0.5f, z + 0.5f), new Vector3(x + 1, y + 1, z + 1)),
+            2 => new Aabb(new Vector3(x + 0.5f, y + 0.5f, z), new Vector3(x + 1, y + 1, z + 1)),
+            3 => new Aabb(new Vector3(x, y + 0.5f, z), new Vector3(x + 0.5f, y + 1, z + 1)),
+            _ => new Aabb(new Vector3(x, y + 0.5f, z + 0.5f), new Vector3(x + 1, y + 1, z + 1))
+        };
+
+        result.Add(backStep);
     }
 }

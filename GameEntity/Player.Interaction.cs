@@ -100,6 +100,25 @@ public partial class Player
     private void BreakBlock(World world, Vector3i blockPos)
     {
         var blockType = world.GetBlock(blockPos.X, blockPos.Y, blockPos.Z);
+
+        // Double slabs break into single slabs instead of air
+        if (blockType == BlockType.DoubleStoneslab)
+        {
+            world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.Stoneslab);
+            Game.Instance.ParticleSystem.SpawnBlockBreakParticles(blockPos, blockType);
+            Game.Instance.AudioManager.PlayBlockBreakSound(BlockRegistry.GetBlockBreakMaterial(blockType));
+            world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+            return;
+        }
+        if (blockType == BlockType.DoubleWoodSlab)
+        {
+            world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.WoodSlab);
+            Game.Instance.ParticleSystem.SpawnBlockBreakParticles(blockPos, blockType);
+            Game.Instance.AudioManager.PlayBlockBreakSound(BlockRegistry.GetBlockBreakMaterial(blockType));
+            world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+            return;
+        }
+
         world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.Air);
         Game.Instance.ParticleSystem.SpawnBlockBreakParticles(blockPos, blockType);
         Game.Instance.AudioManager.PlayBlockBreakSound(BlockRegistry.GetBlockBreakMaterial(blockType));
@@ -112,6 +131,8 @@ public partial class Player
             world.SetBlock(blockPos.X, checkY, blockPos.Z, BlockType.Air);
             checkY += 1;
         }
+
+        world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
     }
 
     // Main function that is called when you try to break or place a block. Breaking blocks has been moved mostly to another function to this really just handles placing blocks now.
@@ -135,6 +156,25 @@ public partial class Player
         }
         else if (placeBlock && placePos.HasValue)
         {
+            // If the targeted block is replaceable (flower, grass tuft, etc.), place into it directly.
+            var hitBlock = world.GetBlock(blockPos.X, blockPos.Y, blockPos.Z);
+            if (BlockRegistry.Get(hitBlock).IsReplaceable)
+                placePos = blockPos;
+            if (mSelectedBlock == BlockType.Stoneslab && hitBlock == BlockType.Stoneslab)
+            {
+                world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.DoubleStoneslab);
+                Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(BlockType.Stoneslab));
+                world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+                return;
+            }
+            if (mSelectedBlock == BlockType.WoodSlab && hitBlock == BlockType.WoodSlab)
+            {
+                world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.DoubleWoodSlab);
+                Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(BlockType.WoodSlab));
+                world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+                return;
+            }
+
             var placeBMin = BlockRegistry.GetBoundsMin(mSelectedBlock);
             var placeBMax = BlockRegistry.GetBoundsMax(mSelectedBlock);
             var placeVec = new Vector3(placePos.Value.X, placePos.Value.Y, placePos.Value.Z);
@@ -143,6 +183,8 @@ public partial class Player
             {
                 int x = placePos.Value.X, y = placePos.Value.Y, z = placePos.Value.Z;
                 var blockToPlace = mSelectedBlock;
+                byte placeMeta = 0;
+                bool isWallTorch = false;
 
                 Vector3i SupportBlockOffset = Vector3i.Zero;
 
@@ -158,35 +200,53 @@ public partial class Player
 
                     if (diff.Y == 1)
                     {
+                        // Ground torch (metadata 0)
                         if (!BlockRegistry.IsSolid(world.GetBlock(x, y - 1, z)))
                             return;
                     }
                     else
                     {
+                        // Wall torch: metadata 1=North, 2=South, 3=East, 4=West
                         if (diff.X == 1)
                         {
-                            blockToPlace = BlockType.TorchWest;
+                            placeMeta = 4; // West
                             SupportBlockOffset.X = -1;
                         }
                         else if (diff.X == -1)
                         {
-                            blockToPlace = BlockType.TorchEast;
+                            placeMeta = 3; // East
                             SupportBlockOffset.X = 1;
                         }
                         else if (diff.Z == 1)
                         {
-                            blockToPlace = BlockType.TorchNorth;
+                            placeMeta = 1; // North
                             SupportBlockOffset.Z = -1;
                         }
                         else if (diff.Z == -1)
                         {
-                            blockToPlace = BlockType.TorchSouth;
+                            placeMeta = 2; // South
                             SupportBlockOffset.Z = 1;
                         }
+
+                        isWallTorch = true;
 
                         if (!BlockRegistry.IsSolid(world.GetBlock(blockPos.X, blockPos.Y, blockPos.Z)))
                             return;
                     }
+                }
+                else if (BlockRegistry.GetRenderType(blockToPlace) == RenderingType.Stair
+                         || blockToPlace == BlockType.Furnace
+                         || blockToPlace == BlockType.Chest)
+                {
+                    // Facing: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X)
+                    var front = Camera.Front;
+                    float absX = MathF.Abs(front.X);
+                    float absZ = MathF.Abs(front.Z);
+
+                    if (absX > absZ)
+                        placeMeta = front.X > 0 ? (byte)2 : (byte)3;
+                    else
+                        placeMeta = front.Z > 0 ? (byte)1 : (byte)0;
                 }
                 else if (BlockRegistry.NeedsSupportBelow(blockToPlace))
                 {
@@ -203,22 +263,33 @@ public partial class Player
                 }
 
                 var existing = world.GetBlock(x, y, z);
-                if (existing != BlockType.Air && existing != BlockType.Water)
+                bool existingIsReplaceable = BlockRegistry.Get(existing).IsReplaceable;
+                if (existing != BlockType.Air && existing != BlockType.Water && existing != BlockType.Lava && !existingIsReplaceable)
                     return;
+
+                if (existingIsReplaceable)
+                {
+                    BlockRegistry.Get(existing).OnRemoved(world, x, y, z);
+                    Game.Instance.ParticleSystem.SpawnBlockBreakParticles(new OpenTK.Mathematics.Vector3i(x, y, z), existing);
+                }
 
                 if (world.GetBlock(x, y - 1, z) == BlockType.Grass && !BlockRegistry.GetSuffocatesBeneath(blockToPlace))
                 {
                     world.SetBlock(x, y - 1, z, BlockType.Dirt);
                 }
 
-                if (blockToPlace != BlockType.TorchEast && blockToPlace != BlockType.TorchWest && blockToPlace != BlockType.TorchNorth && blockToPlace != BlockType.TorchSouth)
+                if (!isWallTorch)
                     SupportBlockOffset.Y = -1;
 
                 if (!BlockRegistry.CanBlockSupport(blockToPlace, world.GetBlock(x + SupportBlockOffset.X, y + SupportBlockOffset.Y, z + SupportBlockOffset.Z)))
                     return;
 
                 world.SetBlock(x, y, z, blockToPlace);
+                if (placeMeta != 0)
+                    world.SetMetadata(x, y, z, placeMeta);
                 Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(blockToPlace));
+
+                world.SetChunkAsModified(x, y, z);
             }
         }
     }

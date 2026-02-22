@@ -8,6 +8,7 @@ public class BlockPlanks : Block
     public override BlockType Type => BlockType.Planks;
     public override string Name => "Planks";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wooden;
+    public override bool IsFlamable => true;
     public override float Hardness => 2.0f;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(2, 2);

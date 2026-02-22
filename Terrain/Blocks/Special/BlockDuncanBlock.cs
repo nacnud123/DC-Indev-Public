@@ -8,6 +8,7 @@ public class BlockDuncanBlock : Block
     public override BlockType Type => BlockType.DuncanBlock;
     public override string Name => "Duncan Block";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Glass;
+    public override bool IsFlamable => true;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(7, 1);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

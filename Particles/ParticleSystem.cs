@@ -1,4 +1,4 @@
-// Main class for particle system, holds reference to particle rendering and movement | DA | 2/5/26
+// The main class for the particle system holds reference to particle rendering and movement | DA | 2/5/26
 // Both smoke and regular particles use instance rendering, making there is one draw call that renders all particles of the type.
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
@@ -186,7 +186,7 @@ public class ParticleSystem : IDisposable
         GL.VertexAttribDivisor(6, 1);
     }
 
-    // Spawn new block breaking particles at blockPos, uses BlockType to get particle textures
+    // Spawn new block-breaking particles at blockPos, uses BlockType to get particle textures
     public void SpawnBlockBreakParticles(Vector3 blockPos, BlockType type)
     {
         var blockUv = BlockRegistry.GetParticleTexture(type);
@@ -212,6 +212,9 @@ public class ParticleSystem : IDisposable
     // Spawn new smoke particles at position. No texture because smoke particles are black.
     public void SpawnSmokeParticle(Vector3 position)
     {
+        if (mSmokeParticles.Count >= MAX_PARTICLES)
+            return;
+
         float lifetime = RandomRange(1.0f, 2.0f);
         mSmokeParticles.Add(new SmokeParticle
         {
@@ -284,9 +287,10 @@ public class ParticleSystem : IDisposable
         if (mParticles.Count == 0)
             return;
 
-        var instances = new InstanceData[mParticles.Count];
+        int renderCount = Math.Min(mParticles.Count, MAX_PARTICLES);
+        var instances = new InstanceData[renderCount];
 
-        for (int i = 0; i < mParticles.Count; i++)
+        for (int i = 0; i < renderCount; i++)
         {
             var p = mParticles[i];
             instances[i] = new InstanceData
@@ -297,7 +301,7 @@ public class ParticleSystem : IDisposable
         }
 
         GL.BindBuffer(BufferTarget.ArrayBuffer, mInstanceVbo);
-        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, instances.Length * Marshal.SizeOf<InstanceData>(), instances);
+        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<InstanceData>(), instances);
 
         mShader.Use();
         mShader.SetMatrix4("view", view);
@@ -310,7 +314,7 @@ public class ParticleSystem : IDisposable
         GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
         GL.BindVertexArray(mVao);
-        GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, QUAD_VERTEX_COUNT, mParticles.Count);
+        GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, QUAD_VERTEX_COUNT, renderCount);
         GL.BindVertexArray(0);
 
         GL.Disable(EnableCap.Blend);
@@ -322,9 +326,10 @@ public class ParticleSystem : IDisposable
         if (mSmokeParticles.Count == 0)
             return;
 
-        var instances = new SmokeInstanceData[mSmokeParticles.Count];
+        int renderCount = Math.Min(mSmokeParticles.Count, MAX_PARTICLES);
+        var instances = new SmokeInstanceData[renderCount];
 
-        for (int i = 0; i < mSmokeParticles.Count; i++)
+        for (int i = 0; i < renderCount; i++)
         {
             var p = mSmokeParticles[i];
             instances[i] = new SmokeInstanceData
@@ -335,7 +340,7 @@ public class ParticleSystem : IDisposable
         }
 
         GL.BindBuffer(BufferTarget.ArrayBuffer, mSmokeInstanceVbo);
-        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, instances.Length * Marshal.SizeOf<SmokeInstanceData>(), instances);
+        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<SmokeInstanceData>(), instances);
 
         mSmokeShader.Use();
         mSmokeShader.SetMatrix4("view", view);
@@ -345,7 +350,7 @@ public class ParticleSystem : IDisposable
         GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
         GL.BindVertexArray(mSmokeVao);
-        GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, QUAD_VERTEX_COUNT, mSmokeParticles.Count);
+        GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, QUAD_VERTEX_COUNT, renderCount);
         GL.BindVertexArray(0);
 
         GL.Disable(EnableCap.Blend);

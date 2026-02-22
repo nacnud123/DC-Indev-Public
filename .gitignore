@@ -8,4 +8,7 @@ Building/
 /.idea
 /Properties
 Block Art/
+/psudocode/
+/Block Art/
 *.xcf
+/.vscode

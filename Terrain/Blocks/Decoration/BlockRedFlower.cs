@@ -9,7 +9,9 @@ public class BlockRedFlower : Block
     public override string Name => "Red Flower";
     public override RenderingType RenderType => RenderingType.Cross;
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Grass;
+    public override bool IsFlamable => true;
     public override bool IsSolid => false;
+    public override bool IsReplaceable => true;
     public override int LightOpacity => 0;
     public override float Hardness => 0.0f;
     public override bool SuffocatesBeneath => true;

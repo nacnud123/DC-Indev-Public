@@ -9,6 +9,7 @@ public class BlockSapling : Block
     public override string Name => "Sapling";
     public override RenderingType RenderType => RenderingType.Cross;
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Dirt;
+    public override bool IsFlamable => true;
     public override bool IsSolid => false;
     public override int LightOpacity => 0;
     public override float Hardness => 0.0f;

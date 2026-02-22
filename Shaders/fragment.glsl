@@ -12,7 +12,7 @@ uniform vec3 lightColor;
 uniform float ambientStrength;
 uniform float sunlightLevel;
 uniform sampler2D blockTexture;
-uniform int underwater;
+uniform int fluidType; // 0=none, 1=water, 2=lava
 
 
 
@@ -48,11 +48,10 @@ void main()
     float fogFactor = clamp((fogEnd - fragDist) / (fogEnd - fogStart), 0.0, 1.0);
     vec3 finalColor = mix(fogColor, baseColor, fogFactor);
 
-    if(underwater == 1)
-    {
-        vec3 waterTint = vec3(0.2, 0.4, 0.9);
-        finalColor = finalColor * waterTint;
-    }
+    if(fluidType == 1)
+        finalColor *= vec3(0.2, 0.4, 0.9);
+    else if(fluidType == 2)
+        finalColor *= vec3(0.9, 0.2, 0.1);
 
     float alpha = alphaOverride > 0.0 ? alphaOverride : texColor.a;
 

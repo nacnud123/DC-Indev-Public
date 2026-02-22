@@ -16,6 +16,7 @@ public abstract class Block
     public virtual bool IsSolid => true;
     public virtual bool GravityBlock => false;
     public virtual bool IsBreakable => true;
+    public virtual bool IsReplaceable => false;
     public virtual bool ShowInInventory => true;
     public virtual bool BlocksLight => LightOpacity >= 15;
     public virtual bool IsTransparent => !BlocksLight;
@@ -25,6 +26,9 @@ public abstract class Block
     public virtual int LightOpacity => 15;
     public virtual float Hardness => 1.0f;
     public virtual bool TicksRandomly => false;
+    public virtual bool IsFlamable => false;
+    public virtual int RandomTickDivisor => 1;
+    public virtual bool IsFluid => false;
     public virtual bool SlowsEntities => false;
     public virtual List<BlockType> BlocksThatCanSupport => new List<BlockType>() { BlockType.All };
 
@@ -33,11 +37,22 @@ public abstract class Block
 
     public virtual TextureCoords TopTextureCoords => KDefaultCoords;
     public virtual TextureCoords BottomTextureCoords => KDefaultCoords;
+
+    public virtual TextureCoords FrontTextureCoords => SideTextureCoords;
+    public virtual TextureCoords BackTextureCoords => SideTextureCoords;
+    public virtual TextureCoords LeftTextureCoords => SideTextureCoords;
+    public virtual TextureCoords RightTextureCoords => SideTextureCoords;
+
+
+
     public virtual TextureCoords SideTextureCoords => KDefaultCoords;
     public virtual TextureCoords InventoryTextureCoords => TopTextureCoords;
 
+    public virtual int TickRate => 0;  // 0 = not scheduled
+
     public virtual void RandomDisplayTick(int x, int y, int z, Random random) { }
     public virtual void RandomTick(World world, int x, int y, int z, Random random) { }
+    public virtual void ScheduledTick(World world, int x, int y, int z, Random random) { }
     public virtual void OnPlaced(World world, int x, int y, int z) { }
     public virtual void OnRemoved(World world, int x, int y, int z) { }
 

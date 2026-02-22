@@ -7,6 +7,8 @@ namespace VoxelEngine.Terrain;
 
 public partial class World
 {
+    private const float TORCH_SELECT_PADDING = 2f / 16f;
+
     public RaycastHit Raycast(Vector3 origin, Vector3 direction, float maxDist = 8f)
     {
         var blockHit = RaycastBlocks(origin, direction, maxDist);
@@ -59,11 +61,25 @@ public partial class World
         while (dist < maxDist)
         {
             var block = GetBlock(current.X, current.Y, current.Z);
-            if (block != BlockType.Air && block != BlockType.Water)
+            if (block != BlockType.Air && !BlockRegistry.IsFluid(block))
             {
                 var pos = new Vector3(current.X, current.Y, current.Z);
-                var min = BlockRegistry.GetBoundsMin(block) + pos;
-                var max = BlockRegistry.GetBoundsMax(block) + pos;
+
+                var minLocal = BlockRegistry.GetBoundsMin(block);
+                var maxLocal = BlockRegistry.GetBoundsMax(block);
+
+                // Make torches easier to target: expand selection AABB a bit (raycast only).
+                if (block == BlockType.Torch)
+                {
+                    int meta = GetMetadata(current.X, current.Y, current.Z);
+                    if (meta > 0)
+                        (minLocal, maxLocal) = BlockTorch.GetWallTorchBounds(meta - 1);
+
+                    ExpandAndClampLocalAabb(ref minLocal, ref maxLocal, TORCH_SELECT_PADDING);
+                }
+
+                var min = minLocal + pos;
+                var max = maxLocal + pos;
 
                 if (RayIntersectsAabb(origin, dir, min, max, out float hitDist) && hitDist <= maxDist)
                 {
@@ -101,6 +117,20 @@ public partial class World
         }
 
         return RaycastHit.Miss;
+    }
+
+    private static void ExpandAndClampLocalAabb(ref Vector3 min, ref Vector3 max, float pad)
+    {
+        min -= new Vector3(pad);
+        max += new Vector3(pad);
+
+        min.X = Math.Clamp(min.X, 0f, 1f);
+        min.Y = Math.Clamp(min.Y, 0f, 1f);
+        min.Z = Math.Clamp(min.Z, 0f, 1f);
+
+        max.X = Math.Clamp(max.X, 0f, 1f);
+        max.Y = Math.Clamp(max.Y, 0f, 1f);
+        max.Z = Math.Clamp(max.Z, 0f, 1f);
     }
 
     private static bool RayIntersectsAabb(Vector3 origin, Vector3 dir, Vector3 min, Vector3 max, out float hitDist)

@@ -1,4 +1,5 @@
 // Minecraft-style light propagation using BFS flood-fill. Processes both sunlight and block light emission with incremental updates. | DA | 2/5/26
+using VoxelEngine.Core;
 using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;
@@ -35,21 +36,39 @@ public class LightingEngine
         {
             X = x;
             Y = y;
-            Z = z;
+            Z = z; OldLight = oldLight;
             OldLight = oldLight;
         }
     }
 
+    private readonly int mMinBlockLight;
+    private readonly int mMaxBlockLight;
+
+
+    private readonly int mMinSunLight;
+    private readonly int mMaxSunLight;
+
+    private int ClampBlockLight(int light) => Math.Clamp(light, mMinBlockLight, mMaxBlockLight);
+    private int ClampSunLight(int light) => Math.Clamp(light, mMinSunLight, mMaxSunLight);
+
     public LightingEngine(World world)
     {
         mWorld = world;
+        var settings = Game.Instance.GetWorldGenSettings;
+
+        mMinBlockLight = settings.MinBlockLightLevel;
+        mMaxBlockLight = Math.Min(settings.MaxBlockLightLevel, Chunk.MAX_LIGHT);
+
+        // Initialize sunlight clamp values so ClampSunLight works
+        mMinSunLight = settings.MinSunLightLevel;
+        mMaxSunLight = Math.Min(settings.MaxSunLightLevel, Chunk.MAX_LIGHT);
     }
 
     public bool HasPendingUpdates =>
         mSkyLightQueue.Count > 0 || mSkyRemovalQueue.Count > 0 ||
         mBlockLightQueue.Count > 0 || mBlockRemovalQueue.Count > 0;
-    
-    // Runs onc when a chunk is first generated.
+
+    // Runs once when a chunk is first generated.
     // For each column, start with light = 15 at the top. Walk downwards. At each block, subtract that block's LightOpacity. Set the sky light at each position to the remaining light value. Also, scan for any light-emitting blocks and enqueue them for block light propagation.
     public void CalculateInitialLighting(Chunk chunk)
     {
@@ -62,6 +81,8 @@ public class LightingEngine
                 {
                     int opacity = BlockRegistry.GetBlockOpacity(chunk.GetBlock(x, y, z));
                     light = Math.Max(0, light - opacity);
+
+                    light = ClampSunLight(light);
 
                     chunk.SetSkyLightDirect(x, y, z, (byte)light);
                 }
@@ -82,6 +103,8 @@ public class LightingEngine
                     {
                         int worldX = worldOffsetX + x;
                         int worldZ = worldOffsetZ + z;
+
+                        emission = Math.Min(emission, mMaxBlockLight);
 
                         chunk.SetBlockLightDirect(x, y, z, (byte)emission);
                         mBlockLightQueue.Enqueue(new LightNode(worldX, y, worldZ));
@@ -120,14 +143,20 @@ public class LightingEngine
         }
 
         ProcessSkyLightQueue(int.MaxValue);
+
+        // Release internal buffer capacity that grew during bulk propagation
+        mSkyLightQueue.TrimExcess();
     }
 
     public void PropagateAllBlockLight()
     {
         ProcessBlockLightQueue(int.MaxValue);
+
+        // Release internal buffer capacity that grew during bulk propagation
+        mBlockLightQueue.TrimExcess();
     }
 
-    // If the block blocks light, zero out sky light at that position, enqueue it for removal. Also walk downward and remove sky light from all blocks below until hitting another opaque block.
+    // If the block blocks light, zero out sky light at that position, enqueue it for removal. Also, walk downward and remove sky light from all blocks below until hitting another opaque block.
     public void OnBlockPlaced(int x, int y, int z, BlockType newBlock)
     {
         if (BlockRegistry.BlocksLight(newBlock))
@@ -162,7 +191,7 @@ public class LightingEngine
             }
         }
 
-        int emission = BlockRegistry.Get(newBlock).LightEmission;
+        int emission = Math.Min(BlockRegistry.Get(newBlock).LightEmission, mMaxBlockLight);
         if (emission > 0)
         {
             mWorld.SetBlockLightDirect(x, y, z, (byte)emission);
@@ -171,7 +200,7 @@ public class LightingEngine
         }
     }
 
-    // When block is removed, if it was a light emitter, zero out block light, enqueue for removal. Check if the position now has sky access. Similarly fill in block light from neighbors.
+    // When a block is removed, if it was a light emitter, zero out block light, enqueue for removal. Check if the position now has sky access. Similarly, fill in block light from neighbors.
     public void OnBlockRemoved(int x, int y, int z, BlockType oldBlock)
     {
         int oldEmission = BlockRegistry.Get(oldBlock).LightEmission;
@@ -195,7 +224,8 @@ public class LightingEngine
 
         if (hasSkyAccess)
         {
-            mWorld.SetSkyLightDirect(x, y, z, Chunk.MAX_LIGHT);
+            // Give full sunlight using sunlight max
+            mWorld.SetSkyLightDirect(x, y, z, (byte)mMaxSunLight);
             mSkyLightQueue.Enqueue(new LightNode(x, y, z));
             mWorld.MarkChunkDirtyAt(x, z);
 
@@ -204,7 +234,7 @@ public class LightingEngine
                 if (BlockRegistry.BlocksLight(mWorld.GetBlock(x, belowY, z)))
                     break;
 
-                mWorld.SetSkyLightDirect(x, belowY, z, Chunk.MAX_LIGHT);
+                mWorld.SetSkyLightDirect(x, belowY, z, (byte)mMaxSunLight);
                 mSkyLightQueue.Enqueue(new LightNode(x, belowY, z));
             }
         }
@@ -213,7 +243,8 @@ public class LightingEngine
             int maxNeighborSkyLight = GetMaxNeighborSkyLight(x, y, z);
             if (maxNeighborSkyLight > 1)
             {
-                mWorld.SetSkyLightDirect(x, y, z, (byte)(maxNeighborSkyLight - 1));
+                int write = ClampSunLight(maxNeighborSkyLight - 1);
+                mWorld.SetSkyLightDirect(x, y, z, (byte)write);
                 mSkyLightQueue.Enqueue(new LightNode(x, y, z));
                 mWorld.MarkChunkDirtyAt(x, z);
             }
@@ -310,7 +341,7 @@ public class LightingEngine
             return;
 
         int opacity = BlockRegistry.GetBlockOpacity(mWorld.GetBlock(x, y, z));
-        int propagatedLight = newLight - opacity;
+        int propagatedLight = ClampSunLight(newLight - opacity);
 
         if (propagatedLight > mWorld.GetSkyLight(x, y, z))
         {
@@ -381,7 +412,7 @@ public class LightingEngine
             return;
 
         int opacity = BlockRegistry.GetBlockOpacity(mWorld.GetBlock(x, y, z));
-        int propagatedLight = newLight - opacity;
+        int propagatedLight = ClampBlockLight(newLight - opacity);
 
         if (propagatedLight > mWorld.GetBlockLight(x, y, z))
         {

@@ -1,8 +1,9 @@
-// Main file that manages the world. Has functions the do world ticks, rebuild dirty chunk's meshes, render entities, initial generation, and get / set blocks | DA | 2/14/26
+// Main file that manages the world. Has function to do world ticks, rebuild dirty chunk's meshes, render entities, initial generation, and get / set blocks | DA | 2/14/26
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Rendering;
+using VoxelEngine.Saving;
 using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;
@@ -23,6 +24,7 @@ public struct RaycastHit
 
 public partial class World
 {
+    // V Not really needed anymore, but I don't feel like getting rid of it. 
     public int SizeInChunks = 8;
 
     public static World? Current { get; private set; }
@@ -31,16 +33,22 @@ public partial class World
     private readonly LightingEngine mLightingEngine;
     private readonly Frustum mFrustum = new();
     private readonly List<Entity> mEntities = new();
-    private readonly Queue<(int x, int y, int z)> mBlockTickQueue = new();
+    private readonly Queue<(int x, int y, int z, int countdown)> mBlockTickQueue = new();
+    private readonly HashSet<(int, int, int)> mScheduledTickSet = new();
+    private readonly HashSet<Chunk> mDirtyChunks = new();
     private readonly Random mWorldRand;
 
     private int mRandomTickSeed;
+
+    private const int MAX_CHUNK_REBUILDS_PER_FRAME = 8;
+
+    public Chunk[,] GetChunks() => mChunks;
 
     public TerrainGen TerrainGen;
 
     public IReadOnlyList<Entity> Entities => mEntities;
 
-    public World(int worldSize)
+    public World(int worldSize, int seed, WorldGenSettings settings = default)
     {
         SizeInChunks = worldSize;
 
@@ -49,24 +57,28 @@ public partial class World
         mLightingEngine = new LightingEngine(this);
 
         TerrainGen = new TerrainGen();
+        TerrainGen.WorldSettings = settings;
 
         mWorldRand = new Random();
         mRandomTickSeed = mWorldRand.Next();
+
+        var loaded = new bool[SizeInChunks, SizeInChunks];
 
         for (int x = 0; x < SizeInChunks; x++)
         {
             for (int z = 0; z < SizeInChunks; z++)
             {
                 mChunks[x, z] = new Chunk(x, z, this);
+                loaded[x, z] = Serialization.Load(mChunks[x, z]);
             }
         }
 
-        int seed = DateTime.Now.Second;
         for (int x = 0; x < SizeInChunks; x++)
         {
             for (int z = 0; z < SizeInChunks; z++)
             {
-                TerrainGen.GenerateChunk(this, x, z, seed);
+                if (!loaded[x, z])
+                    TerrainGen.GenerateChunk(this, x, z, seed);
             }
         }
     }
@@ -92,6 +104,11 @@ public partial class World
                 mChunks[x, z].RebuildMeshIfDirty();
             }
         }
+
+        mDirtyChunks.Clear();
+
+        // Release terrain generation data
+        TerrainGen.ReleaseGenerationData();
     }
 
     // Process lighting ticks, rebuild the mesh if dirty, and does random ticks.
@@ -100,24 +117,29 @@ public partial class World
         if (mLightingEngine.HasPendingUpdates)
             mLightingEngine.ProcessTick();
 
-        for (int x = 0; x < SizeInChunks; x++)
+        int rebuilt = 0;
+        mDirtyChunks.RemoveWhere(chunk =>
         {
-            for (int z = 0; z < SizeInChunks; z++)
-            {
-                if (mChunks[x, z].IsLoaded)
-                    mChunks[x, z].RebuildMeshIfDirty();
-            }
-        }
+            if (rebuilt >= MAX_CHUNK_REBUILDS_PER_FRAME)
+                return false;
 
-        DoRandomTick();
+            if (!chunk.IsLoaded)
+                return false;
+
+            chunk.RebuildMeshIfDirty();
+            rebuilt++;
+            return true;
+        });
     }
 
     public void TickEntities()
     {
-        foreach (var entity in mEntities)
+
+        for(int e = 0; e < mEntities.Count; e++)
         {
-            entity.Tick(this);
+            mEntities[e].Tick(this);
         }
+
 
         int removed = mEntities.RemoveAll(e => !e.IsAlive);
         if (removed > 0)
@@ -261,12 +283,49 @@ public partial class World
         mChunks[chunkX, chunkZ].SetBlockLightDirect(localX, worldY, localZ, level);
     }
 
+    public int GetMetadata(int worldX, int worldY, int worldZ)
+    {
+        if (worldY is < 0 or >= Chunk.HEIGHT)
+            return 0;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return 0;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+        return mChunks[chunkX, chunkZ].GetMetadata(localX, worldY, localZ);
+    }
+
+    public void SetMetadata(int worldX, int worldY, int worldZ, byte value)
+    {
+        if (worldY is < 0 or >= Chunk.HEIGHT)
+            return;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+        mChunks[chunkX, chunkZ].SetMetadata(localX, worldY, localZ, value);
+    }
+
     public Chunk? GetChunk(int chunkX, int chunkZ)
     {
         if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
             return null;
 
         return mChunks[chunkX, chunkZ];
+    }
+
+    public void NotifyDirty(Chunk chunk)
+    {
+        mDirtyChunks.Add(chunk);
     }
 
     public void MarkChunkDirtyAt(int worldX, int worldZ)
@@ -309,6 +368,30 @@ public partial class World
         mChunks[chunkX, chunkZ].SetBlock(localX, worldY, localZ, type);
     }
 
+    public void SetChunkAsModified(int worldX, int worldY, int worldZ)
+    {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT)
+            return;
+
+        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
+        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+
+        if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
+            return;
+
+        int localX = worldX - chunkX * Chunk.WIDTH;
+        int localZ = worldZ - chunkZ * Chunk.DEPTH;
+
+        mChunks[chunkX, chunkZ].HasChunkBeenModified = true;
+    }
+
+    public void MarkAllChunksWithBlocksAsModified()
+    {
+        for (int x = 0; x < SizeInChunks; x++)
+            for (int z = 0; z < SizeInChunks; z++)
+                mChunks[x, z].HasChunkBeenModified = true;
+    }
+
     public void SetBlock(int worldX, int worldY, int worldZ, BlockType type)
     {
         if (worldY < 0 || worldY >= Chunk.HEIGHT)
@@ -341,11 +424,10 @@ public partial class World
         if (type != BlockType.Air)
             BlockRegistry.Get(type).OnPlaced(this, worldX, worldY, worldZ);
 
-        if (BlockRegistry.TicksRandomly(type))
+        if (BlockRegistry.IsFluid(type))
             ScheduleBlockTick(worldX, worldY, worldZ);
 
-        if (type == BlockType.Air)
-            ScheduleNeighborTicks(worldX, worldY, worldZ);
+        ScheduleNeighborTicks(worldX, worldY, worldZ);
 
         if (localX == 0 && chunkX > 0)
             mChunks[chunkX - 1, chunkZ].MarkDirty();
@@ -361,28 +443,35 @@ public partial class World
             var above = GetBlock(worldX, worldY + 1, worldZ);
             if (above != BlockType.Air && BlockRegistry.NeedsSupportBelow(above))
             {
-                SetBlock(worldX, worldY + 1, worldZ, BlockType.Air);
-                Game.Instance?.ParticleSystem?.SpawnBlockBreakParticles(
-                    new Vector3(worldX, worldY + 1, worldZ), above);
+                // Wall torches (metadata > 0) don't need support below
+                bool isWallTorch = above == BlockType.Torch && GetMetadata(worldX, worldY + 1, worldZ) > 0;
+                if (!isWallTorch)
+                {
+                    SetBlock(worldX, worldY + 1, worldZ, BlockType.Air);
+                    Game.Instance?.ParticleSystem?.SpawnBlockBreakParticles(
+                        new Vector3(worldX, worldY + 1, worldZ), above);
+                }
             }
 
-            BreakUnsupportedWallTorch(worldX - 1, worldY, worldZ, BlockType.TorchEast);
-            BreakUnsupportedWallTorch(worldX + 1, worldY, worldZ, BlockType.TorchWest);
-            BreakUnsupportedWallTorch(worldX, worldY, worldZ - 1, BlockType.TorchSouth);
-            BreakUnsupportedWallTorch(worldX, worldY, worldZ + 1, BlockType.TorchNorth);
+            // Wall torch metadata: 1=North, 2=South, 3=East, 4=West
+            BreakUnsupportedWallTorch(worldX - 1, worldY, worldZ, 3); // East torch attached to this block
+            BreakUnsupportedWallTorch(worldX + 1, worldY, worldZ, 4); // West torch attached to this block
+            BreakUnsupportedWallTorch(worldX, worldY, worldZ - 1, 2); // South torch attached to this block
+            BreakUnsupportedWallTorch(worldX, worldY, worldZ + 1, 1); // North torch attached to this block
         }
     }
 
-    private void BreakUnsupportedWallTorch(int x, int y, int z, BlockType expectedTorch)
+    private void BreakUnsupportedWallTorch(int x, int y, int z, int expectedMeta)
     {
         var block = GetBlock(x, y, z);
-        if (block == expectedTorch)
+        if (block == BlockType.Torch && GetMetadata(x, y, z) == expectedMeta)
         {
             SetBlock(x, y, z, BlockType.Air);
             Game.Instance?.ParticleSystem?.SpawnBlockBreakParticles(new Vector3(x, y, z), block);
         }
     }
-
+    
+    // TODO: Update to use new tree generation / look
     public void GrowTree(int x, int y, int z)
     {
         const int trunkHeight = 6;
@@ -417,6 +506,16 @@ public partial class World
 
         for (int x = 0; x < SizeInChunks; x++)
         {
+            // Early row-skip: check if the entire row is too far on the X axis
+            float rowCx = x * Chunk.WIDTH + Chunk.WIDTH * 0.5f;
+            float rowDx = rowCx - camera.Position.X;
+            if (rowDx * rowDx > renderDistSq)
+            {
+                for (int z2 = 0; z2 < SizeInChunks; z2++)
+                    mChunks[x, z2].IsLoaded = false;
+                continue;
+            }
+
             for (int z = 0; z < SizeInChunks; z++)
             {
                 var chunk = mChunks[x, z];

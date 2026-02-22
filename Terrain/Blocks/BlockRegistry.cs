@@ -21,12 +21,16 @@ public static class BlockRegistry
         Register(new BlockSand());
         Register(new BlockGravel());
         Register(new BlockClay());
+        Register(new BlockSandstone());
+        Register(new BlockStoneSlab());
+        Register(new BlockDoubleStoneSlab());
 
         // Stone
         Register(new BlockStone());
         Register(new BlockCobblestone());
         Register(new BlockMossyCobblestone());
         Register(new BlockBedrock());
+        Register(new BlockStoneStair());
 
         // Ores
         Register(new BlockCoalOre());
@@ -39,6 +43,8 @@ public static class BlockRegistry
         Register(new BlockLeaves());
         Register(new BlockPlanks());
         Register(new BlockWoodSlab());
+        Register(new BlockDoubleWoodSlab());
+        Register(new WoodStiars());
 
         // Decoration
         Register(new BlockFlower());
@@ -54,6 +60,15 @@ public static class BlockRegistry
         Register(new BlockBricks());
         Register(new BlockSponge());
         Register(new BlockGlowstone());
+        Register(new BlockObsidian());
+        Register(new BlockBookcase());
+        Register(new BlockDiamondBlock());
+        Register(new BlockGoldBlock());
+        Register(new BlockIronBlock());
+        Register(new BlockTNT());
+        Register(new BlockWorkBench());
+        Register(new BlockFurnace());
+        Register(new BlockChest());
 
         // Colored
         Register(new BlockBlack());
@@ -64,13 +79,13 @@ public static class BlockRegistry
 
         // Lighting
         Register(new BlockTorch());
-        Register(new BlockWallTorch(BlockType.TorchNorth, "Wall Torch (North)", 0));
-        Register(new BlockWallTorch(BlockType.TorchSouth, "Wall Torch (South)", 1));
-        Register(new BlockWallTorch(BlockType.TorchEast, "Wall Torch (East)", 2));
-        Register(new BlockWallTorch(BlockType.TorchWest, "Wall Torch (West)", 3));
 
         // Fluids
         Register(new BlockWater());
+        Register(new BlockLava());
+
+        // Special
+        Register(new BlockFire());
     }
 
     public static void Register(Block block)
@@ -98,16 +113,25 @@ public static class BlockRegistry
     public static bool GetSuffocatesBeneath(BlockType type) => Get(type).SuffocatesBeneath;
     public static bool IsTransparent(BlockType type) => type == BlockType.Air || Get(type).IsTransparent;
     public static bool GetSlowsEntity(BlockType type) => Get(type).SlowsEntities;
+    public static bool IsFlamable(BlockType type) => Get(type).IsFlamable;
     public static string GetName(BlockType type) => Get(type).Name;
     public static TextureCoords GetTopTexture(BlockType type) => Get(type).TopTextureCoords;
     public static TextureCoords GetBottomTexture(BlockType type) => Get(type).BottomTextureCoords;
     public static TextureCoords GetSideTexture(BlockType type) => Get(type).SideTextureCoords;
+
+    public static TextureCoords GetFrontTexture(BlockType type) => Get(type).FrontTextureCoords;
+    public static TextureCoords GetBackTexture(BlockType type) => Get(type).BackTextureCoords;
+    public static TextureCoords GetLeftTexture(BlockType type) => Get(type).LeftTextureCoords;
+    public static TextureCoords GetRightTexture(BlockType type) => Get(type).RightTextureCoords;
+
     public static TextureCoords GetParticleTexture(BlockType type) => Get(type).InventoryTextureCoords;
     public static RenderingType GetRenderType(BlockType type) => Get(type).RenderType;
     public static Vector3 GetBoundsMin(BlockType type) => Get(type).BoundsMin;
     public static Vector3 GetBoundsMax(BlockType type) => Get(type).BoundsMax;
     public static bool NeedsSupportBelow(BlockType type) => Get(type).NeedsSupportBelow;
+    public static bool IsFluid(BlockType type) => Get(type).IsFluid;
     public static bool TicksRandomly(BlockType type) => Get(type).TicksRandomly;
     public static bool CanBlockSupport(BlockType type, BlockType beneath) => Get(type).CanBlockSupport(beneath);
     public static BlockBreakMaterial GetBlockBreakMaterial(BlockType type) => Get(type).BreakMaterial;
+    public static int GetTickRate(BlockType type) => Get(type).TickRate;
 }

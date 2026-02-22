@@ -1,4 +1,4 @@
-// A partial class that extends World that has functions related to random ticks. Also, has random tick functions for water. | DA | 2/14/26
+// A partial class that extends World that has functions related to random ticks and scheduled ticks. | DA | 2/14/26
 using OpenTK.Mathematics;
 using VoxelEngine.Terrain.Blocks;
 
@@ -33,31 +33,44 @@ public partial class World
 
     public void ScheduleBlockTick(int x, int y, int z)
     {
-        mBlockTickQueue.Enqueue((x, y, z));
+        var blockType = GetBlock(x, y, z);
+        int tickRate = BlockRegistry.GetTickRate(blockType);
+        if (tickRate <= 0)
+            return;
+
+        var key = (x, y, z);
+        if (mScheduledTickSet.Contains(key))
+            return;
+
+        mScheduledTickSet.Add(key);
+        mBlockTickQueue.Enqueue((x, y, z, tickRate));
     }
 
     private void ScheduleNeighborTicks(int x, int y, int z)
     {
-        ScheduleIfWater(x, y + 1, z);
-        ScheduleIfWater(x, y - 1, z);
-        ScheduleIfWater(x + 1, y, z);
-        ScheduleIfWater(x - 1, y, z);
-        ScheduleIfWater(x, y, z + 1);
-        ScheduleIfWater(x, y, z - 1);
+        ScheduleBlockTick(x, y + 1, z);
+        ScheduleBlockTick(x, y - 1, z);
+        ScheduleBlockTick(x + 1, y, z);
+        ScheduleBlockTick(x - 1, y, z);
+        ScheduleBlockTick(x, y, z + 1);
+        ScheduleBlockTick(x, y, z - 1);
     }
 
-    private void ScheduleIfWater(int x, int y, int z)
-    {
-        if (GetBlock(x, y, z) == BlockType.Water)
-            ScheduleBlockTick(x, y, z);
-    }
-
-    public void DoBlockTick()
+    public void DoScheduledTick()
     {
         int count = Math.Min(mBlockTickQueue.Count, MAX_BLOCK_TICKS_PER_TICK);
         for (int i = 0; i < count; i++)
         {
-            var (x, y, z) = mBlockTickQueue.Dequeue();
+            var (x, y, z, countdown) = mBlockTickQueue.Dequeue();
+
+            if (countdown > 0)
+            {
+                mBlockTickQueue.Enqueue((x, y, z, countdown - 1));
+                continue;
+            }
+
+            // countdown == 0: fire the tick
+            mScheduledTickSet.Remove((x, y, z));
 
             int chunkX = x >= 0 ? x / Chunk.WIDTH : (x + 1) / Chunk.WIDTH - 1;
             int chunkZ = z >= 0 ? z / Chunk.DEPTH : (z + 1) / Chunk.DEPTH - 1;
@@ -67,14 +80,13 @@ public partial class World
                 continue;
 
             var blockType = GetBlock(x, y, z);
-            if (blockType != BlockType.Air && BlockRegistry.TicksRandomly(blockType))
-            {
-                BlockRegistry.Get(blockType).RandomTick(this, x, y, z, mWorldRand);
-            }
+            var blockDef = BlockRegistry.Get(blockType);
+            if (blockDef.TickRate > 0)
+                blockDef.ScheduledTick(this, x, y, z, mWorldRand);
         }
     }
 
-    private void DoRandomTick()
+    public void DoRandomTick()
     {
         for (int cx = 0; cx < SizeInChunks; cx++)
         {

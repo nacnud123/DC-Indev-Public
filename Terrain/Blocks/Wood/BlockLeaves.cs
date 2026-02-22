@@ -8,6 +8,7 @@ public class BlockLeaves : Block
     public override BlockType Type => BlockType.Leaves;
     public override string Name => "Leaves";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Grass;
+    public override bool IsFlamable => true;
     public override float Hardness => 0.2f;
     public override int LightOpacity => 1;
 

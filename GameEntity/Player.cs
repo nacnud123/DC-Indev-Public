@@ -27,14 +27,22 @@ public partial class Player : Entity
     public bool IsSprinting { get; private set; }
     public bool IsUnderWater { get; private set; }
     public bool IsInWater { get; private set; }
+    public bool IsUnderLava { get; private set; }
+    public bool IsInLava { get; private set; }
     private bool IsSlowedDown { get; set; }
     private bool mWasInWater = false;
+    private bool mWasInLava = false;
     
+    public float HorizontalSpeed { get; private set; }
+
     private float mStepTimer = 0;
     private float mStepInterval = .5f;
 
     private Vector3 mSpawnPosition;
     private BlockType mSelectedBlock = BlockType.Grass;
+    private float mSmoothEyeY;
+
+    private const float EYE_SMOOTH_SPEED = 16f;
 
     public new Vector3 Position
     {
@@ -42,7 +50,7 @@ public partial class Player : Entity
         set
         {
             base.Position = value;
-            Camera.Position = value + new Vector3(0, EyeHeight, 0);
+            Camera.Position = new Vector3(value.X, mSmoothEyeY, value.Z);
         }
     }
 
@@ -50,6 +58,7 @@ public partial class Player : Entity
     {
         mSpawnPosition = spawnPosition;
         base.Position = spawnPosition;
+        mSmoothEyeY = spawnPosition.Y + EyeHeight;
         Camera = new Camera(spawnPosition + new Vector3(0, EyeHeight, 0), aspectRatio);
         IsSlowedDown = false;
     }
@@ -69,18 +78,32 @@ public partial class Player : Entity
                 new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1), (int)MathF.Floor(Position.Z)),
                 BlockType.Water
             );
-            
+
             Game.Instance.AudioManager.PlayBlockContactSound(BlockBreakMaterial.Water);
         }
 
+        if (IsInLava && !mWasInLava)
+        {
+            Game.Instance.ParticleSystem.SpawnBlockBreakParticles(
+                new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1), (int)MathF.Floor(Position.Z)),
+                BlockType.Lava
+            );
+        }
+
         mWasInWater = IsInWater;
+        mWasInLava = IsInLava;
 
         if (IsFlying)
             UpdateFlying(world, keyboard, deltaTime);
-        else if(IsInWater)
+        else if(IsInWater || IsInLava)
             UpdateSwimming(world, keyboard, deltaTime);
         else
             UpdateSurvival(world, keyboard, deltaTime);
+
+        // Smoothly interpolate camera Y to avoid jarring snaps on step-up/down
+        float targetEyeY = base.Position.Y + EyeHeight;
+        mSmoothEyeY = mSmoothEyeY + (targetEyeY - mSmoothEyeY) * MathF.Min(1f, EYE_SMOOTH_SPEED * deltaTime);
+        Camera.Position = new Vector3(base.Position.X, mSmoothEyeY, base.Position.Z);
     }
 
     // This function checks if the player is underwater or is in a block that slows them down
@@ -90,7 +113,9 @@ public partial class Player : Entity
         var footY = (int)Math.Floor(Position.Y);
         var footZ = (int)Math.Floor(Position.Z);
 
-        IsInWater = (world.GetBlock(footX, footY, footZ) == BlockType.Water);
+        var footBlock = world.GetBlock(footX, footY, footZ);
+        IsInWater = (footBlock == BlockType.Water);
+        IsInLava = (footBlock == BlockType.Lava);
 
         var eyeX = (int)MathF.Floor(Camera.Position.X);
         var eyeY = (int)MathF.Floor(Camera.Position.Y);
@@ -99,6 +124,7 @@ public partial class Player : Entity
         var blockAtCamera = world.GetBlock(eyeX, eyeY, eyeZ);
 
         IsUnderWater = (blockAtCamera == BlockType.Water);
+        IsUnderLava = (blockAtCamera == BlockType.Lava);
 
         IsSlowedDown = false;
         for (int y = footY; y <= eyeY; y++)
@@ -180,6 +206,7 @@ public partial class Player : Entity
         Position += actual;
 
         float horizontalSpeed = MathF.Sqrt(actual.X * actual.X + actual.Z * actual.Z) / deltaTime;
+        HorizontalSpeed = horizontalSpeed;
 
         if (IsOnGround && horizontalSpeed > 0.2f)
         {
@@ -308,7 +335,9 @@ public partial class Player : Entity
     // Reset the player back to spawn point
     public void ResetPosition()
     {
-        Position = mSpawnPosition;
+        base.Position = mSpawnPosition;
+        mSmoothEyeY = mSpawnPosition.Y + EyeHeight;
+        Camera.Position = new Vector3(mSpawnPosition.X, mSmoothEyeY, mSpawnPosition.Z);
         Velocity = Vector3.Zero;
         IsOnGround = false;
         Camera.SetRotation(0, -90);

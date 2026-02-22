@@ -1,5 +1,5 @@
 // The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26
-// Updated with more complex sound playing functions, also added ability to play background music.
+// Updated with more complex sound playing functions, also added the ability to play background music.
 using SFML.Audio;
 using System;
 using System.Collections.Generic;
@@ -51,13 +51,13 @@ namespace VoxelEngine.Audio
             }
         }
 
-        public void UpdateMusicVolume() // Not needed yet
+        public void UpdateBackgroundMusicVolume() // Not needed yet
         {
             if (mBackgroundMusic != null)
                 mBackgroundMusic.Volume = MusicVol;
         }
 
-        public void PlayAudio(string filePath, int vol, bool loop = false) // Play audio at the file, with volume, also does slight randomization to the pitch of the audio
+        public void PlayAudio(string filePath, int vol, bool loop = false)
         {
             if (mDisposed) 
                 return;
