@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -8,6 +9,7 @@ public class BlockSand : Block
     public override BlockType Type => BlockType.Sand;
     public override string Name => "Sand";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Sand;
+    public override ToolType PreferredTool => ToolType.Shovel;
 
     public override bool GravityBlock => true;
 

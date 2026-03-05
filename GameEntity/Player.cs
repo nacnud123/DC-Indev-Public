@@ -1,4 +1,5 @@
-// Main player function, handles stuff like movement, block selection, walking audio, block interaction management | DA | 2/14/26
+// Player entity — movement (survival, flying, swimming), input, fluid/fire damage, and environmental state | DA | 2/14/26
+
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using VoxelEngine.Core;
@@ -13,7 +14,6 @@ public partial class Player : Entity
     private const float FLY_SPEED = 10.0f;
     private const float FLY_SPRINT_MULTIPLIER = 10f;
 
-    // Swimming
     private const float SWIM_SPEED = 2.5f;
     private const float SWIM_UP_SPEED = 3.5f;
     private const float SWIM_SPRINT_MULT = 2.0f;
@@ -32,7 +32,7 @@ public partial class Player : Entity
     private bool IsSlowedDown { get; set; }
     private bool mWasInWater = false;
     private bool mWasInLava = false;
-    
+
     public float HorizontalSpeed { get; private set; }
 
     private float mStepTimer = 0;
@@ -43,6 +43,21 @@ public partial class Player : Entity
     private float mSmoothEyeY;
 
     private const float EYE_SMOOTH_SPEED = 16f;
+
+    private float mInvincibilityTimer = 0f;
+    const float INVINCIBILITY_TIMER = .5f;
+    private int mDamageRemainder; // sub-integer damage carried across hits
+    public const int PLAYER_MAX_HEALTH = 20;
+
+
+    private float mLavaDamageTimer = 0f;
+    private float mFireDamageTimer = 0f;
+
+    public const float BREATH_MAX = 15f;
+    private float mBreathTimer = 0f;
+    private float mDrownTimer = 0f;
+
+    public float BreathFraction => mBreathTimer / BREATH_MAX;
 
     public new Vector3 Position
     {
@@ -56,11 +71,15 @@ public partial class Player : Entity
 
     public Player(Vector3 spawnPosition, float aspectRatio)
     {
+        this.Health = 20;
         mSpawnPosition = spawnPosition;
         base.Position = spawnPosition;
         mSmoothEyeY = spawnPosition.Y + EyeHeight;
         Camera = new Camera(spawnPosition + new Vector3(0, EyeHeight, 0), aspectRatio);
         IsSlowedDown = false;
+
+        mBreathTimer = BREATH_MAX;
+        mInvincibilityTimer = 2f;
     }
 
     public override void Tick(World world)
@@ -75,7 +94,8 @@ public partial class Player : Entity
         if (IsInWater && !mWasInWater)
         {
             Game.Instance.ParticleSystem.SpawnBlockBreakParticles(
-                new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1), (int)MathF.Floor(Position.Z)),
+                new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1),
+                    (int)MathF.Floor(Position.Z)),
                 BlockType.Water
             );
 
@@ -85,7 +105,8 @@ public partial class Player : Entity
         if (IsInLava && !mWasInLava)
         {
             Game.Instance.ParticleSystem.SpawnBlockBreakParticles(
-                new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1), (int)MathF.Floor(Position.Z)),
+                new Vector3i((int)MathF.Floor(Position.X), (int)MathF.Floor(Position.Y + 1),
+                    (int)MathF.Floor(Position.Z)),
                 BlockType.Lava
             );
         }
@@ -95,7 +116,7 @@ public partial class Player : Entity
 
         if (IsFlying)
             UpdateFlying(world, keyboard, deltaTime);
-        else if(IsInWater || IsInLava)
+        else if (IsInWater || IsInLava)
             UpdateSwimming(world, keyboard, deltaTime);
         else
             UpdateSurvival(world, keyboard, deltaTime);
@@ -104,9 +125,72 @@ public partial class Player : Entity
         float targetEyeY = base.Position.Y + EyeHeight;
         mSmoothEyeY = mSmoothEyeY + (targetEyeY - mSmoothEyeY) * MathF.Min(1f, EYE_SMOOTH_SPEED * deltaTime);
         Camera.Position = new Vector3(base.Position.X, mSmoothEyeY, base.Position.Z);
+
+        if (mInvincibilityTimer > 0)
+            mInvincibilityTimer -= deltaTime;
+
+        Camera.UpdateShake(deltaTime);
+
+        if (IsInLava)
+        {
+            mLavaDamageTimer -= deltaTime;
+            if (mLavaDamageTimer <= 0)
+            {
+                TakeDamage(2);
+                mLavaDamageTimer = .5f;
+            }
+
+            FireTimer = 15f;
+        }
+        else
+        {
+            mLavaDamageTimer = 0f;
+        }
+
+        var footX = (int)MathF.Floor(Position.X);
+        var footY = (int)MathF.Floor(Position.Y);
+        var footZ = (int)MathF.Floor(Position.Z);
+        if (world.GetBlock(footX, footY, footZ) == BlockType.Fire)
+            FireTimer = MathF.Max(FireTimer, 8f);
+
+        if (IsInWater && FireTimer > 0f)
+            FireTimer = 0f;
+
+        if (FireTimer > 0f)
+        {
+            FireTimer -= deltaTime;
+            mFireDamageTimer -= deltaTime;
+            if (mFireDamageTimer <= 0f)
+            {
+                TakeDamage(1);
+                mFireDamageTimer = 1f;
+            }
+        }
+        else
+        {
+            mFireDamageTimer = 0f;
+        }
+
+        if (IsUnderWater)
+        {
+            mBreathTimer -= deltaTime;
+            if (mBreathTimer <= 0)
+            {
+                mDrownTimer -= deltaTime;
+                if (mDrownTimer <= 0)
+                {
+                    TakeDamage(2);
+                    mDrownTimer = 1f;
+                }
+            }
+        }
+        else
+        {
+            mBreathTimer = Math.Min(BREATH_MAX, mBreathTimer + deltaTime * 2f);
+            mDrownTimer = 1f;
+        }
     }
 
-    // This function checks if the player is underwater or is in a block that slows them down
     public void UpdateUnderwaterState(World world)
     {
         var footX = (int)Math.Floor(Position.X);
@@ -137,19 +221,21 @@ public partial class Player : Entity
         }
     }
 
-    // Keyboard management
     private void HandleInput(KeyboardState keyboard)
     {
         if (keyboard.IsKeyPressed(Keys.F))
         {
             IsFlying = !IsFlying;
-            if (IsFlying) Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
+            if (IsFlying)
+            {
+                Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
+                mFallDistance = 0f;
+            }
         }
 
         IsSprinting = keyboard.IsKeyDown(Keys.LeftShift);
     }
 
-    // Do special movement when the player is flying
     private void UpdateFlying(World world, KeyboardState keyboard, float deltaTime)
     {
         float speed = IsSprinting ? FLY_SPEED * FLY_SPRINT_MULTIPLIER : FLY_SPEED;
@@ -167,7 +253,6 @@ public partial class Player : Entity
         IsOnGround = Physics.IsOnGround(world, GetBoundingBox());
     }
 
-    // Movement for when the player is not flying
     private void UpdateSurvival(World world, KeyboardState keyboard, float deltaTime)
     {
         var vel = Velocity;
@@ -201,9 +286,40 @@ public partial class Player : Entity
             moveDir.Z * speed
         ) * deltaTime;
 
+        float preCollisionVelY = Velocity.Y;
         float step = IsOnGround ? Physics.STEP_HEIGHT : 0f;
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), frameVelocity, step);
         Position += actual;
+
+        bool wasOnGround = IsOnGround;
+        if (MathF.Abs(actual.Y) < MathF.Abs(frameVelocity.Y) * 0.99f)
+        {
+            if (Velocity.Y < 0)
+                IsOnGround = true;
+
+            Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
+        }
+        else
+        {
+            IsOnGround = Physics.IsOnGround(world, GetBoundingBox());
+        }
+
+        if (IsOnGround && !wasOnGround)
+        {
+            // Just landed
+            if (mFallDistance > 0f)
+                Fall(world, mFallDistance);
+            
+            mFallDistance = 0f;
+        }
+        else if (IsOnGround)
+        {
+            mFallDistance = 0f;
+        }
+        else if (preCollisionVelY < 0f)
+        {
+            mFallDistance += -preCollisionVelY * deltaTime;
+        }
 
         float horizontalSpeed = MathF.Sqrt(actual.X * actual.X + actual.Z * actual.Z) / deltaTime;
         HorizontalSpeed = horizontalSpeed;
@@ -229,21 +345,8 @@ public partial class Player : Entity
         {
             mStepTimer = 0;
         }
-
-        if (MathF.Abs(actual.Y) < MathF.Abs(frameVelocity.Y) * 0.99f)
-        {
-            if (Velocity.Y < 0)
-                IsOnGround = true;
-
-            Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
-        }
-        else
-        {
-            IsOnGround = Physics.IsOnGround(world, GetBoundingBox());
-        }
     }
 
-    // Get the movement direction based on keyboard inputs
     private Vector3 GetMoveDirection(KeyboardState keyboard)
     {
         Vector3 forward = Camera.Front;
@@ -275,16 +378,15 @@ public partial class Player : Entity
         return dir.LengthSquared > 0 ? dir.Normalized() : dir;
     }
 
-    // Do swimming movement
     private void UpdateSwimming(World world, KeyboardState keyboard, float deltaTime)
     {
+        mFallDistance = 0f;
         var vel = Velocity;
         vel.Y -= WATER_GRAVITY * deltaTime;
         vel.Y = Math.Max(vel.Y, -WATER_TERMINAL);
 
         if (keyboard.IsKeyDown(Keys.Space))
         {
-
             var headX = (int)MathF.Floor(Position.X);
             var headY = (int)MathF.Floor(Position.Y);
             var headZ = (int)MathF.Floor(Position.Z);
@@ -322,6 +424,7 @@ public partial class Player : Entity
         {
             if (Velocity.Y < 0)
                 IsOnGround = true;
+            
             Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
         }
         else
@@ -332,7 +435,6 @@ public partial class Player : Entity
 
     public void HandleMouseLook(Vector2 delta) => Camera.Rotate(delta.X, delta.Y);
 
-    // Reset the player back to spawn point
     public void ResetPosition()
     {
         base.Position = mSpawnPosition;
@@ -341,5 +443,58 @@ public partial class Player : Entity
         Velocity = Vector3.Zero;
         IsOnGround = false;
         Camera.SetRotation(0, -90);
+    }
+
+    protected override void Fall(World world, float dist)
+    {
+        if (dist < 1f) 
+            return;
+
+        var bx = (int)MathF.Floor(Position.X);
+        var by = (int)MathF.Floor(Position.Y - 0.2f);
+        var bz = (int)MathF.Floor(Position.Z);
+        var mat = BlockRegistry.GetBlockBreakMaterial(world.GetBlock(bx, by, bz));
+        Game.Instance.AudioManager.PlayLandingSound(mat);
+
+        int damage = (int)MathF.Ceiling(dist - 3f);
+        if (damage > 0)
+            TakeDamage(damage);
+    }
+
+    public override void TakeDamage(int amount)
+    {
+        if (mInvincibilityTimer > 0)
+            return;
+        
+        
+        var inv = Game.Instance.PlayerInventory;
+        if (inv != null)
+        {
+            int armorValue = inv.GetArmorValue();
+            int scaledDamage = amount * (25 - armorValue) + mDamageRemainder;
+            int actualDamage = scaledDamage / 25;
+            mDamageRemainder = scaledDamage % 25;
+
+            inv.DamageArmor(amount);
+
+            if (actualDamage == 0)
+            {
+                mInvincibilityTimer = INVINCIBILITY_TIMER;
+                return;
+            }
+
+            amount = actualDamage;
+        }
+
+        Health = Math.Max(0, Health - amount);
+        mInvincibilityTimer = INVINCIBILITY_TIMER;
+        Camera.Shake(0.4f);
+
+        Game.Instance.AudioManager.PlayPlayerHurtSound();
+    }
+
+    public void Heal(int amount)
+    {
+        this.Health = Math.Min(PLAYER_MAX_HEALTH, Health + amount);
     }
 }

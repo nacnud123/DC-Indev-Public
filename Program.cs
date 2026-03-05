@@ -9,7 +9,6 @@ Console.WriteLine("  RMB       - Place block");
 Console.WriteLine("  0-9       - Select block");
 Console.WriteLine("  R         - Reset position");
 Console.WriteLine("  X         - Wireframe");
-Console.WriteLine("  P         - Spawn pig");
 Console.WriteLine("  ESC       - Pause");
 Console.WriteLine("  Tab       - Release cursor");
 Console.WriteLine("  F         - Toggle fly mode");
@@ -19,6 +18,8 @@ Console.WriteLine("  Ctrl      - Fly down");
 Console.WriteLine("  Shift     - Sprint");
 Console.WriteLine("  + / -     - Increase / decrease render distance");
 Console.WriteLine("  Mouse     - Look");
+Console.WriteLine("  F7        - Take screenshot");
+
 
 Console.WriteLine();
 

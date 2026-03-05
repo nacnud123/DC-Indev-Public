@@ -18,7 +18,7 @@ public class Texture : IDisposable
         Height = height;
     }
 
-    public static Texture LoadFromFile(string path, bool repeat = false)
+    public static Texture LoadFromFile(string path, bool repeat = false, bool mipmaps = false)
     {
         int handle = GL.GenTexture();
 
@@ -39,12 +39,23 @@ public class Texture : IDisposable
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
 
-        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, repeat ? (int)TextureWrapMode.ClampToBorder : (int)TextureWrapMode.Repeat);
-        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, repeat ? (int)TextureWrapMode.ClampToBorder : (int)TextureWrapMode.Repeat);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, repeat ? (int)TextureWrapMode.Repeat : (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, repeat ? (int)TextureWrapMode.Repeat : (int)TextureWrapMode.ClampToEdge);
         float[] borderColor = new float[] { 0f, 0f, 0f, 0f };
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBorderColor, borderColor);
 
-        GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
+        if (mipmaps)
+        {
+            GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
+        }
+        else
+        {
+            // Restrict sampler to the base mip level only. Some Windows drivers
+            // sample higher mip levels regardless of TextureMinFilter.Nearest,
+            // which bleeds dark transparent pixels from adjacent atlas tiles into
+            // the edges of item/block icons and creates a dark outline artefact.
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, 0);
+        }
 
         return new Texture(handle, width, height);
     }

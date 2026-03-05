@@ -1,5 +1,6 @@
 // A partial class that extends World that has functions related to random ticks and scheduled ticks. | DA | 2/14/26
 using OpenTK.Mathematics;
+using VoxelEngine.Rendering;
 using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;

@@ -8,7 +8,6 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Rendering;
 
-// Pre-renders block icons into FBO textures. Produces isometric 3D icons for Normal/Slab blocks and a composed stair mesh for Stairs. Icons are stored as OpenGL texture handles in-memory.
 public class BlockIconRenderer : IDisposable
 {
     private const int ICON_SIZE = 64;
@@ -40,12 +39,12 @@ void main() {
 }";
 
     // Face shading values (kept in sync with ChunkMeshBuilder shading)
-    private const float SHADE_TOP = 1.0f;
+    private const float SHADE_TOP    = 1.0f;
     private const float SHADE_BOTTOM = 0.5f;
-    private const float SHADE_FRONT = 0.8f;  // +Z
-    private const float SHADE_BACK = 0.8f;   // -Z
-    private const float SHADE_RIGHT = 0.7f;  // +X
-    private const float SHADE_LEFT = 0.7f;   // -X
+    private const float SHADE_FRONT  = 0.8f;  // +Z
+    private const float SHADE_BACK   = 0.8f;   // -Z
+    private const float SHADE_RIGHT  = 0.7f;  // +X
+    private const float SHADE_LEFT   = 0.7f;   // -X
 
     private readonly Dictionary<BlockType, int> mIconTextures = new();
     private Shader mShader = null!;

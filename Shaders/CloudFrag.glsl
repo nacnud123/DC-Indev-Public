@@ -15,11 +15,14 @@ void main()
 {
     vec4 texSample = texture(cloudTexture, vTexCoord);
 
+    // Discard transparent pixels — creates gaps between cloud puffs.
+    // This is the Core Profile equivalent of GL_ALPHA_TEST.
     if (texSample.a < 0.1)
         discard;
 
     vec3 color = cloudColor * texSample.rgb;
-    
+
+    // Optional fog: uncomment to fade cloud edges into the horizon fog color
     float fogFactor = clamp((fogEnd - vFragDist) / (fogEnd - fogStart), 0.0, 1.0);
     color = mix(fogColor, color, fogFactor);
 

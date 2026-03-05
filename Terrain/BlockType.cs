@@ -56,6 +56,7 @@ public enum BlockType : byte
     TNT,
     WorkBench,
     Furnace,
+    FurnaceLit,
     Chest,
 
     // Colored Blocks
@@ -75,7 +76,14 @@ public enum BlockType : byte
     // Special
     Fire,
     DuncanBlock,
-    
+
+    // Farming
+    Farmland,
+    WheatStage0,
+    WheatStage1,
+    WheatStage2,
+    WheatStage3,
+    WheatStage4,
 
     All = 255
 }

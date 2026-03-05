@@ -1,0 +1,10 @@
+# Made in Blockbench 5.0.7
+newmtl m_cdbe550c-e881-0ebd-6796-2f95061e6d82
+map_Kd HeadTexture.png
+newmtl m_1b10e0a9-6493-1ac3-25af-70a89721e28b
+map_Kd BodyTexture.png
+newmtl m_0d397883-ff06-d561-e6c3-29764dcb29ef
+map_Kd feathers2.png
+newmtl m_2d69e455-ae84-00ed-3ff7-48f314f59b59
+map_Kd Feathers.png
+newmtl none

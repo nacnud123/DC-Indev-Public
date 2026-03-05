@@ -134,16 +134,18 @@ public partial class World
 
     public void TickEntities()
     {
-
-        for(int e = 0; e < mEntities.Count; e++)
-        {
+        for (int e = 0; e < mEntities.Count; e++)
             mEntities[e].Tick(this);
+
+        // Single pass: dispose and remove dead entities
+        for (int e = mEntities.Count - 1; e >= 0; e--)
+        {
+            if (!mEntities[e].IsAlive)
+            {
+                mEntities[e].Dispose();
+                mEntities.RemoveAt(e);
+            }
         }
-
-
-        int removed = mEntities.RemoveAll(e => !e.IsAlive);
-        if (removed > 0)
-            mEntities.TrimExcess();
     }
 
     public void AddEntity(Entity entity)
@@ -200,16 +202,13 @@ public partial class World
         if (worldY is < 0 or >= Chunk.HEIGHT)
             return BlockType.Air;
 
-        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
-        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+        int chunkX = worldX >> 4;
+        int chunkZ = worldZ >> 4;
 
         if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
             return BlockType.Air;
 
-        int localX = worldX - chunkX * Chunk.WIDTH;
-        int localZ = worldZ - chunkZ * Chunk.DEPTH;
-
-        return mChunks[chunkX, chunkZ].GetBlock(localX, worldY, localZ);
+        return mChunks[chunkX, chunkZ].GetBlock(worldX & 15, worldY, worldZ & 15);
     }
 
     public int GetSkyLight(int worldX, int worldY, int worldZ)
@@ -356,16 +355,13 @@ public partial class World
         if (worldY < 0 || worldY >= Chunk.HEIGHT)
             return;
 
-        int chunkX = worldX >= 0 ? worldX / Chunk.WIDTH : (worldX + 1) / Chunk.WIDTH - 1;
-        int chunkZ = worldZ >= 0 ? worldZ / Chunk.DEPTH : (worldZ + 1) / Chunk.DEPTH - 1;
+        int chunkX = worldX >> 4;
+        int chunkZ = worldZ >> 4;
 
         if (chunkX < 0 || chunkX >= SizeInChunks || chunkZ < 0 || chunkZ >= SizeInChunks)
             return;
 
-        int localX = worldX - chunkX * Chunk.WIDTH;
-        int localZ = worldZ - chunkZ * Chunk.DEPTH;
-
-        mChunks[chunkX, chunkZ].SetBlock(localX, worldY, localZ, type);
+        mChunks[chunkX, chunkZ].SetBlock(worldX & 15, worldY, worldZ & 15, type);
     }
 
     public void SetChunkAsModified(int worldX, int worldY, int worldZ)
@@ -539,6 +535,30 @@ public partial class World
                 if (mFrustum.IsBoxVisible(min, max))
                     renderAction(chunk);
             }
+        }
+    }
+
+    public void RenderAll(Shader shader)
+    {
+        foreach (var chunk in mChunks)
+        {
+            if (chunk == null) 
+                continue;
+
+            shader.SetMatrix4("model", Matrix4.Identity);
+            chunk.Render();
+        }
+    }
+
+    public void RenderAllTransparent(Shader shader)
+    {
+        foreach (var chunk in mChunks)
+        {
+            if (chunk == null) 
+                continue;
+
+            shader.SetMatrix4("model", Matrix4.Identity);
+            chunk.RenderTransparent();
         }
     }
 

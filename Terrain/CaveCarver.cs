@@ -6,19 +6,21 @@ namespace VoxelEngine.Terrain;
 
 internal class CaveCarver
 {
+
     private const int CAVE_SEARCH_RADIUS = 8;
     private const int CAVE_MIN_Y = 2;
     private const int CAVE_MAX_Y = 120;
-    private const int CAVE_SPAWN_MIN_Y = 15;
-    private const int CAVE_SPAWN_MAX_Y = 90;
-    private const float WORM_CAVE_CHANCE = 0.45f;
-    private const float BRANCHING_CAVE_CHANCE = 0.15f;
-    private const float CAVERN_CHANCE = 0.08f;
-    private const float RAVINE_CHANCE = 0.01f;
+    private const int CAVE_SPAWN_MIN_Y = 5;         // was 15
+    private const int CAVE_SPAWN_MAX_Y = 110;       // was 90
+    private const float WORM_CAVE_CHANCE = 0.65f;   // was 0.45f
+    private const float BRANCHING_CAVE_CHANCE = 0.30f; // was 0.15f
+    private const float CAVERN_CHANCE = 0.12f;      // was 0.08f
+    private const float RAVINE_CHANCE = 0.02f;      // was 0.01f
     private const int MAX_BRANCH_DEPTH = 3;
     private const float CAVERN_START_CHANCE = 0.008f;
 
     private readonly int mChunkMinX, mChunkMinZ, mChunkMaxX, mChunkMaxZ;
+    private Chunk? mTargetChunk;
 
     public CaveCarver(int chunkMinX, int chunkMinZ, int chunkMaxX, int chunkMaxZ)
     {
@@ -30,6 +32,10 @@ internal class CaveCarver
 
     public void GenerateCaves(World world, int chunkX, int chunkZ, int seed)
     {
+        mTargetChunk = world.GetChunk(chunkX, chunkZ);
+        if (mTargetChunk == null)
+            return;
+
         for (int cx = chunkX - CAVE_SEARCH_RADIUS; cx <= chunkX + CAVE_SEARCH_RADIUS; cx++)
         {
             for (int cz = chunkZ - CAVE_SEARCH_RADIUS; cz <= chunkZ + CAVE_SEARCH_RADIUS; cz++)
@@ -58,11 +64,11 @@ internal class CaveCarver
     {
         int count = 0;
 
-        if (rng.NextDouble() < 0.15)
-            count = 1;
+        if (rng.NextDouble() < 0.40)
+            count++;
 
-        if (rng.NextDouble() < 0.04)
-            count = 2;
+        if (rng.NextDouble() < 0.12)
+            count++;
 
         for (int i = 0; i < count; i++)
         {
@@ -116,11 +122,11 @@ internal class CaveCarver
                 CarveWormBranching(world, x, y, z, branchYaw, branchPitch, branchRad, steps / 2 + rng.Next(20), rng, depth + 1);
             }
 
-            if (y < CAVE_MIN_Y || y > CAVE_MAX_Y) 
+            if (y < CAVE_MIN_Y || y > CAVE_MAX_Y)
                 break;
         }
     }
-    
+
     private void CarveWormCavern(World world, float x, float y, float z, float yaw, float pitch, float radius, int steps, Random rng)
     {
         bool inCavern = false;
@@ -152,26 +158,25 @@ internal class CaveCarver
             TerrainGen.Advance(ref x, ref y, ref z, yaw, pitch, speed);
             TerrainGen.Wobble(rng, ref yaw, ref pitch, 0.7f, 0.3f, 0.6f);
 
-            if (y < CAVE_MIN_Y || y > CAVE_MAX_Y) 
+            if (y < CAVE_MIN_Y || y > CAVE_MAX_Y)
                 break;
         }
     }
-    
+
     // Deep vertical gash, it's like a ravine. Linear path, not worm based
     private void CarveRavine(World world, float startX, float startY, float startZ, Random rng)
     {
         float yaw = TerrainGen.RandAngle(rng);
         int length = 40 + rng.Next(40);
+        int height = 10 + rng.Next(20);
+        int bottomY = (int)(startY - height / 2f);
+        int topY = (int)(startY + height / 2f);
         float x = startX, z = startZ;
 
         for (int step = 0; step < length; step++)
         {
             float progress = (float)step / length;
             float width = 1.5f + MathF.Sin(progress * MathF.PI) * 3.0f;
-
-            int height = 10 + rng.Next(20);
-            int bottomY = (int)(startY - height / 2f);
-            int topY = (int)(startY + height / 2f);
 
             for (int by = bottomY; by <= topY; by++)
             {
@@ -182,7 +187,7 @@ internal class CaveCarver
                         float dx = (bx - x) / width;
                         float dz = (bz - z) / width;
                         if (dx * dx + dz * dz <= 1.0f)
-                            CarveBlock(world, bx, by, bz);
+                            CarveBlock(bx, by, bz);
                     }
                 }
             }
@@ -195,11 +200,26 @@ internal class CaveCarver
 
     private void CarveSphere(World world, float cx, float cy, float cz, float radius)
     {
-        float r2 = radius * radius;
-
         int minX = (int)MathF.Floor(cx - radius), maxX = (int)MathF.Ceiling(cx + radius);
-        int minY = (int)MathF.Floor(cy - radius), maxY = (int)MathF.Ceiling(cy + radius);
         int minZ = (int)MathF.Floor(cz - radius), maxZ = (int)MathF.Ceiling(cz + radius);
+
+        // Reject spheres entirely outside the chunk before iterating any blocks.
+        if (maxX < mChunkMinX || minX > mChunkMaxX || maxZ < mChunkMinZ || minZ > mChunkMaxZ)
+            return;
+
+        float r2 = radius * radius;
+        int minY = (int)MathF.Floor(cy - radius), maxY = (int)MathF.Ceiling(cy + radius);
+
+        // Clamp iteration to the chunk + valid Y range so we never touch out-of-bounds blocks.
+        minX = Math.Max(minX, mChunkMinX);
+        maxX = Math.Min(maxX, mChunkMaxX);
+        minY = Math.Max(minY, CAVE_MIN_Y);
+        maxY = Math.Min(maxY, CAVE_MAX_Y);
+        minZ = Math.Max(minZ, mChunkMinZ);
+        maxZ = Math.Min(maxZ, mChunkMaxZ);
+
+        if (minY > maxY)
+            return;
 
         for (int bx = minX; bx <= maxX; bx++)
         {
@@ -210,20 +230,21 @@ internal class CaveCarver
                     float dx = bx - cx, dy = by - cy, dz = bz - cz;
 
                     if (dx * dx + dy * dy + dz * dz <= r2)
-                        CarveBlock(world, bx, by, bz);
+                        CarveBlock(bx, by, bz);
                 }
             }
         }
     }
 
-    // Set block at position to air, with some checks
-    private void CarveBlock(World world, int x, int y, int z)
+    // Set block at position to air. CarveSphere clamps coordinates to the chunk, so we
+    // use direct chunk access here to avoid the full world lookup on every block.
+    private void CarveBlock(int x, int y, int z)
     {
-        if (x < mChunkMinX || x > mChunkMaxX || z < mChunkMinZ || z > mChunkMaxZ)
-            return;
+        int localX = x - mChunkMinX;
+        int localZ = z - mChunkMinZ;
 
-        var block = world.GetBlock(x, y, z);
+        var block = mTargetChunk!.GetBlock(localX, y, localZ);
         if (block != BlockType.Bedrock && BlockRegistry.IsSolid(block))
-            world.SetBlockDirect(x, y, z, BlockType.Air);
+            mTargetChunk.SetBlock(localX, y, localZ, BlockType.Air);
     }
 }

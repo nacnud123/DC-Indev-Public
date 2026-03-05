@@ -1,5 +1,6 @@
 // Main block parent class, holds a lot of block properties, some of which are not used yet | DA | 2/5/26
 using OpenTK.Mathematics;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -22,6 +23,7 @@ public abstract class Block
     public virtual bool IsTransparent => !BlocksLight;
     public virtual bool SuffocatesBeneath => false;
     public virtual bool NeedsSupportBelow => false;
+    public virtual bool CrossHasOffset => true;
     public virtual int LightEmission => 0;
     public virtual int LightOpacity => 15;
     public virtual float Hardness => 1.0f;
@@ -64,9 +66,10 @@ public abstract class Block
 
         return needed.Contains(beneath);
     }
-}
 
-public interface IBlockTick
-{
-    public void DoBlockTick(World world, int blockX, int blockY, int blockZ);
+    public virtual ItemStack? GetDrop(byte metadata) => ItemStack.FromBlock(this.Type);
+    public virtual ToolType PreferredTool => ToolType.None;
+    public virtual ToolTier MinimumTier => ToolTier.None;
+    public virtual int DropCount => 1;
+    public virtual int MaxStackSize => 64;
 }

@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -8,6 +9,7 @@ public class BlockPlanks : Block
     public override BlockType Type => BlockType.Planks;
     public override string Name => "Planks";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wooden;
+    public override ToolType PreferredTool => ToolType.Axe;
     public override bool IsFlamable => true;
     public override float Hardness => 2.0f;
 

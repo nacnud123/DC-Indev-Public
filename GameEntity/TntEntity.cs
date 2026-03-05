@@ -1,4 +1,5 @@
 // TNT block entity: falls with gravity, flashes white on a fuse, then explodes. Kind of like a block entity. | DA | 2/17/26
+
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
@@ -52,28 +53,52 @@ public class TntEntity : Entity
         // Vertex order and UVs ported from ChunkMeshBuilder so winding matches the terrain renderer.
 
         // Front (+Z)
-        V(verts, 0, 0, 1, u0s, v0s, 0, 0, 1); V(verts, 1, 1, 1, u1s, v1s, 0, 0, 1); V(verts, 0, 1, 1, u0s, v1s, 0, 0, 1);
-        V(verts, 0, 0, 1, u0s, v0s, 0, 0, 1); V(verts, 1, 0, 1, u1s, v0s, 0, 0, 1); V(verts, 1, 1, 1, u1s, v1s, 0, 0, 1);
+        V(verts, 0, 0, 1, u0s, v0s, 0, 0, 1);
+        V(verts, 1, 1, 1, u1s, v1s, 0, 0, 1);
+        V(verts, 0, 1, 1, u0s, v1s, 0, 0, 1);
+        V(verts, 0, 0, 1, u0s, v0s, 0, 0, 1);
+        V(verts, 1, 0, 1, u1s, v0s, 0, 0, 1);
+        V(verts, 1, 1, 1, u1s, v1s, 0, 0, 1);
 
         // Back (-Z)
-        V(verts, 0, 0, 0, u1s, v0s, 0, 0, -1); V(verts, 0, 1, 0, u1s, v1s, 0, 0, -1); V(verts, 1, 1, 0, u0s, v1s, 0, 0, -1);
-        V(verts, 0, 0, 0, u1s, v0s, 0, 0, -1); V(verts, 1, 1, 0, u0s, v1s, 0, 0, -1); V(verts, 1, 0, 0, u0s, v0s, 0, 0, -1);
+        V(verts, 0, 0, 0, u1s, v0s, 0, 0, -1);
+        V(verts, 0, 1, 0, u1s, v1s, 0, 0, -1);
+        V(verts, 1, 1, 0, u0s, v1s, 0, 0, -1);
+        V(verts, 0, 0, 0, u1s, v0s, 0, 0, -1);
+        V(verts, 1, 1, 0, u0s, v1s, 0, 0, -1);
+        V(verts, 1, 0, 0, u0s, v0s, 0, 0, -1);
 
         // Top (+Y)
-        V(verts, 0, 1, 0, u0t, v0t, 0, 1, 0); V(verts, 1, 1, 1, u1t, v1t, 0, 1, 0); V(verts, 1, 1, 0, u1t, v0t, 0, 1, 0);
-        V(verts, 0, 1, 0, u0t, v0t, 0, 1, 0); V(verts, 0, 1, 1, u0t, v1t, 0, 1, 0); V(verts, 1, 1, 1, u1t, v1t, 0, 1, 0);
+        V(verts, 0, 1, 0, u0t, v0t, 0, 1, 0);
+        V(verts, 1, 1, 1, u1t, v1t, 0, 1, 0);
+        V(verts, 1, 1, 0, u1t, v0t, 0, 1, 0);
+        V(verts, 0, 1, 0, u0t, v0t, 0, 1, 0);
+        V(verts, 0, 1, 1, u0t, v1t, 0, 1, 0);
+        V(verts, 1, 1, 1, u1t, v1t, 0, 1, 0);
 
         // Bottom (-Y)
-        V(verts, 0, 0, 0, u0t, v1t, 0, -1, 0); V(verts, 1, 0, 0, u1t, v1t, 0, -1, 0); V(verts, 1, 0, 1, u1t, v0t, 0, -1, 0);
-        V(verts, 0, 0, 0, u0t, v1t, 0, -1, 0); V(verts, 1, 0, 1, u1t, v0t, 0, -1, 0); V(verts, 0, 0, 1, u0t, v0t, 0, -1, 0);
+        V(verts, 0, 0, 0, u0t, v1t, 0, -1, 0);
+        V(verts, 1, 0, 0, u1t, v1t, 0, -1, 0);
+        V(verts, 1, 0, 1, u1t, v0t, 0, -1, 0);
+        V(verts, 0, 0, 0, u0t, v1t, 0, -1, 0);
+        V(verts, 1, 0, 1, u1t, v0t, 0, -1, 0);
+        V(verts, 0, 0, 1, u0t, v0t, 0, -1, 0);
 
         // Right (+X)
-        V(verts, 1, 0, 0, u1s, v0s, 1, 0, 0); V(verts, 1, 1, 0, u1s, v1s, 1, 0, 0); V(verts, 1, 1, 1, u0s, v1s, 1, 0, 0);
-        V(verts, 1, 0, 0, u1s, v0s, 1, 0, 0); V(verts, 1, 1, 1, u0s, v1s, 1, 0, 0); V(verts, 1, 0, 1, u0s, v0s, 1, 0, 0);
+        V(verts, 1, 0, 0, u1s, v0s, 1, 0, 0);
+        V(verts, 1, 1, 0, u1s, v1s, 1, 0, 0);
+        V(verts, 1, 1, 1, u0s, v1s, 1, 0, 0);
+        V(verts, 1, 0, 0, u1s, v0s, 1, 0, 0);
+        V(verts, 1, 1, 1, u0s, v1s, 1, 0, 0);
+        V(verts, 1, 0, 1, u0s, v0s, 1, 0, 0);
 
         // Left (-X)
-        V(verts, 0, 0, 1, u1s, v0s, -1, 0, 0); V(verts, 0, 1, 1, u1s, v1s, -1, 0, 0); V(verts, 0, 1, 0, u0s, v1s, -1, 0, 0);
-        V(verts, 0, 0, 1, u1s, v0s, -1, 0, 0); V(verts, 0, 1, 0, u0s, v1s, -1, 0, 0); V(verts, 0, 0, 0, u0s, v0s, -1, 0, 0);
+        V(verts, 0, 0, 1, u1s, v0s, -1, 0, 0);
+        V(verts, 0, 1, 1, u1s, v1s, -1, 0, 0);
+        V(verts, 0, 1, 0, u0s, v1s, -1, 0, 0);
+        V(verts, 0, 0, 1, u1s, v0s, -1, 0, 0);
+        V(verts, 0, 1, 0, u0s, v1s, -1, 0, 0);
+        V(verts, 0, 0, 0, u0s, v0s, -1, 0, 0);
 
         float[] arr = verts.ToArray();
         mVertexCount = arr.Length / VERTEX_STRIDE;
@@ -98,9 +123,14 @@ public class TntEntity : Entity
 
     private static void V(List<float> v, float px, float py, float pz, float u, float vv, float nx, float ny, float nz)
     {
-        v.Add(px); v.Add(py); v.Add(pz);
-        v.Add(u); v.Add(vv);
-        v.Add(nx); v.Add(ny); v.Add(nz);
+        v.Add(px);
+        v.Add(py);
+        v.Add(pz);
+        v.Add(u);
+        v.Add(vv);
+        v.Add(nx);
+        v.Add(ny);
+        v.Add(nz);
     }
 
     public override void Tick(World world)

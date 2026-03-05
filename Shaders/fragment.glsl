@@ -27,6 +27,7 @@ void main()
     if (texColor.a < 0.1)
         discard;
 
+
     // Directional sun lighting
     vec3 norm = normalize(fragNormal);
     float diff = max(dot(norm, -lightDir), 0.0);

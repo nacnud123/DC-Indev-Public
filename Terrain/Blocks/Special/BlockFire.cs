@@ -1,5 +1,6 @@
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -16,6 +17,7 @@ public class BlockFire : Block
     public override bool IsReplaceable => true;
     public override bool IsBreakable => true;
     public override float Hardness => 0f;
+    public override ItemStack? GetDrop(byte metadata) => null;
     public override int LightOpacity => 0;
     public override int LightEmission => 12;
     public override int TickRate => 20;

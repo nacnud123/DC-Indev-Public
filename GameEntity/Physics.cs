@@ -132,9 +132,12 @@ public static class Physics
         return vel;
     }
 
+    private static readonly List<Aabb> sBlockBuffer = new(32);
+
     private static List<Aabb> GetCollidingBlocks(World world, Aabb search)
     {
-        var result = new List<Aabb>();
+        sBlockBuffer.Clear();
+        var result = sBlockBuffer;
         int minX = (int)MathF.Floor(search.Min.X), maxX = (int)MathF.Floor(search.Max.X);
         int minY = (int)MathF.Floor(search.Min.Y), maxY = (int)MathF.Floor(search.Max.Y);
         int minZ = (int)MathF.Floor(search.Min.Z), maxZ = (int)MathF.Floor(search.Max.Z);

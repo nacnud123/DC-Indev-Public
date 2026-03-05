@@ -218,11 +218,15 @@ public class Chunk
                     var renderType = BlockRegistry.GetRenderType(block);
                     if (renderType == RenderingType.Cross)
                     {
-                        // Deterministic visual offset per block position
-                        int hash = (int)(wx * 3129871) ^ ((int)wz * 116129781);
-                        hash = hash * hash * 42317861 + hash * 11;
-                        float offsetX = ((hash >> 16 & 15) / 15f - 0.5f) * 0.5f;
-                        float offsetZ = ((hash >> 24 & 15) / 15f - 0.5f) * 0.5f;
+                        float offsetX = 0f, offsetZ = 0f;
+                        if (BlockRegistry.Get(block).CrossHasOffset)
+                        {
+                            // Deterministic visual offset per block position
+                            int hash = (int)(wx * 3129871) ^ ((int)wz * 116129781);
+                            hash = hash * hash * 42317861 + hash * 11;
+                            offsetX = ((hash >> 16 & 15) / 15f - 0.5f) * 0.5f;
+                            offsetZ = ((hash >> 24 & 15) / 15f - 0.5f) * 0.5f;
+                        }
 
                         ChunkMeshBuilder.AddCross(vertices, wx + offsetX, y, wz + offsetZ, block, GetSkyLightAt(x, y, z), GetBlockLightAt(x, y, z));
                         continue;
@@ -251,7 +255,16 @@ public class Chunk
 
                     if (renderType == RenderingType.Fire)
                     {
-                        ChunkMeshBuilder.AddFire(transVertices, wx, y, wz, block, GetSkyLightAt(x, y, z), GetBlockLightAt(x, y, z));
+                        var below = GetBlockAt(x, y - 1, z);
+                        bool hasSolidBase = BlockRegistry.IsSolid(below) || BlockFire.GetEncouragement(below) > 0;
+                        bool fNegX = BlockFire.GetEncouragement(GetBlockAt(x - 1, y, z)) > 0;
+                        bool fPosX = BlockFire.GetEncouragement(GetBlockAt(x + 1, y, z)) > 0;
+                        bool fNegZ = BlockFire.GetEncouragement(GetBlockAt(x, y, z - 1)) > 0;
+                        bool fPosZ = BlockFire.GetEncouragement(GetBlockAt(x, y, z + 1)) > 0;
+                        bool fAbove = BlockFire.GetEncouragement(GetBlockAt(x, y + 1, z)) > 0;
+                        ChunkMeshBuilder.AddFire(transVertices, wx, y, wz, block,
+                            GetSkyLightAt(x, y, z), GetBlockLightAt(x, y, z),
+                            hasSolidBase, fNegX, fPosX, fNegZ, fPosZ, fAbove);
                         continue;
                     }
 
@@ -259,7 +272,7 @@ public class Chunk
                         BuildWaterFaces(transVertices, x, y, z, wx, wz, block);
                     else if (block == BlockType.Lava)
                         BuildLavaFaces(transVertices, x, y, z, wx, wz, block);
-                    else if (block == BlockType.Furnace || block == BlockType.Chest)
+                    else if (block == BlockType.Furnace || block == BlockType.FurnaceLit || block == BlockType.Chest)
                         BuildFacingBlockFaces(vertices, x, y, z, wx, wz, block);
                     else
                         BuildBlockFaces(vertices, x, y, z, wx, wz, block);

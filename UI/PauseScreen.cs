@@ -9,6 +9,7 @@ public class PauseScreen
 {
     public event Action OnPauseQuitGame;
     public event Action OnResumeGame;
+    public event Action OnSaveGame;
 
     public void Render()
     {
@@ -49,25 +50,31 @@ public class PauseScreen
 
         ImGui.PopFont();
 
-        // Buttons
-        var buttonWidth = 150f;
+        // Buttons — 3 stacked vertically
+        var buttonWidth = 180f;
         var buttonHeight = 40f;
-        var buttonSpacing = 20f;
-        var totalButtonWidth = (buttonWidth * 2) + buttonSpacing;
-        var buttonStartX = centerX - totalButtonWidth * 0.5f;
-        var buttonY = centerY + 30f;
+        var buttonSpacing = 12f;
+        var buttonX = centerX - buttonWidth * 0.5f;
+        var buttonY = centerY - 10f;
 
         // Resume button
-        ImGui.SetCursorPos(new Vector2(buttonStartX, buttonY));
-
+        ImGui.SetCursorPos(new Vector2(buttonX, buttonY));
         if (ImGui.Button("Resume Game", new Vector2(buttonWidth, buttonHeight)))
         {
             Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
             OnResumeGame?.Invoke();
         }
 
+        // Save Game button
+        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + buttonHeight + buttonSpacing));
+        if (ImGui.Button("Save Game", new Vector2(buttonWidth, buttonHeight)))
+        {
+            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
+            OnSaveGame?.Invoke();
+        }
+
         // Quit button
-        ImGui.SetCursorPos(new Vector2(buttonStartX + buttonWidth + buttonSpacing, buttonY));
+        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * 2f));
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.9f, 0.3f, 0.3f, 1.0f));
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.7f, 0.1f, 0.1f, 1.0f));

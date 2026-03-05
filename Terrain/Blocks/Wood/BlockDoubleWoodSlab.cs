@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -8,6 +9,7 @@ public class BlockDoubleWoodSlab : Block
     public override BlockType Type => BlockType.DoubleWoodSlab;
     public override string Name => "Double Wood Slab";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wooden;
+    public override ToolType PreferredTool => ToolType.Axe;
     public override bool IsFlamable => true;
     public override bool ShowInInventory => false;
 

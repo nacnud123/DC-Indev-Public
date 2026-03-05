@@ -1,9 +1,9 @@
 #version 330 core
 
-layout(location = 0) in vec3 aPosition;
+layout(location = 0) in vec3 aPosition;    // pre-rotated star quad vertex
 
-uniform mat4 celestialMVP;
-uniform float starBrightness;
+uniform mat4 celestialMVP;        // same celestial matrix as sun/moon
+uniform float starBrightness;     // 0.0 (day) to 0.5 (full night)
 
 out float vBrightness;
 

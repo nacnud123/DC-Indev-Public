@@ -1,3 +1,5 @@
+using VoxelEngine.Core;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -13,6 +15,8 @@ public class BlockSpiderweb : Block
     public override int LightOpacity => 0;
     public override float Hardness => 0.2f;
     public override bool SlowsEntities => true;
+    
+    public override ItemStack? GetDrop(byte metadata) => ItemStack.FromItem(ItemType.String);
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(5, 3);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

@@ -1,4 +1,5 @@
-﻿using VoxelEngine.Rendering;
+﻿using VoxelEngine.Items;
+using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
@@ -8,6 +9,8 @@ public class BlockCobblestone : Block
     public override BlockType Type => BlockType.CobbleStone;
     public override string Name => "Cobblestone";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Stone;
+    public override ToolType PreferredTool => ToolType.Pickaxe;
+    public override ToolTier MinimumTier => ToolTier.Wood;
 
     public override float Hardness => 1.5f;
 

@@ -1,4 +1,5 @@
 ﻿using OpenTK.Mathematics;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -9,6 +10,7 @@ public class BlockWoodSlab : Block
     public override BlockType Type => BlockType.WoodSlab;
     public override string Name => "Wood Slab";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wooden;
+    public override ToolType PreferredTool => ToolType.Axe;
     public override RenderingType RenderType => RenderingType.Slab;
     public override bool IsSolid => true;
     public override bool IsTransparent => true;

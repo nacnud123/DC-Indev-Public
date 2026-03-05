@@ -17,6 +17,8 @@ public class ParticleSystem : IDisposable
 
     private readonly List<BlockParticle> mParticles = new();
     private readonly List<SmokeParticle> mSmokeParticles = new();
+    private readonly InstanceData[] mInstanceBuffer = new InstanceData[MAX_PARTICLES];
+    private readonly SmokeInstanceData[] mSmokeInstanceBuffer = new SmokeInstanceData[MAX_PARTICLES];
     private readonly int mVao;
     private readonly int mVbo;
     private readonly int mInstanceVbo;
@@ -257,7 +259,11 @@ public class ParticleSystem : IDisposable
             p.Lifetime -= deltaTime;
 
             if (p.Lifetime <= 0)
-                mParticles.RemoveAt(i);
+            {
+                // Swap-and-pop: O(1) removal, order doesn't matter for particles
+                mParticles[i] = mParticles[mParticles.Count - 1];
+                mParticles.RemoveAt(mParticles.Count - 1);
+            }
             else
                 mParticles[i] = p;
         }
@@ -275,7 +281,10 @@ public class ParticleSystem : IDisposable
 
 
             if (p.Lifetime <= 0)
-                mSmokeParticles.RemoveAt(i);
+            {
+                mSmokeParticles[i] = mSmokeParticles[mSmokeParticles.Count - 1];
+                mSmokeParticles.RemoveAt(mSmokeParticles.Count - 1);
+            }
             else
                 mSmokeParticles[i] = p;
         }
@@ -288,12 +297,11 @@ public class ParticleSystem : IDisposable
             return;
 
         int renderCount = Math.Min(mParticles.Count, MAX_PARTICLES);
-        var instances = new InstanceData[renderCount];
 
         for (int i = 0; i < renderCount; i++)
         {
             var p = mParticles[i];
-            instances[i] = new InstanceData
+            mInstanceBuffer[i] = new InstanceData
             {
                 ModelMatrix = Matrix4.CreateScale(p.Size) * Matrix4.CreateTranslation(p.Pos),
                 UVRegion = new Vector4(p.UvOffset.X, p.UvOffset.Y, p.UvSize.X, p.UvSize.Y)
@@ -301,7 +309,7 @@ public class ParticleSystem : IDisposable
         }
 
         GL.BindBuffer(BufferTarget.ArrayBuffer, mInstanceVbo);
-        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<InstanceData>(), instances);
+        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<InstanceData>(), mInstanceBuffer);
 
         mShader.Use();
         mShader.SetMatrix4("view", view);
@@ -327,12 +335,11 @@ public class ParticleSystem : IDisposable
             return;
 
         int renderCount = Math.Min(mSmokeParticles.Count, MAX_PARTICLES);
-        var instances = new SmokeInstanceData[renderCount];
 
         for (int i = 0; i < renderCount; i++)
         {
             var p = mSmokeParticles[i];
-            instances[i] = new SmokeInstanceData
+            mSmokeInstanceBuffer[i] = new SmokeInstanceData
             {
                 ModelMatrix = Matrix4.CreateScale(p.Size) * Matrix4.CreateTranslation(p.Pos),
                 Alpha = p.Lifetime / p.MaxLifetime
@@ -340,7 +347,7 @@ public class ParticleSystem : IDisposable
         }
 
         GL.BindBuffer(BufferTarget.ArrayBuffer, mSmokeInstanceVbo);
-        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<SmokeInstanceData>(), instances);
+        GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, renderCount * Marshal.SizeOf<SmokeInstanceData>(), mSmokeInstanceBuffer);
 
         mSmokeShader.Use();
         mSmokeShader.SetMatrix4("view", view);

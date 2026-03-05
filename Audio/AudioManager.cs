@@ -57,9 +57,9 @@ namespace VoxelEngine.Audio
                 mBackgroundMusic.Volume = MusicVol;
         }
 
-        public void PlayAudio(string filePath, int vol, bool loop = false)
+        public void PlayAudio(string filePath, int vol, bool loop = false, float forcePitch = -1f)
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             try
@@ -72,7 +72,9 @@ namespace VoxelEngine.Audio
                     mSoundBuffers[filePath] = buffer;
                 }
 
-                float pitch = loop ? 1f : 0.9f + (float)Game.Instance.GameRandom.NextDouble() * 0.2f;
+                float pitch = forcePitch >= 0f
+                    ? forcePitch
+                    : (loop ? 1f : 0.9f + (float)Game.Instance.GameRandom.NextDouble() * 0.2f);
                 var sound = new Sound(mSoundBuffers[filePath])
                 {
                     IsLooping = loop,
@@ -89,9 +91,18 @@ namespace VoxelEngine.Audio
             }
         }
 
+        // Landing thud
+        public void PlayLandingSound(BlockBreakMaterial material)
+        {
+            if (mDisposed) return;
+            string? path = GetContactSoundPath(material);
+            if (path != null)
+                PlayAudio(path, SfxVol / 2, false, 0.75f);
+        }
+
         public void Stop() // Stop all active sounds
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             if (mBackgroundMusic != null)
@@ -140,12 +151,12 @@ namespace VoxelEngine.Audio
         {
             return material switch
             {
-                BlockBreakMaterial.Grass  => "Resources/Audio/GrassBreak.ogg",
-                BlockBreakMaterial.Dirt   => "Resources/Audio/DirtBreak.ogg",
-                BlockBreakMaterial.Stone  => "Resources/Audio/StoneBreak.ogg",
-                BlockBreakMaterial.Glass  => "Resources/Audio/GlassBreak.ogg",
-                BlockBreakMaterial.Wool   => "Resources/Audio/WoolBreak.ogg",
-                BlockBreakMaterial.Sand   => "Resources/Audio/SandBreak.ogg",
+                BlockBreakMaterial.Grass => "Resources/Audio/GrassBreak.ogg",
+                BlockBreakMaterial.Dirt => "Resources/Audio/DirtBreak.ogg",
+                BlockBreakMaterial.Stone => "Resources/Audio/StoneBreak.ogg",
+                BlockBreakMaterial.Glass => "Resources/Audio/GlassBreak.ogg",
+                BlockBreakMaterial.Wool => "Resources/Audio/WoolBreak.ogg",
+                BlockBreakMaterial.Sand => "Resources/Audio/SandBreak.ogg",
                 BlockBreakMaterial.Gravel => "Resources/Audio/GravelBreak.ogg",
                 BlockBreakMaterial.Wooden => "Resources/Audio/WoodenBreak.ogg",
                 _ => null
@@ -156,15 +167,15 @@ namespace VoxelEngine.Audio
         {
             return material switch
             {
-                BlockBreakMaterial.Dirt   => RandomContactSound("Dirt", "DirtWalk", 3),
-                BlockBreakMaterial.Grass  => RandomContactSound("Grass", "GrassWalk", 3),
-                BlockBreakMaterial.Stone  => RandomContactSound("Stone", "StoneWalk", 3),
-                BlockBreakMaterial.Glass  => RandomContactSound("Stone", "StoneWalk", 3),
-                BlockBreakMaterial.Wool   => RandomContactSound("Wool", "WoolWalk", 2),
-                BlockBreakMaterial.Sand   => RandomContactSound("Sand", "SandWalk", 2),
+                BlockBreakMaterial.Dirt => RandomContactSound("Dirt", "DirtWalk", 3),
+                BlockBreakMaterial.Grass => RandomContactSound("Grass", "GrassWalk", 3),
+                BlockBreakMaterial.Stone => RandomContactSound("Stone", "StoneWalk", 3),
+                BlockBreakMaterial.Glass => RandomContactSound("Stone", "StoneWalk", 3),
+                BlockBreakMaterial.Wool => RandomContactSound("Wool", "WoolWalk", 2),
+                BlockBreakMaterial.Sand => RandomContactSound("Sand", "SandWalk", 2),
                 BlockBreakMaterial.Gravel => RandomContactSound("Gravel", "GravelWalk", 3),
                 BlockBreakMaterial.Wooden => RandomContactSound("Wood", "WoodWalk", 3),
-                BlockBreakMaterial.Water  => RandomContactSound("Water", "Water", 3),
+                BlockBreakMaterial.Water => RandomContactSound("Water", "Water", 3),
                 _ => null
             };
         }
@@ -174,6 +185,30 @@ namespace VoxelEngine.Audio
         {
             int index = Game.Instance.GameRandom.Next(1, count + 1);
             return $"Resources/Audio/Walking/{folder}/{prefix}{index}.ogg";
+        }
+
+        public void PlayPickupSound()
+        {
+            if (mDisposed) 
+                return;
+
+            PlayAudio("Resources/Audio/ItemPop.ogg", SfxVol, false);
+        }
+
+        public void PlayMunchSound()
+        {
+            if (mDisposed) 
+                return;
+
+            PlayAudio("Resources/Audio/Eat.ogg", SfxVol, false);
+        }
+
+        public void PlayPlayerHurtSound()
+        {
+            if (mDisposed) 
+                return;
+
+            PlayAudio("Resources/Audio/PlayerHurt.ogg", SfxVol, false);
         }
 
         public void CleanupFinishedSounds()
@@ -201,7 +236,7 @@ namespace VoxelEngine.Audio
         // Free up the memory
         public void Dispose()
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             Console.WriteLine("Disposing AudioManager...");

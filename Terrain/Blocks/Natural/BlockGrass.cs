@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -8,7 +9,9 @@ public class BlockGrass : Block
     public override BlockType Type => BlockType.Grass;
     public override string Name => "Grass";
     public override float Hardness => 0.6f;
+    public override ItemStack? GetDrop(byte metadata) => ItemStack.FromBlock(BlockType.Dirt);
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Grass;
+    public override ToolType PreferredTool => ToolType.Shovel;
     public override bool TicksRandomly => true;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(0, 2);

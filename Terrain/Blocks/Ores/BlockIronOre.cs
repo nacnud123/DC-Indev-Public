@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -9,6 +10,8 @@ public class BlockIronOre : Block
     public override string Name => "Iron Ore";
     public override float Hardness => 1.5f;
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Stone;
+    public override ToolType PreferredTool => ToolType.Pickaxe;
+    public override ToolTier MinimumTier => ToolTier.Stone;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(2, 3);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

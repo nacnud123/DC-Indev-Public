@@ -1,4 +1,5 @@
 ﻿using OpenTK.Mathematics;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -9,6 +10,7 @@ public class WoodStiars : Block
     public override BlockType Type => BlockType.WoodenStair;
     public override string Name => "Wood Stair";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Wooden;
+    public override ToolType PreferredTool => ToolType.Axe;
     public override RenderingType RenderType => RenderingType.Stair;
 
     public override bool IsTransparent => true;

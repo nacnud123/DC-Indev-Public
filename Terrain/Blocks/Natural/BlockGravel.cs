@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -8,6 +9,7 @@ public class BlockGravel : Block
     public override BlockType Type => BlockType.Gravel;
     public override string Name => "Gravel";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Gravel;
+    public override ToolType PreferredTool => ToolType.Shovel;
 
     public override bool GravityBlock => true;
     public override float Hardness => 0.5f;

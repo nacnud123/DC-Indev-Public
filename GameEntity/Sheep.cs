@@ -1,8 +1,10 @@
 // Sheep entity with rigid-body part animation (body, head, legs) | DA | 2/14/26
+
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity.AI;
+using VoxelEngine.Items;
 using VoxelEngine.Terrain;
 
 namespace VoxelEngine.GameEntity;
@@ -44,10 +46,30 @@ public class Sheep : Entity
     private float mHeadPitch;
     private float mIdleSoundTimer;
 
-    public override float Width { get => 0.9f; set { } }
-    public override float Height { get => 0.9f; set { } }
-    public override float Scale { get => 4f; set { } }
-    public override float WalkSpeed { get => 2f; set { } }
+    public override float Width
+    {
+        get => 0.9f;
+        set { }
+    }
+
+    public override float Height
+    {
+        get => 0.9f;
+        set { }
+    }
+
+    public override float Scale
+    {
+        get => 4f;
+        set { }
+    }
+
+    public override float WalkSpeed
+    {
+        get => 2f;
+        set { }
+    }
+
     public override int Health { get; set; } = 20;
 
 
@@ -77,7 +99,8 @@ public class Sheep : Entity
             int idx = Game.Instance.GameRandom.Next(1, 4);
             Game.Instance.AudioManager.PlayAudio(
                 $"Resources/Audio/Entities/Sheep/SheepIdle{idx}.ogg",
-                Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f, Game.Instance.AudioManager.SfxVol),
+                Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f,
+                    Game.Instance.AudioManager.SfxVol),
                 false);
         }
     }
@@ -86,11 +109,20 @@ public class Sheep : Entity
     public override void TakeDamage(int amount)
     {
         base.TakeDamage(amount);
-        
+
         Game.Instance.AudioManager.PlayAudio(
             "Resources/Audio/Entities/Sheep/SheepDie.ogg",
-            Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f, Game.Instance.AudioManager.SfxVol),
+            Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f,
+                Game.Instance.AudioManager.SfxVol),
             false);
+
+        if (!IsAlive)
+        {
+            int count = Game.Instance.GameRandom.Next(1, 4); // 1-3
+            var drop = new DroppedItemEntity(Position, ItemStack.FromBlock(BlockType.White, count),
+                Game.Instance.WorldTexture);
+            Game.Instance.GetWorld.AddEntity(drop);
+        }
     }
 
     // Play the walking animation if the sheep is moving. Basically swings the legs back and forth. Also, if the player gets close enough the sheep will look at the player.
@@ -107,7 +139,9 @@ public class Sheep : Entity
         else
         {
             mLegSwing *= SWING_DECAY;
-            if (mLegSwing < 0.01f) mLegSwing = 0f;
+            
+            if (mLegSwing < 0.01f) 
+                mLegSwing = 0f;
         }
 
         if (hSpeed < 0.01f && CurrentAI is not { IsFleeing: true })
@@ -139,7 +173,8 @@ public class Sheep : Entity
     // Draw the sheep. Duplicate the legs and draw four of them with different offsets. Leg's have own draw function
     protected override void DrawModel(Matrix4 view, Matrix4 projection)
     {
-        Matrix4 entityBase = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) * Matrix4.CreateTranslation(Position);
+        Matrix4 entityBase = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) *
+                             Matrix4.CreateTranslation(Position);
         Matrix4 vp = view * projection;
 
         DrawPart(mBodyModel, Matrix4.CreateTranslation(BodyOffset) * entityBase * vp);
@@ -158,6 +193,12 @@ public class Sheep : Entity
     }
 
     // Draw the leg at the offset.
+    protected override void Fall(World world, float dist)
+    {
+        int damage = (int)MathF.Ceiling(dist - 3f);
+        if (damage > 0) TakeDamage(damage);
+    }
+
     private void DrawLeg(float swingAngle, Vector3 offset, Matrix4 entityBase, Matrix4 vp)
     {
         Matrix4 legLocal = Matrix4.CreateTranslation(-LegPivot)

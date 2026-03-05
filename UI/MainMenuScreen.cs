@@ -1,5 +1,6 @@
 // Main menu class, holds stuff related to rendering the main menu. | DA | 2/5/26
 // Updated to look better and include save selection.
+
 using ImGuiNET;
 using System;
 using System.Numerics;
@@ -174,7 +175,7 @@ public class MainMenuScreen
         // Version (top-left)
         ImGui.SetCursorPos(new Vector2(12, 8));
         ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("Version 6.0A");
+        ImGui.Text("Version 1.0B");
         ImGui.PopStyleColor();
 
         // Title
@@ -207,6 +208,7 @@ public class MainMenuScreen
             mSelectedWorld = -1;
             mCurrentState = MainMenuState.WorldSelection;
         }
+
         PopBtn();
 
         PushGreenBtn();
@@ -216,6 +218,7 @@ public class MainMenuScreen
             ClickSound();
             mCurrentState = MainMenuState.Options;
         }
+
         PopBtn();
 
         PushRedBtn();
@@ -225,6 +228,7 @@ public class MainMenuScreen
             ClickSound();
             OnTitleQuitGame?.Invoke();
         }
+
         PopBtn();
 
         // Controls (bottom-left)
@@ -237,7 +241,6 @@ public class MainMenuScreen
             "0-9  -  Select block",
             "R  -  Reset position",
             "X  -  Wireframe",
-            "P  -  Spawn pig",
             "Esc  -  Pause",
             "Tab  -  Toggle cursor",
             "F  -  Fly / Instant break",
@@ -246,6 +249,7 @@ public class MainMenuScreen
             "Ctrl  -  Fly down",
             "Shift  -  Sprint",
             "+/-  -  Render distance",
+            "F7  -  Take screenshot"
         };
         float lineH = ImGui.GetTextLineHeightWithSpacing();
         float totalH = controls.Length * lineH;
@@ -256,6 +260,7 @@ public class MainMenuScreen
             ImGui.SetCursorPos(new Vector2(16f, startY + i * lineH));
             ImGui.Text(controls[i]);
         }
+
         ImGui.PopStyleColor();
 
         ImGui.End();
@@ -306,7 +311,9 @@ public class MainMenuScreen
             for (int i = 0; i < mAvailableWorlds.Count; i++)
             {
                 var world = mAvailableWorlds[i];
-                string lastPlayed = world.LastPlayed != DateTime.MinValue ? world.LastPlayed.ToString("yyyy-MM-dd HH:mm") : "Unknown";
+                string lastPlayed = world.LastPlayed != DateTime.MinValue
+                    ? world.LastPlayed.ToString("yyyy-MM-dd HH:mm")
+                    : "Unknown";
 
                 bool selected = mSelectedWorld == i;
 
@@ -315,7 +322,9 @@ public class MainMenuScreen
                 {
                     var drawList = ImGui.GetWindowDrawList();
                     var cursorScreen = ImGui.GetCursorScreenPos();
-                    drawList.AddRectFilled(cursorScreen, new Vector2(cursorScreen.X + listW - 20f, cursorScreen.Y + 48f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f)));
+                    drawList.AddRectFilled(cursorScreen,
+                        new Vector2(cursorScreen.X + listW - 20f, cursorScreen.Y + 48f),
+                        ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f)));
                 }
 
                 if (ImGui.Selectable($"##world_{i}", selected, ImGuiSelectableFlags.None, new Vector2(0, 48)))
@@ -328,13 +337,16 @@ public class MainMenuScreen
                 var itemMax = ImGui.GetItemRectMax();
                 var dl = ImGui.GetWindowDrawList();
 
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText), world.WorldName);
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim), $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
+                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText),
+                    world.WorldName);
+                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim),
+                    $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
 
                 // Thin separator line
                 if (i < mAvailableWorlds.Count - 1)
                 {
-                    dl.AddLine(new Vector2(itemMin.X + 8f, itemMax.Y), new Vector2(itemMax.X - 8f, itemMax.Y), ImGui.ColorConvertFloat4ToU32(ColSeparator), 1f);
+                    dl.AddLine(new Vector2(itemMin.X + 8f, itemMax.Y), new Vector2(itemMax.X - 8f, itemMax.Y),
+                        ImGui.ColorConvertFloat4ToU32(ColSeparator), 1f);
                 }
             }
 
@@ -345,7 +357,7 @@ public class MainMenuScreen
 
         // DEL key
         bool hasSel = mSelectedWorld >= 0 && mSelectedWorld < mAvailableWorlds.Count;
-        
+
         if (hasSel && ImGui.IsKeyPressed(ImGuiKey.Delete))
             mShowDeleteConfirm = true;
 
@@ -361,8 +373,10 @@ public class MainMenuScreen
         {
             ClickSound();
             Serialization.s_WorldName = mAvailableWorlds[mSelectedWorld].WorldName;
-            OnStartGame?.Invoke(Serialization.GetWorldSize(mAvailableWorlds[mSelectedWorld].WorldName), mVolSfx, mVolMusic, 0, 0);
+            OnStartGame?.Invoke(Serialization.GetWorldSize(mAvailableWorlds[mSelectedWorld].WorldName), mVolSfx,
+                mVolMusic, 0, 0);
         }
+
         PopDisableableBtn(hasSel, false);
 
         // Delete
@@ -373,6 +387,7 @@ public class MainMenuScreen
             ClickSound();
             mShowDeleteConfirm = true;
         }
+
         PopDisableableBtn(hasSel, true);
 
         // New World
@@ -387,6 +402,7 @@ public class MainMenuScreen
             SetInputBuffer(mWorldNameBuffer, "New World");
             mCurrentState = MainMenuState.NewGame;
         }
+
         PopBtn();
 
         // Back
@@ -397,6 +413,7 @@ public class MainMenuScreen
             ClickSound();
             mCurrentState = MainMenuState.Title;
         }
+
         PopBtn();
 
         // Delete confirmation popup
@@ -449,6 +466,7 @@ public class MainMenuScreen
                 mWorldsLoaded = true;
                 ImGui.CloseCurrentPopup();
             }
+
             PopBtn();
 
             ImGui.SameLine(0, BUTTON_SPACING);
@@ -458,6 +476,7 @@ public class MainMenuScreen
             {
                 ImGui.CloseCurrentPopup();
             }
+
             PopBtn();
 
             ImGui.EndPopup();
@@ -522,6 +541,7 @@ public class MainMenuScreen
             ClickSound();
             mWorldType = (mWorldType + 1) % WorldTypes.Length;
         }
+
         PopBtn();
         y += BUTTON_HEIGHT + rowGap;
 
@@ -547,6 +567,7 @@ public class MainMenuScreen
                 mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
             }
         }
+
         y += inputH + rowGap;
 
         // Theme
@@ -557,6 +578,7 @@ public class MainMenuScreen
             ClickSound();
             mWorldTheme = (mWorldTheme + 1) % WorldThemes.Length;
         }
+
         PopBtn();
         y += BUTTON_HEIGHT + bigGap;
 
@@ -573,6 +595,7 @@ public class MainMenuScreen
             Serialization.CreateWorld(worldName, null, mWorldSize, mWorldType, mWorldTheme);
             OnStartGame?.Invoke(mWorldSize, mVolSfx, mVolMusic, mWorldType, mWorldTheme);
         }
+
         PopBtn();
         y += BUTTON_HEIGHT + rowGap;
 
@@ -585,6 +608,7 @@ public class MainMenuScreen
             mWorldsLoaded = false;
             mCurrentState = MainMenuState.WorldSelection;
         }
+
         PopBtn();
 
         ImGui.End();
@@ -643,6 +667,7 @@ public class MainMenuScreen
             ClickSound();
             mCurrentState = MainMenuState.Title;
         }
+
         PopBtn();
 
         ImGui.End();

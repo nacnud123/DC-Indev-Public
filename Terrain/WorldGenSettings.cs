@@ -55,7 +55,7 @@ public struct WorldGenSettings
                 s.DayFogColor = new Vector3(0.0627f, 0.0235f, 0.000f);
                 
                 s.MinBlockLightLevel = 0;
-                s.MaxBlockLightLevel = 16;
+                s.MaxBlockLightLevel = Chunk.MAX_LIGHT;
 
                 s.MinSunLightLevel = 0;
                 s.MaxSunLightLevel = 7;
@@ -76,10 +76,10 @@ public struct WorldGenSettings
                 s.DayFogColor = new Vector3(0.780f, 0.780f, 1.000f);
                 
                 s.MinBlockLightLevel = 0;
-                s.MaxBlockLightLevel = 16;
+                s.MaxBlockLightLevel = Chunk.MAX_LIGHT;
 
                 s.MinSunLightLevel = 12;
-                s.MaxSunLightLevel = 16;
+                s.MaxSunLightLevel = Chunk.MAX_LIGHT;
 
                 s.CloudColor = new Vector3(0xEE / 255f, 0xBF / 255f, 0xFF / 255f);
                 s.CloudHeight = Chunk.HEIGHT + 64;
@@ -118,10 +118,10 @@ public struct WorldGenSettings
                 s.DayFogColor = new Vector3(1.000f, 1.000f, 1.000f);
 
                 s.MinBlockLightLevel = 0;
-                s.MaxBlockLightLevel = 16;
+                s.MaxBlockLightLevel = Chunk.MAX_LIGHT;
 
                 s.MinSunLightLevel = 0;
-                s.MaxSunLightLevel = 16;
+                s.MaxSunLightLevel = Chunk.MAX_LIGHT;
 
                 s.CloudColor = new Vector3(1.0f, 1.0f, 1.0f);
                 s.CloudHeight = Chunk.HEIGHT + 2;

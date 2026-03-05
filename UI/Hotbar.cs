@@ -1,6 +1,8 @@
-// Makes the UI for the hotbar. Builds the hotbar from ImGui elements and not textures, same with the hotbar selector. Also, has functions for moving the hotbar selector and setting a block in a slot | DA | 2/14/26
+// Hotbar UI — renders the 9 selected inventory slots and the active item name. Reads slot contents from PlayerInventory. | DA | 2/14/26
 using System.Numerics;
 using ImGuiNET;
+using VoxelEngine.GameEntity;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
@@ -9,122 +11,147 @@ namespace VoxelEngine.UI;
 
 internal class Hotbar
 {
-    private const int HOTBAR_SLOTS = 10;
-    private const float UI_SCALE = 1.5f;
-
-    private const float SLOT_SIZE = 32f * UI_SCALE;
-    private const float ITEM_SIZE = 24f * UI_SCALE;
-    private const float ITEM_PADDING = (SLOT_SIZE - ITEM_SIZE) / 2f;
-    private const float BAR_PADDING = 4f * UI_SCALE;
-    private const float HOTBAR_WIDTH = HOTBAR_SLOTS * SLOT_SIZE + BAR_PADDING * 2;
+    private const int   HOTBAR_SLOTS  = PlayerInventory.HOTBAR_SLOTS;
+    private const int   HOTBAR_START  = PlayerInventory.HOTBAR_START;
+    private const float SLOT_SIZE     = 48f * UIHelper.UI_SCALE;
+    private const float ITEM_SIZE     = 36f * UIHelper.UI_SCALE;
+    private const float ITEM_PADDING  = (SLOT_SIZE - ITEM_SIZE) / 2f;
+    private const float BAR_PADDING   = 6f  * UIHelper.UI_SCALE;
+    private const float HOTBAR_WIDTH  = HOTBAR_SLOTS * SLOT_SIZE + BAR_PADDING * 2;
     private const float HOTBAR_HEIGHT = SLOT_SIZE + BAR_PADDING * 2;
 
-    private int mSelectedSlot;
-    private readonly BlockType?[] mSlots = new BlockType?[HOTBAR_SLOTS];
-    private readonly BlockIconRenderer mIconRenderer;
+    private static readonly uint ColorBg        = ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
+    private static readonly uint ColorSlot      = ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.60f));
+    private static readonly uint ColorBorder    = ImGui.ColorConvertFloat4ToU32(new Vector4(0.4f, 0.4f, 0.4f, 0.80f));
+    private static readonly uint ColorBorderSel = ImGui.ColorConvertFloat4ToU32(new Vector4(1f,   1f,   1f,   0.90f));
+    private static readonly uint ColorWhite     = ImGui.ColorConvertFloat4ToU32(new Vector4(1f,   1f,   1f,   1f));
+    private static readonly uint ColorShadow    = ImGui.ColorConvertFloat4ToU32(new Vector4(0f,   0f,   0f,   0.75f));
 
-    public Hotbar(BlockIconRenderer iconRenderer)
+    private int mSelectedSlot;
+    private readonly PlayerInventory   mInventory;
+    private readonly BlockIconRenderer mIconRenderer;
+    private readonly Texture           mItemTexture;
+
+    public int SelectedSlotIndex => mSelectedSlot;
+
+    public float GetHotbarX(float displayWidth)  => (displayWidth - HOTBAR_WIDTH) / 2f;
+    public float GetHotbarY(float displayHeight) => displayHeight - HOTBAR_HEIGHT - 10f;
+    public float HotbarWidth => HOTBAR_WIDTH;
+
+    public Hotbar(BlockIconRenderer iconRenderer, Texture itemTexture, PlayerInventory inventory)
     {
         mIconRenderer = iconRenderer;
+        mItemTexture  = itemTexture;
+        mInventory    = inventory;
     }
 
-    public void SetHotbarSlot(int slot)
-    {
-        mSelectedSlot = Math.Clamp(slot, 0, HOTBAR_SLOTS - 1);
-    }
+    private ItemStack? GetSlot(int i)            => mInventory.GetSlot(HOTBAR_START + i);
+    private void       SetSlot(int i, ItemStack? s) => mInventory.SetSlot(HOTBAR_START + i, s);
+
+    public void SetHotbarSlot(int slot)   => mSelectedSlot = Math.Clamp(slot, 0, HOTBAR_SLOTS - 1);
 
     public void ScrollSlot(int direction)
     {
-        mSelectedSlot += direction;
-        if (mSelectedSlot < 0) 
-            mSelectedSlot = HOTBAR_SLOTS - 1;
-        else if (mSelectedSlot >= HOTBAR_SLOTS) 
-            mSelectedSlot = 0;
+        mSelectedSlot = (mSelectedSlot + direction + HOTBAR_SLOTS) % HOTBAR_SLOTS;
     }
 
     public void SetBlockInSlot(int slot, BlockType block)
     {
         if (slot >= 0 && slot < HOTBAR_SLOTS)
-            mSlots[slot] = block;
+            SetSlot(slot, ItemStack.FromBlock(block));
     }
 
-    public void SetBlockInCurrentSlot(BlockType block)
+    public void SetItemInSlot(int slot, ItemType item)
     {
-        mSlots[mSelectedSlot] = block;
+        if (slot >= 0 && slot < HOTBAR_SLOTS)
+            SetSlot(slot, ItemStack.FromItem(item));
     }
+
+    public void SetBlockInCurrentSlot(BlockType block) => SetSlot(mSelectedSlot, ItemStack.FromBlock(block));
+    public void ClearCurrentSlot()                     => SetSlot(mSelectedSlot, null);
 
     public BlockType? GetSelectedBlock()
     {
-        return mSlots[mSelectedSlot];
+        var stack = GetSlot(mSelectedSlot);
+        return stack.HasValue && stack.Value.IsBlock ? stack.Value.Block : null;
     }
+
+    public ItemStack? GetSelectedStack() => GetSlot(mSelectedSlot);
 
     public void Render()
     {
         var displaySize = ImGui.GetIO().DisplaySize;
-        var drawList = ImGui.GetBackgroundDrawList();
+        var drawList    = ImGui.GetBackgroundDrawList();
 
         float hotbarX = (displaySize.X - HOTBAR_WIDTH) / 2f;
         float hotbarY = displaySize.Y - HOTBAR_HEIGHT - 10f;
 
-        uint bgColor = ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
-        uint slotColor = ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.6f));
-        uint slotBorder = ImGui.ColorConvertFloat4ToU32(new Vector4(0.4f, 0.4f, 0.4f, 0.8f));
-        uint selectedBorder = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.9f));
-
-        // Background
         drawList.AddRectFilled(
             new Vector2(hotbarX, hotbarY),
             new Vector2(hotbarX + HOTBAR_WIDTH, hotbarY + HOTBAR_HEIGHT),
-            bgColor, 4f);
+            ColorBg, 4f);
 
-        // Slots
         for (int i = 0; i < HOTBAR_SLOTS; i++)
         {
             float slotX = hotbarX + BAR_PADDING + i * SLOT_SIZE;
             float slotY = hotbarY + BAR_PADDING;
+            var   min   = new Vector2(slotX, slotY);
+            var   max   = new Vector2(slotX + SLOT_SIZE, slotY + SLOT_SIZE);
 
-            var min = new Vector2(slotX, slotY);
-            var max = new Vector2(slotX + SLOT_SIZE, slotY + SLOT_SIZE);
+            drawList.AddRectFilled(min, max, ColorSlot);
+            drawList.AddRect(min, max,
+                i == mSelectedSlot ? ColorBorderSel : ColorBorder,
+                0f, ImDrawFlags.None, i == mSelectedSlot ? 3f : 1f);
 
-            drawList.AddRectFilled(min, max, slotColor);
+            var stack = GetSlot(i);
+            if (!stack.HasValue) continue;
 
-            if (i == mSelectedSlot)
-                drawList.AddRect(min, max, selectedBorder, 0f, ImDrawFlags.None, 3f);
-            else
-                drawList.AddRect(min, max, slotBorder);
+            DrawItem(drawList, stack.Value, slotX + ITEM_PADDING, slotY + ITEM_PADDING, ITEM_SIZE);
 
-            // Block icon
-            var block = mSlots[i];
-            if (block.HasValue)
+            if (stack.Value.Count > 1)
             {
-                var iconPtr = mIconRenderer.GetIcon(block.Value);
-                float itemX = slotX + ITEM_PADDING;
-                float itemY = slotY + ITEM_PADDING;
-
-                drawList.AddImage(
-                    iconPtr,
-                    new Vector2(itemX, itemY),
-                    new Vector2(itemX + ITEM_SIZE, itemY + ITEM_SIZE),
-                    new Vector2(0, 0),
-                    new Vector2(1, 1));
+                var   countStr = stack.Value.Count.ToString();
+                var   textSize = ImGui.CalcTextSize(countStr);
+                var   countPos = new Vector2(slotX + SLOT_SIZE - textSize.X - 2f, slotY + SLOT_SIZE - textSize.Y - 1f);
+                DrawShadowedText(drawList, countPos, countStr);
             }
+
+            UIHelper.DrawDurabilityBar(drawList, stack.Value, slotX, slotY + SLOT_SIZE, SLOT_SIZE);
         }
 
-        // Block name label
-        var selectedBlock = mSlots[mSelectedSlot];
-        if (selectedBlock.HasValue)
+        var selected = GetSlot(mSelectedSlot);
+        if (selected.HasValue)
         {
-            var block = BlockRegistry.Get(selectedBlock.Value);
-            string name = block.Name;
-
-            var textSize = ImGui.CalcTextSize(name);
-            float textX = (displaySize.X - textSize.X) / 2f;
-            float textY = hotbarY - textSize.Y - 8f;
-
-            uint shadow = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.6f));
-            drawList.AddText(new Vector2(textX + 1, textY + 1), shadow, name);
-            uint white = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 1f));
-            drawList.AddText(new Vector2(textX, textY), white, name);
+            string name     = selected.Value.IsBlock ? BlockRegistry.GetName(selected.Value.Block)
+                                                     : ItemRegistry.GetName(selected.Value.Item);
+            var    textSize = ImGui.CalcTextSize(name);
+            var    labelPos = new Vector2((displaySize.X - textSize.X) / 2f, hotbarY - textSize.Y - 8f);
+            DrawShadowedText(drawList, labelPos, name);
         }
+    }
+
+    private void DrawItem(ImDrawListPtr drawList, ItemStack stack, float x, float y, float size)
+    {
+        var min = new Vector2(x, y);
+        var max = new Vector2(x + size, y + size);
+
+        if (stack.IsBlock)
+        {
+            drawList.AddImage(mIconRenderer.GetIcon(stack.Block), min, max, Vector2.Zero, Vector2.One);
+        }
+        else
+        {
+            // GL UVs have V=0 at bottom; ImGui has V=0 at top, so flip V.
+            var uv = ItemRegistry.GetItemCoords(stack.Item);
+            drawList.AddImage(new IntPtr(mItemTexture.Handle), min, max,
+                new Vector2(uv.TopLeft.X,    uv.BottomRight.Y),
+                new Vector2(uv.BottomRight.X, uv.TopLeft.Y));
+        }
+    }
+
+    private static void DrawShadowedText(ImDrawListPtr drawList, Vector2 pos, string text)
+    {
+        drawList.AddText(pos + Vector2.One, ColorShadow, text);
+        drawList.AddText(pos, ColorWhite, text);
     }
 }

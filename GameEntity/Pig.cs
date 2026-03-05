@@ -3,6 +3,7 @@ using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity.AI;
+using VoxelEngine.Items;
 using VoxelEngine.Terrain;
 
 namespace VoxelEngine.GameEntity;
@@ -84,11 +85,18 @@ public class Pig : Entity
     public override void TakeDamage(int amount)
     {
         base.TakeDamage(amount);
-        
+
         Game.Instance.AudioManager.PlayAudio(
-            "Resources/Audio/Entities/Pig/PigDie.ogg", 
-            Proximity((Game.Instance.GetPlayer.Position - this.Position).Length ,20f, Game.Instance.AudioManager.SfxVol), 
+            "Resources/Audio/Entities/Pig/PigDie.ogg",
+            Proximity((Game.Instance.GetPlayer.Position - this.Position).Length ,20f, Game.Instance.AudioManager.SfxVol),
             false);
+
+        if (!IsAlive)
+        {
+            int count = Game.Instance.GameRandom.Next(1, 4); // 1-3
+            var drop = new DroppedItemEntity(Position, ItemStack.FromItem(ItemType.RawPork, count), Game.Instance.WorldTexture);
+            Game.Instance.GetWorld.AddEntity(drop);
+        }
     }
 
     // Play the walking animation if the pig is moving. Basically swings the legs back and forth. Also, if the player gets close enough the pig will look at the player.
@@ -160,6 +168,12 @@ public class Pig : Entity
     }
 
     // Draw the leg at the offset.
+    protected override void Fall(World world, float dist)
+    {
+        int damage = (int)MathF.Ceiling(dist - 3f);
+        if (damage > 0) TakeDamage(damage);
+    }
+
     private void DrawLeg(float swingAngle, Vector3 offset, Matrix4 entityBase, Matrix4 vp)
     {
         Matrix4 legLocal = Matrix4.CreateTranslation(-LegPivot)

@@ -1,4 +1,5 @@
 using OpenTK.Mathematics;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -9,6 +10,8 @@ public class BlockStoneStair : Block
     public override BlockType Type => BlockType.StoneStair;
     public override string Name => "Stone Stair";
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Stone;
+    public override ToolType PreferredTool => ToolType.Pickaxe;
+    public override ToolTier MinimumTier => ToolTier.Wood;
     public override RenderingType RenderType => RenderingType.Stair;
 
     public override float Hardness => 1.5f;

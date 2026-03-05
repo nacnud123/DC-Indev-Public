@@ -8,8 +8,7 @@ namespace VoxelEngine.Rendering;
 public class CloudRenderer : IDisposable
 {
     private const float CLOUD_PLANE_RADIIUS = 512f;
-    private const float CLOUD_UV_SCALE = .5f / 1024.0f;
-    private const float SCROLL_SPEED = .03f;
+    private const float SCROLL_SPEED = 0.06f; // world units per tick
 
     private Shader mShader;
     private Texture mCloudTexture;
@@ -26,26 +25,25 @@ public class CloudRenderer : IDisposable
 
     private void BuildMesh()
     {
+        float r = CLOUD_PLANE_RADIIUS;
         float[] vertices =
         [
-            // Top face
-            // pos.x              pos.y pos.z                 tex.u   tex.v
-            -CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, -0.25f, -0.25f,
-            -CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, -0.25f, +0.25f,
-            +CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, +0.25f, +0.25f,
-            +CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, +0.25f, +0.25f, // repeated for tri 2
-            +CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, +0.25f, -0.25f,
-            -CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, -0.25f, -0.25f, // repeated for tri 2
+            // Top face (normal +Y)
+            -r, 0f, -r,
+            -r, 0f, +r,
+            +r, 0f, +r,
+            +r, 0f, +r,
+            +r, 0f, -r,
+            -r, 0f, -r,
 
-            // Bottom face
-            -CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, -0.25f, -0.25f,
-            +CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, +0.25f, -0.25f,
-            +CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, +0.25f, +0.25f,
-            +CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, +0.25f, +0.25f, // repeated for tri 2
-            -CLOUD_PLANE_RADIIUS, 0.0f, CLOUD_PLANE_RADIIUS, -0.25f, +0.25f,
-            -CLOUD_PLANE_RADIIUS, 0.0f, -CLOUD_PLANE_RADIIUS, -0.25f, -0.25f // repeated for tri 2
+            // Bottom face (normal -Y)
+            -r, 0f, -r,
+            +r, 0f, -r,
+            +r, 0f, +r,
+            +r, 0f, +r,
+            -r, 0f, +r,
+            -r, 0f, -r,
         ];
-        // 12 vertices total (6 per face × 2 faces)
 
         mVAO = GL.GenVertexArray();
         mVBO = GL.GenBuffer();
@@ -57,10 +55,7 @@ public class CloudRenderer : IDisposable
             BufferUsageHint.StaticDraw);
 
         GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 5 * sizeof(float), 0);
-
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 5 * sizeof(float), 3 * sizeof(float));
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
         GL.BindVertexArray(0);
     }
 
@@ -76,7 +71,7 @@ public class CloudRenderer : IDisposable
 
     public void Render(Vector3 playerPos, WorldGenSettings settings, float dayFactor, float partialTick, Vector3 fogColor, float fogDist, Matrix4 view, Matrix4 proj)
     {
-        float uvScrollU = (mCloudOffsetX + partialTick) * CLOUD_UV_SCALE * SCROLL_SPEED;
+        float uvScrollU = (mCloudOffsetX + partialTick) * SCROLL_SPEED;
 
         float brightRG = dayFactor * .9f + .1f;
         float brightB = dayFactor * .85f + .15f;

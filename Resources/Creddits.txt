@@ -1,5 +1,6 @@
 Textures:
 https://opengameart.org/content/1616-block-textures
 https://opengameart.org/content/16x16-block-texture-set
+https://opengameart.org/content/16px-items-and-materials
 Block breaking texture:
 https://opengameart.org/content/breaking-blocks

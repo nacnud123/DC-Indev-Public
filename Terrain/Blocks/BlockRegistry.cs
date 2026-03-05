@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using OpenTK.Mathematics;
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 
 namespace VoxelEngine.Terrain.Blocks;
@@ -68,6 +69,7 @@ public static class BlockRegistry
         Register(new BlockTNT());
         Register(new BlockWorkBench());
         Register(new BlockFurnace());
+        Register(new BlockFurnaceLit());
         Register(new BlockChest());
 
         // Colored
@@ -86,6 +88,14 @@ public static class BlockRegistry
 
         // Special
         Register(new BlockFire());
+
+        // Farming
+        Register(new BlockFarmland());
+        Register(new BlockWheatStage0());
+        Register(new BlockWheatStage1());
+        Register(new BlockWheatStage2());
+        Register(new BlockWheatStage3());
+        Register(new BlockWheatStage4());
     }
 
     public static void Register(Block block)
@@ -134,4 +144,5 @@ public static class BlockRegistry
     public static bool CanBlockSupport(BlockType type, BlockType beneath) => Get(type).CanBlockSupport(beneath);
     public static BlockBreakMaterial GetBlockBreakMaterial(BlockType type) => Get(type).BreakMaterial;
     public static int GetTickRate(BlockType type) => Get(type).TickRate;
+    public static ItemStack? GetDrop(BlockType type, byte metaData = 0) => Get(type).GetDrop(metaData);
 }

@@ -1,6 +1,9 @@
 // A partial class that handles breaking and placing blocks | DA | 2/14/26
+
 using OpenTK.Mathematics;
+using VoxelEngine.BlockEntities;
 using VoxelEngine.Core;
+using VoxelEngine.Items;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
 
@@ -41,7 +44,7 @@ public partial class Player
 
         if (!BlockRegistry.IsBreakable(blockType))
             return;
-        
+
         float hardness = BlockRegistry.GetHardness(blockType);
 
         // Instant break for zero-hardness blocks and when the player is flying
@@ -52,15 +55,29 @@ public partial class Player
             return;
         }
 
+        var tool = GetHeldTool();
+        bool correctTool = tool != null && tool.ToolType == BlockRegistry.Get(blockType).PreferredTool;
+
+        // damage per tick = toolStrength / hardness / divisor (20 ticks/sec)
+        float toolStrength = correctTool ? tool!.MiningSpeed : 1f;
+        float divisor = correctTool ? 30f : (tool != null ? 100f : 30f);
+        float damagePerSecond = toolStrength / hardness / divisor * 20f;
+
+        if (IsUnderWater)
+            damagePerSecond *= 0.2f;
+
+        if (!IsOnGround)
+            damagePerSecond *= 0.2f;
+
         // Start or continue breaking
         if (!mBreakingPos.HasValue)
         {
             mBreakingPos = blockPos;
-            mBreakHardness = hardness;
+            mBreakHardness = 1f;
             mBreakProgress = 0f;
         }
 
-        mBreakProgress += dt;
+        mBreakProgress += damagePerSecond * dt;
         mDigSoundTimer -= dt;
 
         if (mDigSoundTimer <= 0f)
@@ -69,7 +86,7 @@ public partial class Player
             Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(blockType));
         }
 
-        if (mBreakProgress >= mBreakHardness)
+        if (mBreakProgress >= 1f)
         {
             BreakBlock(world, blockPos);
             mBreakCooldown = 0.15f;
@@ -110,6 +127,7 @@ public partial class Player
             world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
             return;
         }
+
         if (blockType == BlockType.DoubleWoodSlab)
         {
             world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.WoodSlab);
@@ -119,9 +137,47 @@ public partial class Player
             return;
         }
 
+        if (blockType == BlockType.Furnace || blockType == BlockType.FurnaceLit)
+        {
+            if (Game.Instance.CurrentState == GameState.Furnace)
+                Game.Instance.CloseFurnace();
+            
+            BlockEntityManager.DestroyAt(blockPos, world);
+        }
+
+        if (blockType == BlockType.Chest)
+        {
+            if (Game.Instance.CurrentState == GameState.Chest)
+                Game.Instance.CloseChest();
+            
+            BlockEntityManager.DestroyAt(blockPos, world);
+        }
+
+        byte meta = (byte)world.GetMetadata(blockPos.X, blockPos.Y, blockPos.Z);
         world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.Air);
         Game.Instance.ParticleSystem.SpawnBlockBreakParticles(blockPos, blockType);
         Game.Instance.AudioManager.PlayBlockBreakSound(BlockRegistry.GetBlockBreakMaterial(blockType));
+
+        var tool = GetHeldTool();
+        var minTier = BlockRegistry.Get(blockType).MinimumTier;
+        bool tierMet = minTier == ToolTier.None || (tool != null && tool.ToolTier >= minTier);
+
+        if (tool != null)
+        {
+            int slotIndex = PlayerInventory.HOTBAR_START + (Game.Instance.Hotbar?.SelectedSlotIndex ?? 0);
+            Game.Instance.PlayerInventory?.DamageTool(slotIndex);
+        }
+
+        var drop = tierMet ? BlockRegistry.GetDrop(blockType, meta) : null;
+        if (drop.HasValue)
+        {
+            var rng = Game.Instance.GameRandom;
+            float spawnX = blockPos.X + (float)rng.NextDouble() * 0.7f + 0.15f;
+            float spawnY = blockPos.Y + (float)rng.NextDouble() * 0.7f + 0.15f;
+            float spawnZ = blockPos.Z + (float)rng.NextDouble() * 0.7f + 0.15f;
+            world.AddEntity(new DroppedItemEntity(new Vector3(spawnX, spawnY, spawnZ), drop.Value,
+                Game.Instance.WorldTexture));
+        }
 
         // Handle gravity blocks above
         var checkY = blockPos.Y + 1;
@@ -135,7 +191,6 @@ public partial class Player
         world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
     }
 
-    // Main function that is called when you try to break or place a block. Breaking blocks has been moved mostly to another function to this really just handles placing blocks now.
     public void HandleBlockInteraction(World world, bool breakBlock, bool placeBlock)
     {
         var hit = world.Raycast(Camera.Position, Camera.Front);
@@ -152,26 +207,60 @@ public partial class Player
             if (!BlockRegistry.IsBreakable(tempBlock))
                 return;
 
+            if (tempBlock == BlockType.WorkBench && Game.Instance.CurrentState == GameState.Crafting)
+                Game.Instance.CloseCrafting();
+
+            if (tempBlock == BlockType.Chest && Game.Instance.CurrentState == GameState.Chest)
+                Game.Instance.CloseChest();
+
             BreakBlock(world, blockPos);
         }
-        else if (placeBlock && placePos.HasValue)
+        else if (placeBlock)
         {
-            // If the targeted block is replaceable (flower, grass tuft, etc.), place into it directly.
             var hitBlock = world.GetBlock(blockPos.X, blockPos.Y, blockPos.Z);
+
+            if (hitBlock == BlockType.WorkBench)
+            {
+                Game.Instance.OpenCrafting();
+                return;
+            }
+
+            if (hitBlock == BlockType.Furnace || hitBlock == BlockType.FurnaceLit)
+            {
+                Game.Instance.OpenFurnace(blockPos);
+                return;
+            }
+
+            if (hitBlock == BlockType.Chest)
+            {
+                Game.Instance.OpenChest(blockPos);
+                return;
+            }
+
+            if (!placePos.HasValue || mSelectedBlock == BlockType.Air) 
+                return;
+
+            // If the targeted block is replaceable (flower, grass tuft, etc.), place into it directly.
             if (BlockRegistry.Get(hitBlock).IsReplaceable)
                 placePos = blockPos;
+            
             if (mSelectedBlock == BlockType.Stoneslab && hitBlock == BlockType.Stoneslab)
             {
                 world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.DoubleStoneslab);
-                Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(BlockType.Stoneslab));
+                Game.Instance.AudioManager.PlayBlockContactSound(
+                    BlockRegistry.GetBlockBreakMaterial(BlockType.Stoneslab));
                 world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+                ConsumeSelectedHotbarItem();
                 return;
             }
+
             if (mSelectedBlock == BlockType.WoodSlab && hitBlock == BlockType.WoodSlab)
             {
                 world.SetBlock(blockPos.X, blockPos.Y, blockPos.Z, BlockType.DoubleWoodSlab);
-                Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(BlockType.WoodSlab));
+                Game.Instance.AudioManager.PlayBlockContactSound(
+                    BlockRegistry.GetBlockBreakMaterial(BlockType.WoodSlab));
                 world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
+                ConsumeSelectedHotbarItem();
                 return;
             }
 
@@ -198,9 +287,9 @@ public partial class Player
                     if (diff.Y == -1)
                         return;
 
-                    if (diff.Y == 1)
+                    if (diff.Y == 1 || diff == Vector3i.Zero)
                     {
-                        // Ground torch (metadata 0)
+                        // Ground torch (metadata 0) — also handles placing into a replaceable block.
                         if (!BlockRegistry.IsSolid(world.GetBlock(x, y - 1, z)))
                             return;
                     }
@@ -264,13 +353,15 @@ public partial class Player
 
                 var existing = world.GetBlock(x, y, z);
                 bool existingIsReplaceable = BlockRegistry.Get(existing).IsReplaceable;
-                if (existing != BlockType.Air && existing != BlockType.Water && existing != BlockType.Lava && !existingIsReplaceable)
+                if (existing != BlockType.Air && existing != BlockType.Water && existing != BlockType.Lava &&
+                    !existingIsReplaceable)
                     return;
 
                 if (existingIsReplaceable)
                 {
                     BlockRegistry.Get(existing).OnRemoved(world, x, y, z);
-                    Game.Instance.ParticleSystem.SpawnBlockBreakParticles(new OpenTK.Mathematics.Vector3i(x, y, z), existing);
+                    Game.Instance.ParticleSystem.SpawnBlockBreakParticles(new OpenTK.Mathematics.Vector3i(x, y, z),
+                        existing);
                 }
 
                 if (world.GetBlock(x, y - 1, z) == BlockType.Grass && !BlockRegistry.GetSuffocatesBeneath(blockToPlace))
@@ -281,22 +372,101 @@ public partial class Player
                 if (!isWallTorch)
                     SupportBlockOffset.Y = -1;
 
-                if (!BlockRegistry.CanBlockSupport(blockToPlace, world.GetBlock(x + SupportBlockOffset.X, y + SupportBlockOffset.Y, z + SupportBlockOffset.Z)))
+                if (!BlockRegistry.CanBlockSupport(blockToPlace,
+                        world.GetBlock(x + SupportBlockOffset.X, y + SupportBlockOffset.Y, z + SupportBlockOffset.Z)))
                     return;
 
                 world.SetBlock(x, y, z, blockToPlace);
                 if (placeMeta != 0)
                     world.SetMetadata(x, y, z, placeMeta);
                 Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(blockToPlace));
-
                 world.SetChunkAsModified(x, y, z);
+                ConsumeSelectedHotbarItem();
             }
         }
+    }
+
+    private void ConsumeSelectedHotbarItem()
+    {
+        var inv = Game.Instance.PlayerInventory;
+        var hotbar = Game.Instance.Hotbar;
+
+        if (inv == null || hotbar == null)
+            return;
+
+        inv.ConsumeOne(PlayerInventory.HOTBAR_START + hotbar.SelectedSlotIndex);
+        if (!hotbar.GetSelectedStack().HasValue)
+            mSelectedBlock = BlockType.Air;
+    }
+
+    public void UseHeldItem(World world, ItemType itemType)
+    {
+        var def = ItemRegistry.Get(itemType);
+
+        if (def.IsFood)
+        {
+            if (Health >= PLAYER_MAX_HEALTH)
+                return;
+
+            Health = Math.Min(Health + def.FoodRestore, PLAYER_MAX_HEALTH);
+            var inv = Game.Instance.PlayerInventory;
+            var hotbar = Game.Instance.Hotbar;
+
+            if (inv == null || hotbar == null)
+                return;
+
+            inv.ConsumeOne(PlayerInventory.HOTBAR_START + hotbar.SelectedSlotIndex);
+
+            Game.Instance.AudioManager.PlayMunchSound();
+
+            return;
+        }
+
+        if (def.OnUse == null)
+            return;
+
+        bool used;
+        if (def.SkipBlockRaycast)
+        {
+            used = def.OnUse(world, Vector3i.Zero, null);
+        }
+        else
+        {
+            var hit = world.Raycast(Camera.Position, Camera.Front);
+            if (hit.Type != RaycastHitType.Block)
+                return;
+
+            used = def.OnUse(world, hit.BlockPos, hit.PlacePos);
+        }
+
+        if (!used)
+            return;
+
+        var inv2 = Game.Instance.PlayerInventory;
+        var hotbar2 = Game.Instance.Hotbar;
+        if (inv2 == null || hotbar2 == null)
+            return;
+
+        int slotIndex = PlayerInventory.HOTBAR_START + hotbar2.SelectedSlotIndex;
+        if (def.IsTool)
+            inv2.DamageTool(slotIndex);
+        else
+            inv2.ConsumeOne(slotIndex);
     }
 
     public BlockType SelectedBlock
     {
         get => mSelectedBlock;
         set => mSelectedBlock = value;
+    }
+
+    private ItemDef? GetHeldTool()
+    {
+        var stack = Game.Instance.Hotbar?.GetSelectedStack();
+        if (stack == null || stack.Value.IsBlock) 
+            return null;
+        
+        var def = ItemRegistry.Get(stack.Value.Item);
+        return def.IsTool ? def : null;
     }
 }

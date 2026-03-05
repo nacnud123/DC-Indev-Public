@@ -1,3 +1,4 @@
+using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
 
@@ -10,6 +11,7 @@ public class BlockDirt : Block
     public override float Hardness => 0.5f;
     public override bool TicksRandomly => true;
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.Dirt;
+    public override ToolType PreferredTool => ToolType.Shovel;
 
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(1, 1);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

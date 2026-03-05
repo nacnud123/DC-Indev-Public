@@ -1,5 +1,4 @@
-// Main entity class, holds reference to entity model, position, and velocity. Along with other code related to Entities | DA | 2/5/26 - 2/14/26
-// Updated with lighting, now entities will become darker or lighter depending on the lighting. Also, added functions to draw certain body parts. Finally, added in audio integration.
+// Base entity class — position, velocity, physics, lighting, hit flash, fire, and model rendering | DA | 2/5/26 - 2/14/26
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
@@ -7,6 +6,7 @@ using VoxelEngine.GameEntity.AI;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
+using VoxelEngine.Utils;
 
 namespace VoxelEngine.GameEntity;
 
@@ -19,6 +19,7 @@ public class Entity
     public static float AmbientStrength = 0.4f;
     public static float SunlightLevel = 1f;
 
+    public virtual bool IsTargetable => true;
     public virtual int Health { get; set; } = 100;
     public virtual float Width { get; set; } = 0.6f;
     public virtual float Height { get; set; } = 1.8f;
@@ -27,13 +28,19 @@ public class Entity
     public virtual float SlowWalkSpeed { get; set; } = 2.1585f;
     public virtual float Scale { get; set; } = 1f;
     public virtual float JumpForce { get; set; }
-    public float Yaw { get; set; }
+    public float Yaw   { get; set; }
+    public float Pitch { get; set; }
     public bool IsOnGround { get; protected set; }
     public bool IsAlive { get; set; } = true;
     private float hitFlashTimer = 0;
     const float HIT_FLASH_DURATION = 0.3f;
     private float mStepTimer;
     private const float STEP_INTERVAL = 0.5f;
+
+    public float FireTimer { get; set; }
+    public bool IsOnFire => FireTimer > 0f;
+    private float mFireDamageTimer;
+    protected float mFallDistance;
 
     protected EntityModel? Model { get; set; }
 
@@ -65,10 +72,12 @@ public class Entity
     public virtual void Tick(World world)
     {
         float dt = TickSystem.TICK_DURATION;
+        bool wasOnGround = IsOnGround;
 
         mVel.Y -= Physics.GRAVITY * dt;
         mVel.Y = MathF.Max(mVel.Y, -Physics.TERMINAL_VEL);
 
+        float preCollisionVelY = mVel.Y;
         Vector3 frameVelocity = mVel * dt;
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), frameVelocity);
         mPos += actual;
@@ -84,10 +93,52 @@ public class Entity
             IsOnGround = Physics.IsOnGround(world, GetBoundingBox());
         }
 
+        if (IsOnGround && !wasOnGround)
+        {
+            if (mFallDistance > 0f)
+            {
+                Fall(world, mFallDistance);
+                mFallDistance = 0f;
+            }
+        }
+        else if (!IsOnGround && preCollisionVelY < 0f)
+        {
+            mFallDistance += -preCollisionVelY * dt;
+        }
+
         if(hitFlashTimer > 0)
             hitFlashTimer -= dt;
 
-        // Footstep sounds
+        int fx = (int)MathF.Floor(mPos.X);
+        int fy = (int)MathF.Floor(mPos.Y);
+        int fz = (int)MathF.Floor(mPos.Z);
+        var footBlock = world.GetBlock(fx, fy, fz);
+
+        if (footBlock == BlockType.Water)
+            mFallDistance = 0f;
+
+        if (footBlock == BlockType.Fire)
+            FireTimer = MathF.Max(FireTimer, 8f);
+
+        if (FireTimer > 0f)
+        {
+            if (footBlock == BlockType.Water)
+            {
+                FireTimer = 0f;
+                mFireDamageTimer = 0f;
+            }
+            else
+            {
+                FireTimer -= dt;
+                mFireDamageTimer -= dt;
+                if (mFireDamageTimer <= 0f)
+                {
+                    TakeDamage(1);
+                    mFireDamageTimer = 1f;
+                }
+            }
+        }
+
         float hSpeed = MathF.Sqrt(actual.X * actual.X + actual.Z * actual.Z) / dt;
         if (IsOnGround && hSpeed > 0.1f)
         {
@@ -133,6 +184,9 @@ public class Entity
         _shader?.SetFloat("blockLight", blockLight);
 
         DrawModel(view, projection);
+
+        if (IsOnFire)
+            DrawFireBillboard(view, projection);
     }
 
     protected virtual void DrawModel(Matrix4 view, Matrix4 projection)
@@ -151,6 +205,73 @@ public class Entity
         GL.BindVertexArray(model.Vao);
         GL.DrawArrays(PrimitiveType.Triangles, 0, model.VertexCount);
     }
+
+    // Lazy-initialised fire billboard — one VAO shared across all entities
+    private static int _fireVao, _fireVbo;
+    private static bool _fireVaoReady;
+
+    private static void EnsureFireVao()
+    {
+        if (_fireVaoReady) return;
+
+        var fireUv = UvHelper.FromTileCoords(6, 7);
+        float u0 = fireUv.TopLeft.X,     v0 = fireUv.TopLeft.Y;
+        float u1 = fireUv.BottomRight.X, v1 = fireUv.BottomRight.Y;
+
+        // Vertex format must match the entity shader: pos(3) + uv(2) + normal(3) = 8 floats
+        float[] verts =
+        {
+            -0.5f, 0f, 0f,  u0, v0,  0f, 0f, 1f,
+             0.5f, 0f, 0f,  u1, v0,  0f, 0f, 1f,
+             0.5f, 1f, 0f,  u1, v1,  0f, 0f, 1f,
+
+            -0.5f, 0f, 0f,  u0, v0,  0f, 0f, 1f,
+             0.5f, 1f, 0f,  u1, v1,  0f, 0f, 1f,
+            -0.5f, 1f, 0f,  u0, v1,  0f, 0f, 1f,
+        };
+
+        _fireVao = GL.GenVertexArray();
+        _fireVbo = GL.GenBuffer();
+        GL.BindVertexArray(_fireVao);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _fireVbo);
+        GL.BufferData(BufferTarget.ArrayBuffer, verts.Length * sizeof(float), verts, BufferUsageHint.StaticDraw);
+
+        int stride = 8 * sizeof(float);
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
+        GL.EnableVertexAttribArray(0);
+        GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
+        GL.EnableVertexAttribArray(1);
+        GL.VertexAttribPointer(2, 3, VertexAttribPointerType.Float, false, stride, 5 * sizeof(float));
+        GL.EnableVertexAttribArray(2);
+        GL.BindVertexArray(0);
+        _fireVaoReady = true;
+    }
+
+    private void DrawFireBillboard(Matrix4 view, Matrix4 projection)
+    {
+        EnsureFireVao();
+
+        var camPos = Game.Instance.GetPlayer.Camera.Position;
+        float dx = camPos.X - mPos.X;
+        float dz = camPos.Z - mPos.Z;
+        float yaw = MathF.Atan2(dx, dz);
+
+        Matrix4 mvp =
+            Matrix4.CreateScale(Width * 1.5f, Height, 1f)
+            * Matrix4.CreateRotationY(yaw)
+            * Matrix4.CreateTranslation(mPos + new Vector3(0f, 0.3f, 0f))
+            * view
+            * projection;
+
+        _shader?.SetMatrix4("mvp", mvp);
+        _shader?.SetFloat("uHitFlash", 0f);
+
+        Game.Instance.WorldTexture.Use(TextureUnit.Texture0);
+        GL.BindVertexArray(_fireVao);
+        GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+    }
+
+    protected virtual void Fall(World world, float dist) { }
 
     public virtual void TakeDamage(int amount)
     {
@@ -178,9 +299,16 @@ public class Entity
         _shader?.Dispose();
         _shader = null;
         _shaderInitialized = false;
+
+        if (_fireVaoReady)
+        {
+            GL.DeleteVertexArray(_fireVao);
+            GL.DeleteBuffer(_fireVbo);
+            _fireVaoReady = false;
+        }
     }
 
-    public Aabb GetBoundingBox()
+    public virtual Aabb GetBoundingBox()
     {
         float hw = Width / 2.0f;
         return new Aabb(new Vector3(mPos.X - hw, mPos.Y, mPos.Z - hw), new Vector3(mPos.X + hw, mPos.Y + Height, mPos.Z + hw));

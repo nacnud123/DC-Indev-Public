@@ -36,7 +36,7 @@ public class LightingEngine
         {
             X = x;
             Y = y;
-            Z = z; OldLight = oldLight;
+            Z = z;
             OldLight = oldLight;
         }
     }

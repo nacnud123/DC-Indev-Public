@@ -10,6 +10,7 @@
    9-10 	2 floats 	Texture UV coordinates
  *
  */
+
 using OpenTK.Mathematics;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain.Blocks;
@@ -28,7 +29,8 @@ internal static class ChunkMeshBuilder
     private const float BASE_Y = 3.5f / 16f;
 
     // Normal block building, 6 faces. Check's neighboring blocks for face culling.
-    internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, BlockType block, int skyLight, int blockLight, float topY = -1f)
+    internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, BlockType block,
+        int skyLight, int blockLight, float topY = -1f)
     {
         float top = topY < 0 ? y + 1 : topY;
 
@@ -58,7 +60,8 @@ internal static class ChunkMeshBuilder
     }
 
     // Emit a face with explicit texture coords - no heap allocations, vertices written directly
-    internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, TextureCoords texCoords, int skyLight, int blockLight, float topY = -1f)
+    internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, TextureCoords texCoords,
+        int skyLight, int blockLight, float topY = -1f)
     {
         float top = topY < 0 ? y + 1 : topY;
 
@@ -157,88 +160,188 @@ internal static class ChunkMeshBuilder
         }
     }
 
-    // Four outer wall faces (no top/bottom) + two double-sided diagonal quads.
-    internal static void AddFire(List<float> verts, float x, float y, float z, BlockType block, int skyLight, int blockLight)
+    // Minecraft-style fire rendering.
+    internal static void AddFire(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
+        int blockLight,
+        bool hasSolidBase, bool flammableNegX, bool flammablePosX, bool flammableNegZ, bool flammablePosZ,
+        bool flammableAbove)
     {
-        float skyLightNorm = skyLight / (float)Chunk.MAX_LIGHT;
-        float blockLightNorm = blockLight / (float)Chunk.MAX_LIGHT;
+        float sl = skyLight / (float)Chunk.MAX_LIGHT;
+        float bl = blockLight / (float)Chunk.MAX_LIGHT;
+        const float shade = 0.9f;
+        const float fireHeight = 1.4f;
+        const float yBase = 1f / 16f; // raise bottom edge 1/16 off ground
 
         var tex = BlockRegistry.GetSideTexture(block);
         float u0 = tex.TopLeft.X, v0 = tex.TopLeft.Y;
         float u1 = tex.BottomRight.X, v1 = tex.BottomRight.Y;
 
-        // Outer wall faces
+        if (!hasSolidBase)
+        {
+            float yBot = y + yBase;
+            float yTop = y + fireHeight + yBase;
 
-        // Front +Z
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.8f, Vector3.UnitZ, new Vector2(u1, v1));
+            // -X neighbor
+            if (flammableNegX)
+            {
+                // Bottom edge at x, top edge at x+0.2 (leans inward)
+                AddFireQuadDoubleSided(verts, sl, bl, shade,
+                    new Vector3(x, yBot, z), new Vector3(x, yBot, z + 1),
+                    new Vector3(x + 0.2f, yTop, z + 1), new Vector3(x + 0.2f, yTop, z),
+                    u0, v0, u1, v1);
+            }
 
-        // Back -Z
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, 0.8f, -Vector3.UnitZ, new Vector2(u0, v0));
+            // +X neighbor
+            if (flammablePosX)
+            {
+                // Bottom edge at x+1, top edge at x+0.8 (leans inward)
+                AddFireQuadDoubleSided(verts, sl, bl, shade,
+                    new Vector3(x + 1, yBot, z + 1), new Vector3(x + 1, yBot, z),
+                    new Vector3(x + 0.8f, yTop, z), new Vector3(x + 0.8f, yTop, z + 1),
+                    u0, v0, u1, v1);
+            }
 
-        // Right +X
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z + 1), skyLightNorm, blockLightNorm, 0.7f, Vector3.UnitX, new Vector2(u0, v0));
+            // -Z neighbor
+            if (flammableNegZ)
+            {
+                // Bottom edge at z, top edge at z+0.2
+                AddFireQuadDoubleSided(verts, sl, bl, shade,
+                    new Vector3(x + 1, yBot, z), new Vector3(x, yBot, z),
+                    new Vector3(x, yTop, z + 0.2f), new Vector3(x + 1, yTop, z + 0.2f),
+                    u0, v0, u1, v1);
+            }
 
-        // Left -X
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y + 1, z), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, 0.7f, -Vector3.UnitX, new Vector2(u0, v0));
+            // +Z neighbor
+            if (flammablePosZ)
+            {
+                // Bottom edge at z+1, top edge at z+0.8
+                AddFireQuadDoubleSided(verts, sl, bl, shade,
+                    new Vector3(x, yBot, z + 1), new Vector3(x + 1, yBot, z + 1),
+                    new Vector3(x + 1, yTop, z + 0.8f), new Vector3(x, yTop, z + 0.8f),
+                    u0, v0, u1, v1);
+            }
 
-        // Interior cross quads (double-sided, shade 0.9)
+            // Above neighbor — X-cap
+            if (flammableAbove)
+            {
+                AddFireXCap(verts, x, z, y, sl, bl, shade, u0, v0, u1, v1);
+            }
+        }
+        else
+        {
+            // 8 diagonal leaning quads (classic campfire pillars)
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x + 0.7f, y, z),
+                new Vector3(x + 0.7f, y, z + 1),
+                new Vector3(x + 0.2f, y + fireHeight, z + 1),
+                new Vector3(x + 0.2f, y + fireHeight, z),
+                u0, v0, u1, v1);
+            // Quad leans right: top at x+0.8, bottom at x+0.3
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x + 0.3f, y, z + 1),
+                new Vector3(x + 0.3f, y, z),
+                new Vector3(x + 0.8f, y + fireHeight, z),
+                new Vector3(x + 0.8f, y + fireHeight, z + 1),
+                u0, v0, u1, v1);
 
-        Vector3 crossNormal = Vector3.UnitY;
-        float cs = 0.9f;
+            // Z-axis pair
+            // Quad leans forward: top at z+0.2, bottom at z+0.7
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x, y, z + 0.7f),
+                new Vector3(x + 1, y, z + 0.7f),
+                new Vector3(x + 1, y + fireHeight, z + 0.2f),
+                new Vector3(x, y + fireHeight, z + 0.2f),
+                u0, v0, u1, v1);
+            // Quad leans back: top at z+0.8, bottom at z+0.3
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x + 1, y, z + 0.3f),
+                new Vector3(x, y, z + 0.3f),
+                new Vector3(x, y + fireHeight, z + 0.8f),
+                new Vector3(x + 1, y + fireHeight, z + 0.8f),
+                u0, v0, u1, v1);
 
-        // Diagonal A
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y + 1, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v1));
+            // Wide panels near block edges, slight lean inward
+            // X-axis outer pair
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x, y, z),
+                new Vector3(x, y, z + 1),
+                new Vector3(x + 0.1f, y + fireHeight, z + 1),
+                new Vector3(x + 0.1f, y + fireHeight, z),
+                u0, v0, u1, v1);
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x + 1, y, z + 1),
+                new Vector3(x + 1, y, z),
+                new Vector3(x + 0.9f, y + fireHeight, z),
+                new Vector3(x + 0.9f, y + fireHeight, z + 1),
+                u0, v0, u1, v1);
 
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v0));
+            // Z-axis outer pair
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x + 1, y, z),
+                new Vector3(x, y, z),
+                new Vector3(x, y + fireHeight, z + 0.1f),
+                new Vector3(x + 1, y + fireHeight, z + 0.1f),
+                u0, v0, u1, v1);
+            AddFireQuadDoubleSided(verts, sl, bl, shade,
+                new Vector3(x, y, z + 1),
+                new Vector3(x + 1, y, z + 1),
+                new Vector3(x + 1, y + fireHeight, z + 0.9f),
+                new Vector3(x, y + fireHeight, z + 0.9f),
+                u0, v0, u1, v1);
+        }
+    }
 
-        // Diagonal B
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v1));
+    // Emits two triangles (front + back) for a fire parallelogram panel.
+    private static void AddFireQuadDoubleSided(List<float> verts, float sl, float bl2, float shade,
+        Vector3 bottomLeft, Vector3 bottomRight, Vector3 topRight, Vector3 topLeft,
+        float u0, float v0, float u1, float v1)
+    {
+        Vector3 n = Vector3.UnitY; // fire quads use upward normal for lighting
 
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x + 1, y + 1, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v1));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x + 1, y, z), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u0, v0));
-        AddVertex(verts, new Vector3(x, y + 1, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v1));
-        AddVertex(verts, new Vector3(x, y, z + 1), skyLightNorm, blockLightNorm, cs, crossNormal, new Vector2(u1, v0));
+        // Front face
+        AddVertex(verts, bottomLeft, sl, bl2, shade, n, new Vector2(u0, v0));
+        AddVertex(verts, bottomRight, sl, bl2, shade, n, new Vector2(u1, v0));
+        AddVertex(verts, topRight, sl, bl2, shade, n, new Vector2(u1, v1));
+        AddVertex(verts, bottomLeft, sl, bl2, shade, n, new Vector2(u0, v0));
+        AddVertex(verts, topRight, sl, bl2, shade, n, new Vector2(u1, v1));
+        AddVertex(verts, topLeft, sl, bl2, shade, n, new Vector2(u0, v1));
+
+        // Back face (reversed winding)
+        AddVertex(verts, bottomLeft, sl, bl2, shade, n, new Vector2(u0, v0));
+        AddVertex(verts, topLeft, sl, bl2, shade, n, new Vector2(u0, v1));
+        AddVertex(verts, topRight, sl, bl2, shade, n, new Vector2(u1, v1));
+        AddVertex(verts, bottomLeft, sl, bl2, shade, n, new Vector2(u0, v0));
+        AddVertex(verts, topRight, sl, bl2, shade, n, new Vector2(u1, v1));
+        AddVertex(verts, bottomRight, sl, bl2, shade, n, new Vector2(u1, v0));
+    }
+
+    // Two double-sided diagonal quads forming an X, used as a top-cap when fire has no base.
+    private static void AddFireXCap(List<float> verts, float x, float z, float y, float sl, float bl, float shade,
+        float u0, float v0, float u1, float v1)
+    {
+        float yTop = y + 1.4f + 1f / 16f;
+        float yBot = y + 1f / 16f;
+
+        // Diagonal A: (x,z) to (x+1,z+1)
+        AddFireQuadDoubleSided(verts, sl, bl, shade,
+            new Vector3(x, yBot, z),
+            new Vector3(x + 1, yBot, z + 1),
+            new Vector3(x + 1, yTop, z + 1),
+            new Vector3(x, yTop, z),
+            u0, v0, u1, v1);
+
+        // Diagonal B: (x+1,z) to (x,z+1)
+        AddFireQuadDoubleSided(verts, sl, bl, shade,
+            new Vector3(x + 1, yBot, z),
+            new Vector3(x, yBot, z + 1),
+            new Vector3(x, yTop, z + 1),
+            new Vector3(x + 1, yTop, z),
+            u0, v0, u1, v1);
     }
 
     // Two diagonal quads forming an X shape. No face culling. Zero heap allocations.
-    internal static void AddCross(List<float> verts, float x, float y, float z, BlockType block, int skyLight, int blockLight)
+    internal static void AddCross(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
+        int blockLight)
     {
         float sl = skyLight / (float)Chunk.MAX_LIGHT;
         float bl = blockLight / (float)Chunk.MAX_LIGHT;
@@ -287,7 +390,8 @@ internal static class ChunkMeshBuilder
     }
 
     // Custom block building made for torches, also does mesh building for wall mounted torches
-    internal static void AddTorch(List<float> verts, float x, float y, float z, BlockType block, int skyLight, int blockLight, int facing = -1)
+    internal static void AddTorch(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
+        int blockLight, int facing = -1)
     {
         float skyLightNorm = skyLight / (float)Chunk.MAX_LIGHT;
         float blockLightNorm = blockLight / (float)Chunk.MAX_LIGHT;
@@ -325,17 +429,23 @@ internal static class ChunkMeshBuilder
                 topFace[i] = RotateWallTorch(topFace[i], pivotX, pivotY, pivotZ, facing) + raise;
         }
 
-        AddTorchQuad(verts, [topFace[0], topFace[1], topFace[3], topFace[2]], Vector3.UnitY, top, skyLightNorm, blockLightNorm, 1.0f);
+        AddTorchQuad(verts, [topFace[0], topFace[1], topFace[3], topFace[2]], Vector3.UnitY, top, skyLightNorm,
+            blockLightNorm, 1.0f);
 
-        AddTorchQuad(verts, [corners[1], corners[0], corners[2], corners[3]], -Vector3.UnitY, bot, skyLightNorm, blockLightNorm, 0.5f);
+        AddTorchQuad(verts, [corners[1], corners[0], corners[2], corners[3]], -Vector3.UnitY, bot, skyLightNorm,
+            blockLightNorm, 0.5f);
 
-        AddTorchQuad(verts, [corners[1], corners[3], corners[7], corners[5]], Vector3.UnitZ, side, skyLightNorm, blockLightNorm, 0.8f);
+        AddTorchQuad(verts, [corners[1], corners[3], corners[7], corners[5]], Vector3.UnitZ, side, skyLightNorm,
+            blockLightNorm, 0.8f);
 
-        AddTorchQuad(verts, [corners[2], corners[0], corners[4], corners[6]], -Vector3.UnitZ, side, skyLightNorm, blockLightNorm, 0.8f);
+        AddTorchQuad(verts, [corners[2], corners[0], corners[4], corners[6]], -Vector3.UnitZ, side, skyLightNorm,
+            blockLightNorm, 0.8f);
 
-        AddTorchQuad(verts, [corners[3], corners[2], corners[6], corners[7]], Vector3.UnitX, side, skyLightNorm, blockLightNorm, 0.7f);
+        AddTorchQuad(verts, [corners[3], corners[2], corners[6], corners[7]], Vector3.UnitX, side, skyLightNorm,
+            blockLightNorm, 0.7f);
 
-        AddTorchQuad(verts, [corners[0], corners[1], corners[5], corners[4]], -Vector3.UnitX, side, skyLightNorm, blockLightNorm, 0.7f);
+        AddTorchQuad(verts, [corners[0], corners[1], corners[5], corners[4]], -Vector3.UnitX, side, skyLightNorm,
+            blockLightNorm, 0.7f);
     }
 
     private static Vector3 RotateWallTorch(Vector3 point, float pivotX, float pivotY, float pivotZ, int facing)
@@ -389,7 +499,8 @@ internal static class ChunkMeshBuilder
     }
 
     // Scalar overload avoids creating Vector3/Vector2 structs for the hot path
-    private static void AddVertex(List<float> verts, float px, float py, float pz, float skyLightNorm, float blockLightNorm, float faceShade, float nx, float ny, float nz, float u, float v)
+    private static void AddVertex(List<float> verts, float px, float py, float pz, float skyLightNorm,
+        float blockLightNorm, float faceShade, float nx, float ny, float nz, float u, float v)
     {
         verts.Add(px);
         verts.Add(py);
@@ -405,7 +516,8 @@ internal static class ChunkMeshBuilder
     }
 
     // Emits a quad (2 triangles) with UV scaled proportionally to box dimensions
-    private static void EmitQuad(List<float> verts, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, float faceShade, float skyLightNorm, float blockLightNorm, TextureCoords tex, float uScale, float vScale)
+    private static void EmitQuad(List<float> verts, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal,
+        float faceShade, float skyLightNorm, float blockLightNorm, TextureCoords tex, float uScale, float vScale)
     {
         float u0 = tex.TopLeft.X;
         float v0 = tex.TopLeft.Y;
@@ -422,7 +534,8 @@ internal static class ChunkMeshBuilder
     }
 
     // Emits 6 faces for an arbitrary axis-aligned box
-    internal static void AddStairBox(List<float> verts, float x0, float y0, float z0, float x1, float y1, float z1, BlockType block, int skyLight, int blockLight)
+    internal static void AddStairBox(List<float> verts, float x0, float y0, float z0, float x1, float y1, float z1,
+        BlockType block, int skyLight, int blockLight)
     {
         float skyLightNorm = skyLight / (float)Chunk.MAX_LIGHT;
         float blockLightNorm = blockLight / (float)Chunk.MAX_LIGHT;

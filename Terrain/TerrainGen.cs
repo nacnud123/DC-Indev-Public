@@ -455,6 +455,10 @@ public class TerrainGen
                 int worldX = originX + x;
                 int worldZ = originZ + z;
 
+                // Skip land columns — any air below sea level there is a cave, not open ocean.
+                if (GetHeight(worldX, worldZ) + SEA_LEVEL > SEA_LEVEL)
+                    continue;
+
                 for (int y = SEA_LEVEL; y >= BEDROCK_HEIGHT; y--)
                 {
                     var block = world.GetBlock(worldX, y, worldZ);
@@ -664,7 +668,7 @@ public class TerrainGen
 
             int cx = startX, cy = startY, cz = startZ;
 
-            for (int step = 0; step < 10; step++)
+            for (int step = 0; step < 4; step++)
             {
                 cx += rng.Next(4) - rng.Next(4);
                 cy += rng.Next(2) - rng.Next(2);
@@ -691,7 +695,7 @@ public class TerrainGen
                 int worldZ = originZ + z;
 
                 var rng = new Random(HashSeed(seed + 5555, worldX, worldZ));
-                if (rng.NextDouble() > 0.12)
+                if (rng.NextDouble() > 0.04)
                     continue;
 
                 int surfaceY = GetHeight(worldX, worldZ) + SEA_LEVEL;

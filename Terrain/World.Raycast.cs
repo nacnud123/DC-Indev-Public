@@ -9,12 +9,18 @@ public partial class World
 {
     private const float TORCH_SELECT_PADDING = 2f / 16f;
 
-    public RaycastHit Raycast(Vector3 origin, Vector3 direction, float maxDist = 8f)
+    public RaycastHit Raycast(Vector3 origin, Vector3 direction, float maxDist = 8f, bool solidOnly = false)
     {
-        var blockHit = RaycastBlocks(origin, direction, maxDist);
+        var blockHit  = RaycastBlocks(origin, direction, maxDist, solidOnly);
         var entityHit = RaycastEntitiesInternal(origin, direction, maxDist);
 
         return entityHit.Distance < blockHit.Distance ? entityHit : blockHit;
+    }
+
+    // Block-only raycast — ignores entities. Used for LOS checks so other mobs don't count as cover.
+    public RaycastHit RaycastBlocksOnly(Vector3 origin, Vector3 direction, float maxDist, bool solidOnly = false)
+    {
+        return RaycastBlocks(origin, direction, maxDist, solidOnly);
     }
 
     private RaycastHit RaycastEntitiesInternal(Vector3 origin, Vector3 direction, float maxDistance)
@@ -23,6 +29,9 @@ public partial class World
 
         foreach (var entity in mEntities)
         {
+            if (!entity.IsTargetable)
+                continue;
+
             if (entity.IsLookedAt(origin, direction, maxDistance, out float dist) && dist < result.Distance)
             {
                 result = new RaycastHit
@@ -37,7 +46,7 @@ public partial class World
         return result;
     }
 
-    private RaycastHit RaycastBlocks(Vector3 origin, Vector3 direction, float maxDist)
+    private RaycastHit RaycastBlocks(Vector3 origin, Vector3 direction, float maxDist, bool solidOnly = false)
     {
         Vector3 dir = direction.Normalized();
         Vector3i current = new((int)MathF.Floor(origin.X), (int)MathF.Floor(origin.Y), (int)MathF.Floor(origin.Z));
@@ -61,7 +70,7 @@ public partial class World
         while (dist < maxDist)
         {
             var block = GetBlock(current.X, current.Y, current.Z);
-            if (block != BlockType.Air && !BlockRegistry.IsFluid(block))
+            if (block != BlockType.Air && !BlockRegistry.IsFluid(block) && (!solidOnly || BlockRegistry.IsSolid(block)))
             {
                 var pos = new Vector3(current.X, current.Y, current.Z);
 

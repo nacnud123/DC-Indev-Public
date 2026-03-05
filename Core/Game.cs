@@ -1,16 +1,22 @@
 // Main game file, does things like generate world and init stuff and move between states | DA | 2/5/26
+
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using VoxelEngine.Audio;
+using VoxelEngine.BlockEntities;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Particles;
 using VoxelEngine.Rendering;
 using VoxelEngine.Saving;
 using VoxelEngine.Terrain;
+using VoxelEngine.Items;
+using ImGuiNET;
 using VoxelEngine.UI;
+using VoxelEngine.Utils;
+using System.Linq;
 
 namespace VoxelEngine.Core;
 
@@ -20,7 +26,11 @@ public enum GameState
     Paused,
     MainMenu,
     Inventory,
-    Loading
+    Crafting,
+    Furnace,
+    Chest,
+    Loading,
+    Died
 }
 
 public class Game : GameWindow
@@ -28,17 +38,17 @@ public class Game : GameWindow
     public static Game Instance { get; private set; } = null!;
 
     #region Vars
-    
-    // Constants
-    private const int INITIAL_PIG_COUNT = 5;
-    private const int PIG_SPAWN_RADIUS = 20;
 
     // Core Systems
     private World mWorld = null!;
     private Player mPlayer = null!;
     private TickSystem mTickSystem = null!;
+    private MobSpawner mMobSpawner = null!;
 
-    public World GetWorld { get => mWorld; }
+    public World GetWorld
+    {
+        get => mWorld;
+    }
 
     // Rendering
     private Shader mShader = null!;
@@ -47,8 +57,12 @@ public class Game : GameWindow
     private BlockBreakOverlay mBlockBreakOverlay = null!;
     private Texture mBreakTexture = null!;
     public Texture WorldTexture { get; private set; } = null!;
+    public Texture ItemTexture { get; private set; } = null!;
+    public Texture IconsTexture { get; private set; } = null!;
+    public Texture PaintingsTexture { get; private set; } = null!;
     public ParticleSystem ParticleSystem { get; private set; } = null!;
     private BlockIconRenderer mBlockIconRenderer = null!;
+    private PaintingRenderer mPaintingRenderer = null!;
 
     // UI
     private ImGuiController mImGuiController = null!;
@@ -56,9 +70,16 @@ public class Game : GameWindow
     private LoadingScreen mLoadingScreen = null!;
     private MainMenuScreen mMainMenuScreen = null!;
     private InventoryScreen mInventoryScreen = null!;
+    private CraftingScreen mCraftingScreen = null!;
+    private FurnaceScreen mFurnaceScreen = null!;
+    private ChestScreen mChestScreen = null!;
+    private DeathScreen mDeathScreen = null!;
     private Hotbar mHotbar = null!;
+    private HudScreen mHudScreen = null!;
+    private PlayerInventory mInventory = null!;
 
     internal Hotbar Hotbar => mHotbar;
+    public PlayerInventory? PlayerInventory => mInventory;
 
     // Input State
     private bool mWireframeMode;
@@ -74,20 +95,33 @@ public class Game : GameWindow
     private int mNewWorldSize = 64;
     private int mLoadingFrames;
     private WorldGenSettings mWorldGenSettings = WorldGenSettings.Build(0, 0);
-    public WorldGenSettings GetWorldGenSettings { get => mWorldGenSettings; }
+
+    public WorldGenSettings GetWorldGenSettings
+    {
+        get => mWorldGenSettings;
+    }
 
     // Audio
     private AudioManager mAudioManager;
-    public AudioManager AudioManager { get => mAudioManager; }
+
+    public AudioManager AudioManager
+    {
+        get => mAudioManager;
+    }
 
     // Day/Night cycle
     private float mTimeOfDay = 0.0f; // 0=dawn, 0.25=noon, 0.5=dusk, 0.75=midnight
-    private const float DAY_LENGTH = 600f; // 10 minutes full cycle
+    private const float DAY_LENGTH = 1200f; // 10 minutes full cycle
+    public float TimeOfDay => mTimeOfDay;
 
     // Player
     private Vector3 mSpawnPos;
     private PlayerArm? mPlayerArm;
-    public Player GetPlayer { get => mPlayer; }
+
+    public Player GetPlayer
+    {
+        get => mPlayer;
+    }
 
     // Structures
     private readonly StructureLoader mStructureLoader = new();
@@ -98,7 +132,11 @@ public class Game : GameWindow
 
     // Global Random
     private Random mGameRandom = new Random();
-    public Random GameRandom { get => mGameRandom; }
+
+    public Random GameRandom
+    {
+        get => mGameRandom;
+    }
 
     // Game State
     public GameState CurrentState { get; private set; }
@@ -108,9 +146,9 @@ public class Game : GameWindow
 
     // Clouds
     private CloudRenderer mCloudRenderer = null!;
-    
+
     #endregion
-    
+
     public Game(int width, int height, string title)
         : base(GameWindowSettings.Default, new NativeWindowSettings
         {
@@ -122,6 +160,15 @@ public class Game : GameWindow
     {
         mGameRandom = new Random();
         mAudioManager = new AudioManager();
+
+        // On Wayland, GLFW doesn't support glfwSetCursorPos — suppress that specific error
+        // so opening menus / pressing Escape doesn't crash.
+        GLFWProvider.SetErrorCallback((code, desc) =>
+        {
+            if (desc != null && desc.Contains("cursor position"))
+                return;
+            throw new GLFWException(desc ?? string.Empty, code);
+        });
     }
 
     #region Life
@@ -162,12 +209,17 @@ public class Game : GameWindow
         mBlockBreakOverlay?.Dispose();
         mBreakTexture?.Dispose();
         WorldTexture?.Dispose();
+        ItemTexture?.Dispose();
+        IconsTexture?.Dispose();
+        PaintingsTexture?.Dispose();
+        mPaintingRenderer?.Dispose();
         mBlockIconRenderer?.Dispose();
         ParticleSystem?.Dispose();
         mSkyRenderer?.Dispose();
         mCloudRenderer?.Dispose();
 
         EntityModel.DisposeAll();
+        ArrowEntity.DisposeMesh();
         Entity.DisposeShader();
 
         mImGuiController?.Dispose();
@@ -189,8 +241,15 @@ public class Game : GameWindow
     // Load resources and shaders in
     private void LoadResources()
     {
-        mShader = new Shader( File.ReadAllText("Shaders/vertex.glsl"), File.ReadAllText("Shaders/fragment.glsl"));
+        mShader = new Shader(File.ReadAllText("Shaders/vertex.glsl"), File.ReadAllText("Shaders/fragment.glsl"));
         WorldTexture = Texture.LoadFromFile("Resources/world.png");
+
+        ItemTexture = Texture.LoadFromFile("Resources/Items.png");
+        IconsTexture = Texture.LoadFromFile("Resources/Icons.png");
+        PaintingsTexture = Texture.LoadFromFile("Resources/Paintings.png");
+
+        mPaintingRenderer = new PaintingRenderer();
+        mPaintingRenderer.Init();
 
         mBlockIconRenderer = new BlockIconRenderer();
         mBlockIconRenderer.Init(WorldTexture);
@@ -227,6 +286,10 @@ public class Game : GameWindow
 
         this.mTimeOfDay = worldData.WorldTime;
         
+        mTimeOfDay -= MathF.Floor(mTimeOfDay);
+        if (mTimeOfDay < 0f)
+            mTimeOfDay += 1f;
+        
         mWorldGenSettings = WorldGenSettings.Build(worldData.WorldType, worldData.WorldTheme);
 
         mCloudRenderer?.ResetOffset();
@@ -243,26 +306,56 @@ public class Game : GameWindow
             playerPos = new Vector3(worldData.PlayerX, worldData.PlayerY, worldData.PlayerZ);
 
         mPlayer = new Player(playerPos, Size.X / (float)Size.Y);
-        mPlayerArm = new PlayerArm();
+        mPlayerArm = new PlayerArm(WorldTexture, ItemTexture, "Resources/world.png", "Resources/Items.png");
 
         if (worldData.HasPlayerPosition)
             mPlayer.Camera.SetRotation(worldData.PlayerPitch, worldData.PlayerYaw);
 
-        mHotbar = new Hotbar(mBlockIconRenderer);
-        mHotbar.SetBlockInSlot(0, BlockType.Grass);
-        mHotbar.SetBlockInSlot(1, BlockType.Dirt);
-        mHotbar.SetBlockInSlot(2, BlockType.Stone);
-        mHotbar.SetBlockInSlot(3, BlockType.Wood);
-        mHotbar.SetBlockInSlot(4, BlockType.Leaves);
-        mHotbar.SetBlockInSlot(5, BlockType.Sand);
-        mHotbar.SetBlockInSlot(6, BlockType.Glowstone);
-        mHotbar.SetBlockInSlot(7, BlockType.Glass);
-        mHotbar.SetBlockInSlot(8, BlockType.Torch);
-        mHotbar.SetBlockInSlot(9, BlockType.YellowFlower);
+        mInventory = new PlayerInventory();
+        mHotbar = new Hotbar(mBlockIconRenderer, ItemTexture, mInventory);
+
+        if (worldData.PlayerHealth > 0)
+            mPlayer.Health = worldData.PlayerHealth;
+
+        if (worldData.Inventory?.Count > 0)
+        {
+            mInventory.LoadFromSlots(worldData.Inventory);
+        }
+        else
+        {
+            // Default loadout for a fresh world
+            /*mHotbar.SetItemInSlot(0, ItemType.StonePickaxe);
+            mHotbar.SetItemInSlot(1, ItemType.StoneSword);
+            mHotbar.SetItemInSlot(2, ItemType.StoneAxe);
+            mHotbar.SetItemInSlot(3, ItemType.StoneHoe);
+            mHotbar.SetItemInSlot(4, ItemType.Painting);
+            mHotbar.SetItemInSlot(5, ItemType.Bow);
+            mInventory.SetSlot(PlayerInventory.HOTBAR_START + 6, ItemStack.FromItem(ItemType.Arrow, 64));
+            mHotbar.SetItemInSlot(7, ItemType.Seeds);
+            mHotbar.SetItemInSlot(8, ItemType.Seeds);
+            mInventory.SetSlot(0, ItemStack.FromItem(ItemType.FlintSteel));
+            mInventory.SetSlot(1, ItemStack.FromBlock(BlockType.Torch, 32));
+            */
+        }
+
         mPlayer.SelectedBlock = mHotbar.GetSelectedBlock() ?? BlockType.Grass;
 
-        SpawnSomePigs();
-        SpawnSomeSheep();
+        BlockEntityManager.Load(Serialization.SaveLocation());
+
+        if (worldData.Paintings?.Count > 0)
+        {
+            foreach (var sp in worldData.Paintings)
+            {
+                var art = PaintingRegistry.GetByName(sp.ArtName);
+                var anchor = new Vector3i(sp.AnchorX, sp.AnchorY, sp.AnchorZ);
+                mWorld.AddEntity(new PaintingEntity(anchor, sp.Facing, art));
+            }
+        }
+
+        if (worldData.Entities?.Count > 0)
+            LoadWorldEntities(worldData.Entities);
+
+        mMobSpawner = new MobSpawner(mWorld, mGameRandom);
 
         // Place structures on new worlds and mark all chunks modified so they persist
         if (isNewWorld)
@@ -270,7 +363,8 @@ public class Game : GameWindow
             mStructureLoader.SeedRandom(worldData.Seed + 77777);
 
             var house = mStructureLoader.Load("SpawnHouse.json");
-            mStructureLoader.Place(mWorld, house, (int)mSpawnPos.X - (house.SizeX / 2), (int)mSpawnPos.Y-1, (int)mSpawnPos.Z - (house.SizeZ / 2));
+            mStructureLoader.Place(mWorld, house, (int)mSpawnPos.X - (house.SizeX / 2), (int)mSpawnPos.Y - 1,
+                (int)mSpawnPos.Z - (house.SizeZ / 2));
 
             var tower = mStructureLoader.Load("tower.json");
             mStructureLoader.PlaceRandomly(mWorld, tower, Vector3i.Zero);
@@ -285,41 +379,13 @@ public class Game : GameWindow
             mStructureLoader.PlaceRandomly(mWorld, fountain, new Vector3i(0, 2, 0));
 
             var dungeon = mStructureLoader.Load("dungeon.json");
-            mStructureLoader.PlaceUnderground(mWorld, dungeon, changeRandomBlocks: true, rndOriginalType: BlockType.CobbleStone, rndNewType: BlockType.MossyCobblestone, rndChance: .5f);
+            mStructureLoader.PlaceUnderground(mWorld, dungeon, changeRandomBlocks: true,
+                rndOriginalType: BlockType.CobbleStone, rndNewType: BlockType.MossyCobblestone, rndChance: .5f);
 
             mWorld.MarkAllChunksWithBlocksAsModified();
         }
     }
 
-    private void SpawnSomePigs()
-    {
-        for (int i = 0; i < INITIAL_PIG_COUNT; i++)
-        {
-            int offsetX = mGameRandom.Next(-PIG_SPAWN_RADIUS, PIG_SPAWN_RADIUS);
-            int offsetZ = mGameRandom.Next(-PIG_SPAWN_RADIUS, PIG_SPAWN_RADIUS);
-
-            int x = (int)mSpawnPos.X + offsetX;
-            int z = (int)mSpawnPos.Z + offsetZ;
-
-            Vector3 pigSpawn = mWorld.FindSpawnPosition(x, z);
-            mWorld.AddEntity(new Pig(pigSpawn));
-        }
-    }
-    
-    private void SpawnSomeSheep()
-    {
-        for (int i = 0; i < INITIAL_PIG_COUNT; i++)
-        {
-            int offsetX = mGameRandom.Next(-PIG_SPAWN_RADIUS, PIG_SPAWN_RADIUS);
-            int offsetZ = mGameRandom.Next(-PIG_SPAWN_RADIUS, PIG_SPAWN_RADIUS);
-
-            int x = (int)mSpawnPos.X + offsetX;
-            int z = (int)mSpawnPos.Z + offsetZ;
-
-            Vector3 sheepSpawn = mWorld.FindSpawnPosition(x, z);
-            mWorld.AddEntity(new Sheep(sheepSpawn));
-        }
-    }
 
     // Load in the UI screens
     private void InitUi()
@@ -328,10 +394,18 @@ public class Game : GameWindow
         mPauseScreen = new PauseScreen();
         mLoadingScreen = new LoadingScreen();
         mMainMenuScreen = new MainMenuScreen();
-        mInventoryScreen = new InventoryScreen(mBlockIconRenderer);
+        mInventoryScreen = new InventoryScreen(mBlockIconRenderer, ItemTexture);
+        mCraftingScreen = new CraftingScreen(mBlockIconRenderer, ItemTexture);
+        mFurnaceScreen = new FurnaceScreen(mBlockIconRenderer, ItemTexture);
+        mChestScreen = new ChestScreen(mBlockIconRenderer, ItemTexture);
+        mHudScreen = new HudScreen(IconsTexture);
+        mDeathScreen = new DeathScreen();
 
         mPauseScreen.OnPauseQuitGame += ReturnToMainMenu;
         mPauseScreen.OnResumeGame += ResumeGame;
+        mPauseScreen.OnSaveGame += SaveGame;
+
+        mDeathScreen.OnReturnToMainMenu += ReturnToMainMenuNoSave;
 
         mMainMenuScreen.OnTitleQuitGame += Close;
         mMainMenuScreen.OnStartGame += StartGame;
@@ -341,7 +415,6 @@ public class Game : GameWindow
 
     #region Update
 
-    
     protected override void OnUpdateFrame(FrameEventArgs args)
     {
         base.OnUpdateFrame(args);
@@ -359,7 +432,7 @@ public class Game : GameWindow
             case GameState.Loading:
                 mLoadingScreen?.Render();
                 mLoadingFrames++;
-                
+
                 // Wait a few frames so the loading screen actually renders
                 if (mLoadingFrames >= 3)
                 {
@@ -367,6 +440,7 @@ public class Game : GameWindow
                     CurrentState = GameState.Playing;
                     CursorState = CursorState.Grabbed;
                 }
+
                 return;
 
             case GameState.Paused:
@@ -375,7 +449,12 @@ public class Game : GameWindow
                     ResumeGame();
                     return;
                 }
+
                 mPauseScreen?.Render();
+                return;
+
+            case GameState.Died:
+                mDeathScreen?.Render();
                 return;
 
             case GameState.Inventory:
@@ -384,7 +463,49 @@ public class Game : GameWindow
                     CloseInventory();
                     return;
                 }
+
+                UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
                 mInventoryScreen?.Render();
+                return;
+
+            case GameState.Crafting:
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                {
+                    CloseCrafting();
+                    return;
+                }
+
+                UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
+                mCraftingScreen?.Render();
+                mHotbar?.Render();
+                return;
+
+            case GameState.Furnace:
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                {
+                    CloseFurnace();
+                    return;
+                }
+
+                UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
+                mFurnaceScreen?.Render();
+                mHotbar?.Render();
+                return;
+
+            case GameState.Chest:
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                {
+                    CloseChest();
+                    return;
+                }
+
+                UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
+                mChestScreen?.Render();
+                mHotbar?.Render();
                 return;
 
             case GameState.Playing:
@@ -393,20 +514,27 @@ public class Game : GameWindow
                     PauseGame();
                     return;
                 }
+
                 if (KeyboardState.IsKeyPressed(Keys.E))
                 {
                     OpenInventory();
                     return;
                 }
+
                 ProcessInput(dt);
                 UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
                 mHotbar?.Render();
+                RenderHudOverlay();
                 break;
         }
     }
 
     private void ProcessInput(float dt)
     {
+        // Sync every frame — slot contents can change via inventory screen without a slot-change event.
+        mPlayer.SelectedBlock = mHotbar?.GetSelectedBlock() ?? BlockType.Air;
+
         // Debug keys
         if (KeyboardState.IsKeyPressed(Keys.X))
         {
@@ -417,12 +545,16 @@ public class Game : GameWindow
         if (KeyboardState.IsKeyPressed(Keys.R))
             mPlayer.ResetPosition();
 
-        if (KeyboardState.IsKeyPressed(Keys.P))
+        if (KeyboardState.IsKeyPressed(Keys.F9))
+            mTimeOfDay = 0.75f;
+
+        // Big hostile spawn burst (tries many candidates instantly)
+        if (KeyboardState.IsKeyPressed(Keys.F10))
         {
-            var pig = new Pig(new Vector3(mPlayer.Position.X, mPlayer.Position.Y + 5, mPlayer.Position.Z));
-            mWorld.AddEntity(pig);
+            int spawned = mMobSpawner.DebugSpawnHostilesNow(candidateCount: 2000, ignoreCap: true);
+            Title = $"Spawn test: spawned {spawned} hostiles (F9=midnight, F10=burst)";
         }
-        
+
         if (KeyboardState.IsKeyPressed(Keys.Tab))
         {
             mCursorGrabbed = !mCursorGrabbed;
@@ -430,7 +562,10 @@ public class Game : GameWindow
             mFirstMouse = true;
         }
 
-        // Structure saving
+        if (KeyboardState.IsKeyPressed(Keys.F7))
+            TakeIsoScreenshot();
+
+// Structure saving
         if (KeyboardState.IsKeyPressed(Keys.F1))
         {
             var hit = mWorld.Raycast(mPlayer.Camera.Position, mPlayer.Camera.Front);
@@ -460,7 +595,7 @@ public class Game : GameWindow
                 }
             }
         }
-        
+
         if (KeyboardState.IsKeyPressed(Keys.Equal) || KeyboardState.IsKeyPressed(Keys.KeyPadAdd))
             mPlayer.Camera.RenderDistance = MathF.Min(mPlayer.Camera.RenderDistance + 32f, 512f);
 
@@ -492,6 +627,24 @@ public class Game : GameWindow
         if (KeyboardState.IsKeyPressed(Keys.D9)) SelectHotbarSlot(8);
         if (KeyboardState.IsKeyPressed(Keys.D0)) SelectHotbarSlot(9);
 
+        if (KeyboardState.IsKeyPressed(Keys.Q))
+        {
+            var selected = mHotbar.GetSelectedStack();
+            if (selected.HasValue)
+            {
+                mInventory.ConsumeOne(PlayerInventory.HOTBAR_START + mHotbar.SelectedSlotIndex);
+                if (!mHotbar.GetSelectedStack().HasValue)
+                    mPlayer.SelectedBlock = BlockType.Air;
+
+                var thrown = selected.Value.WithCount(1);
+                var spawnPos = mPlayer.Camera.Position + mPlayer.Camera.Front * 0.5f;
+                var vel = mPlayer.Camera.Front * 5f + new OpenTK.Mathematics.Vector3(0f, 2f, 0f);
+                var drop = new DroppedItemEntity(spawnPos, thrown, WorldTexture);
+                drop.Velocity = vel;
+                mWorld.AddEntity(drop);
+            }
+        }
+
         mPlayer.Update(mWorld, KeyboardState, dt);
 
         mPlayerArm?.Update(dt, mPlayer.HorizontalSpeed);
@@ -514,8 +667,23 @@ public class Game : GameWindow
         if (MouseState.IsButtonPressed(MouseButton.Right))
         {
             mPlayerArm?.TriggerSwing();
+            var selected = mHotbar.GetSelectedStack();
             mPlayer.HandleBlockInteraction(mWorld, false, true);
+            if (selected.HasValue && !selected.Value.IsBlock)
+                mPlayer.UseHeldItem(mWorld, selected.Value.Item);
         }
+    }
+
+    // Take a full isometric screenshot of the world and save to Documents
+    private void TakeIsoScreenshot()
+    {
+        if (mWorld == null || mPlayer == null)
+            return;
+
+        Title = "Taking isometric screenshot...";
+        var shooter = new IsoScreenshot(mWorld, mTimeOfDay);
+        shooter.Capture();
+        Title = "Screenshot saved! (check Documents folder)";
     }
 
     // Select a block on the hotbar using number keys
@@ -562,16 +730,25 @@ public class Game : GameWindow
         {
             mTickCount++;
             mWorld.TickEntities();
+            mMobSpawner.Tick();
             mWorld.Update();
             mWorld.RandomDisplayUpdates(mPlayer.Position);
             mWorld.DoScheduledTick();
             mWorld.DoRandomTick();
             mCloudRenderer?.Tick();
+            BlockEntityManager.TickFurnaces();
         }
 
         // Update active particles
         ParticleSystem.Update(dt, mWorld);
         ParticleSystem.UpdateSmoke(dt, mWorld);
+
+        // Detect player death
+        if (mPlayer.Health <= 0 && CurrentState != GameState.Died)
+        {
+            CurrentState = GameState.Died;
+            CursorState = CursorState.Normal;
+        }
     }
 
     #endregion
@@ -596,9 +773,10 @@ public class Game : GameWindow
             RenderClouds(view, proj);
             RenderWorld(view, proj);
             RenderEntities(view, proj);
+            RenderPaintings(view, proj);
             RenderParticles(view, proj);
             RenderBlockHighlight(view, proj);
-            mPlayerArm?.Render(mPlayer.Camera);
+            mPlayerArm?.Render(mPlayer.Camera, mHotbar.GetSelectedStack());
             RenderHud();
         }
 
@@ -655,9 +833,9 @@ public class Game : GameWindow
 
         Vector3 lightDir = new Vector3(-MathF.Cos(sunAngle), -MathF.Sin(sunAngle), -0.3f).Normalized();
         Vector3 lightColor = GetSunColor(dayFactor);
-        Vector3 nightSky  = mWorldGenSettings.DaySkyColor * 0.02f;
-        Vector3 skyColor  = Vector3.Lerp(nightSky, mWorldGenSettings.DaySkyColor, dayFactor);
-        Vector3 fogColor  = Vector3.Lerp(nightSky, mWorldGenSettings.DayFogColor, dayFactor);
+        Vector3 nightSky = mWorldGenSettings.DaySkyColor * 0.02f;
+        Vector3 skyColor = Vector3.Lerp(nightSky, mWorldGenSettings.DaySkyColor, dayFactor);
+        Vector3 fogColor = Vector3.Lerp(nightSky, mWorldGenSettings.DayFogColor, dayFactor);
         float ambientStrength = 0.08f + dayFactor * 0.22f;
 
         Entity.LightDir = lightDir;
@@ -711,19 +889,19 @@ public class Game : GameWindow
         // Transparent pass (water)
         GL.Enable(EnableCap.Blend);
         GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-        
+
         GL.Enable(EnableCap.PolygonOffsetFill);
         GL.PolygonOffset(-1f, -1f);
-        
+
         GL.DepthMask(false);
         GL.Disable(EnableCap.CullFace);
-        
+
         mShader.SetFloat("alphaOverride", 0.7f);
         mWorld.RenderTransparent(mPlayer.Camera);
-        
+
         GL.Enable(EnableCap.CullFace);
         GL.DepthMask(true);
-        
+
         GL.Disable(EnableCap.PolygonOffsetFill);
         GL.Disable(EnableCap.Blend);
         mShader.SetFloat("alphaOverride", 0.0f);
@@ -737,11 +915,17 @@ public class Game : GameWindow
 
         return Vector3.Lerp(new Vector3(0.3f, 0.3f, 0.5f), new Vector3(1f, 0.6f, 0.3f), dayFactor * 2f);
     }
-    
+
     // Calls render the active entities
     private void RenderEntities(Matrix4 view, Matrix4 proj)
     {
         mWorld.RenderEntities(view, proj, mPlayer.Camera.Position, mPlayer.Camera.RenderDistance);
+    }
+
+    private void RenderPaintings(Matrix4 view, Matrix4 proj)
+    {
+        var paintings = mWorld.Entities.OfType<PaintingEntity>();
+        mPaintingRenderer.Render(paintings, PaintingsTexture, view, proj);
     }
 
     // Calls render on active particles
@@ -789,6 +973,37 @@ public class Game : GameWindow
         GL.Enable(EnableCap.DepthTest);
     }
 
+    private void RenderHudOverlay()
+    {
+        if (mHudScreen == null || mHotbar == null) return;
+        var display = ImGui.GetIO().DisplaySize;
+        mHudScreen.Render(
+            mHotbar.GetHotbarX(display.X),
+            mHotbar.GetHotbarY(display.Y),
+            mHotbar.HotbarWidth);
+
+        if (mPlayer.IsOnFire)
+            RenderFireOverlay(display);
+    }
+
+    private void RenderFireOverlay(System.Numerics.Vector2 display)
+    {
+        var fireUv = UvHelper.FromTileCoords(6, 7);
+
+        // UvHelper uses OpenGL bottom-left origin; ImGui expects top-left, so flip Y
+        var uvMin = new System.Numerics.Vector2(fireUv.TopLeft.X, fireUv.BottomRight.Y);
+        var uvMax = new System.Numerics.Vector2(fireUv.BottomRight.X, fireUv.TopLeft.Y);
+
+        uint tint = 0x990066FF; // ABGR: semi-transparent orange-red
+
+        ImGui.GetBackgroundDrawList().AddImage(
+            new IntPtr(WorldTexture.Handle),
+            System.Numerics.Vector2.Zero,
+            display,
+            uvMin, uvMax,
+            tint);
+    }
+
     // Update the title bar with debug information
     private void UpdateTitle(double deltaTime)
     {
@@ -812,7 +1027,8 @@ public class Game : GameWindow
             int m = (int)((hours24 - h) * 60);
             string timeStr = $"{h:D2}:{m:D2}";
 
-            Title = $"DuncanCraft 2000 InDev | FPS:{mFrameCount} TPS:{mTickCount} | {mPlayer.SelectedBlock} | {pos.X:F1},{pos.Y:F1},{pos.Z:F1} Chunk:{chunkX},{chunkZ} [{mode}] Render:{renderDist} Time:{timeStr}";
+            Title =
+                $"DuncanCraft 2000 InDev | FPS:{mFrameCount} TPS:{mTickCount} | {mPlayer.SelectedBlock} | {pos.X:F1},{pos.Y:F1},{pos.Z:F1} Chunk:{chunkX},{chunkZ} [{mode}] Render:{renderDist} Time:{timeStr}";
 
             mFrameCount = 0;
             mTickCount = 0;
@@ -823,7 +1039,7 @@ public class Game : GameWindow
     #endregion
 
     #region Game State
-    
+
     private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0)
     {
         mNewWorldSize = worldSize;
@@ -856,17 +1072,153 @@ public class Game : GameWindow
         MousePosition = new Vector2(Size.X / 2f, Size.Y / 2f);
     }
 
+    private void DropCurrentBlock()
+    {
+    }
+
     public void CloseInventory()
     {
+        mInventoryScreen?.OnClose();
         CurrentState = GameState.Playing;
         CursorState = CursorState.Grabbed;
         mFirstMouse = true;
     }
 
-    private void ReturnToMainMenu()
+    public void OpenCrafting()
+    {
+        CurrentState = GameState.Crafting;
+        CursorState = CursorState.Normal;
+        MousePosition = new Vector2(Size.X / 2f, Size.Y / 2f);
+    }
+
+    public void CloseCrafting()
+    {
+        mCraftingScreen?.OnClose();
+        CurrentState = GameState.Playing;
+        CursorState = CursorState.Grabbed;
+        mFirstMouse = true;
+    }
+
+    public void OpenFurnace(OpenTK.Mathematics.Vector3i pos)
+    {
+        var furnace = BlockEntityManager.GetOrCreateFurnace(pos);
+        mFurnaceScreen.SetFurnace(furnace);
+        CurrentState = GameState.Furnace;
+        CursorState = CursorState.Normal;
+        MousePosition = new Vector2(Size.X / 2f, Size.Y / 2f);
+    }
+
+    public void CloseFurnace()
+    {
+        mFurnaceScreen?.OnClose();
+        CurrentState = GameState.Playing;
+        CursorState = CursorState.Grabbed;
+        mFirstMouse = true;
+    }
+
+    public void OpenChest(OpenTK.Mathematics.Vector3i pos)
+    {
+        var chest = BlockEntityManager.GetOrCreateChest(pos);
+        mChestScreen.SetChest(chest);
+        CurrentState = GameState.Chest;
+        CursorState = CursorState.Normal;
+        MousePosition = new Vector2(Size.X / 2f, Size.Y / 2f);
+    }
+
+    public void CloseChest()
+    {
+        mChestScreen?.OnClose();
+        CurrentState = GameState.Playing;
+        CursorState = CursorState.Grabbed;
+        mFirstMouse = true;
+    }
+
+    // Serialize all saveable world entities to data objects for XML persistence
+    private List<SavedEntity> SaveWorldEntities()
+    {
+        var list = new List<SavedEntity>();
+        foreach (var entity in mWorld.Entities)
+        {
+            switch (entity)
+            {
+                case PaintingEntity:
+                    break; // paintings are saved separately
+
+                case Pig pig:
+                    list.Add(MakeSavedMob("Pig", pig));
+                    break;
+
+                case Sheep sheep:
+                    list.Add(MakeSavedMob("Sheep", sheep));
+                    break;
+
+                case Zombie zombie:
+                    list.Add(MakeSavedMob("Zombie", zombie));
+                    break;
+
+                case Skeleton skeleton:
+                    list.Add(MakeSavedMob("Skeleton", skeleton));
+                    break;
+
+                case Stalker stalker:
+                    list.Add(MakeSavedMob("Stalker", stalker));
+                    break;
+
+                case DroppedItemEntity drop:
+                    list.Add(new SavedEntity
+                    {
+                        Type = "DroppedItem",
+                        X = drop.Position.X,
+                        Y = drop.Position.Y,
+                        Z = drop.Position.Z,
+                        Stack = SerializableStack.From(drop.Stack),
+                    });
+                    break;
+            }
+        }
+
+        return list;
+    }
+
+    private static SavedEntity MakeSavedMob(string type, Entity e) => new()
+    {
+        Type = type,
+        X = e.Position.X,
+        Y = e.Position.Y,
+        Z = e.Position.Z,
+        Yaw = e.Yaw,
+        Health = e.Health,
+    };
+
+    // Reconstruct world entities from saved data and add them to the world
+    private void LoadWorldEntities(List<SavedEntity> saved)
+    {
+        foreach (var se in saved)
+        {
+            var pos = new Vector3(se.X, se.Y, se.Z);
+
+            Entity? entity = se.Type switch
+            {
+                "Pig" => new Pig(pos) { Yaw = se.Yaw, Health = se.Health },
+                "Sheep" => new Sheep(pos) { Yaw = se.Yaw, Health = se.Health },
+                "Zombie" => new Zombie(pos) { Yaw = se.Yaw, Health = se.Health },
+                "Skeleton" => new Skeleton(pos) { Yaw = se.Yaw, Health = se.Health },
+                "Stalker" => new Stalker(pos) { Yaw = se.Yaw, Health = se.Health },
+                "DroppedItem" => se.Stack != null
+                    ? new DroppedItemEntity(pos, se.Stack.ToItemStack(), WorldTexture)
+                    : null,
+                _ => null,
+            };
+
+            if (entity != null)
+                mWorld.AddEntity(entity);
+        }
+    }
+
+    private void SaveWorldToDisk()
     {
         int savedCount = 0;
-        for(int x = 0; x < mWorld.GetChunks().GetLength(0); x++)
+        for (int x = 0; x < mWorld.GetChunks().GetLength(0); x++)
         {
             for (int z = 0; z < mWorld.GetChunks().GetLength(1); z++)
             {
@@ -878,9 +1230,12 @@ public class Game : GameWindow
                 }
             }
         }
+
         Console.WriteLine($"Saved {savedCount} modified chunks.");
 
-        // Save player position
+        BlockEntityManager.Save(Serialization.SaveLocation());
+
+        // Save player position and inventory
         var saveData = Serialization.LoadWorldData(Serialization.s_WorldName);
         if (saveData != null)
         {
@@ -892,13 +1247,34 @@ public class Game : GameWindow
             saveData.PlayerPitch = mPlayer.Camera.Pitch;
             saveData.LastPlayed = DateTime.Now;
             saveData.WorldTime = mTimeOfDay;
+            saveData.Inventory = mInventory.SaveToSlots();
+            saveData.PlayerHealth = mPlayer.Health;
+            saveData.Paintings = mWorld.Entities
+                .OfType<PaintingEntity>()
+                .Select(p => new SavedPainting
+                {
+                    AnchorX = p.AnchorPos.X,
+                    AnchorY = p.AnchorPos.Y,
+                    AnchorZ = p.AnchorPos.Z,
+                    Facing = p.Facing,
+                    ArtName = p.Art.Name,
+                })
+                .ToList();
+
+            saveData.Entities = SaveWorldEntities();
             Serialization.SaveWorldMetadata(saveData);
         }
         else
         {
             Serialization.UpdateLastPlayed(Serialization.s_WorldName);
         }
+    }
 
+    private void SaveGame() => SaveWorldToDisk();
+
+    private void TeardownWorld()
+    {
+        BlockEntityManager.Clear();
         mWorld?.Dispose();
         mWorld = null!;
         mPlayer = null!;
@@ -909,6 +1285,14 @@ public class Game : GameWindow
 
         mAudioManager?.Stop();
     }
+
+    private void ReturnToMainMenu()
+    {
+        SaveWorldToDisk();
+        TeardownWorld();
+    }
+
+    private void ReturnToMainMenuNoSave() => TeardownWorld();
 
     #endregion
 }
