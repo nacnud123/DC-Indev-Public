@@ -102,7 +102,7 @@ public class ChestScreen : InventoryScreenBase
         DrawCursorStack(drawList, mousePos);
     }
 
-    private static int GetGridSlotAtMouse(Vector2 mousePos, float slotsX, float slotsY, int rows)
+    private int GetGridSlotAtMouse(Vector2 mousePos, float slotsX, float slotsY, int rows)
     {
         float relX = mousePos.X - slotsX;
         float relY = mousePos.Y - slotsY;

@@ -55,8 +55,16 @@ public class SerializableChestSlot
 }
 
 [Serializable]
+public class SerializableDoubleChest
+{
+    public int X, Y, Z;
+    public List<SerializableChestSlot> Slots = new();
+}
+
+[Serializable]
 public class BlockEntityFile
 {
     public List<SerializableFurnace> Furnaces = new();
-    public List<SerializableChest>  Chests   = new();
+    public List<SerializableChest> Chests = new();
+    public List<SerializableDoubleChest> DoubleChests = new();
 }

@@ -10,7 +10,7 @@ namespace VoxelEngine.GameEntity;
 
 public partial class Player : Entity
 {
-    private const float SPRINT_MULTIPLIER = 5f;
+    private const float SPRINT_MULTIPLIER = 1.5f;
     private const float FLY_SPEED = 10.0f;
     private const float FLY_SPRINT_MULTIPLIER = 10f;
 
@@ -223,7 +223,7 @@ public partial class Player : Entity
 
     private void HandleInput(KeyboardState keyboard)
     {
-        if (keyboard.IsKeyPressed(Keys.F))
+        if (keyboard.IsKeyPressed(Keybindings.ToggleFly) && Game.Instance.IsCreative)
         {
             IsFlying = !IsFlying;
             if (IsFlying)
@@ -233,7 +233,7 @@ public partial class Player : Entity
             }
         }
 
-        IsSprinting = keyboard.IsKeyDown(Keys.LeftShift);
+        IsSprinting = keyboard.IsKeyDown(Keybindings.Sprint);
     }
 
     private void UpdateFlying(World world, KeyboardState keyboard, float deltaTime)
@@ -242,10 +242,10 @@ public partial class Player : Entity
         Vector3 moveDir = GetMoveDirection(keyboard);
         Vector3 movement = moveDir * speed * deltaTime;
 
-        if (keyboard.IsKeyDown(Keys.Space))
+        if (keyboard.IsKeyDown(Keybindings.Jump))
             movement.Y += speed * deltaTime;
 
-        if (keyboard.IsKeyDown(Keys.LeftControl))
+        if (keyboard.IsKeyDown(Keybindings.FlyDown))
             movement.Y -= speed * deltaTime;
 
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), movement);
@@ -267,7 +267,7 @@ public partial class Player : Entity
         vel.Y = MathF.Max(vel.Y, -termVel);
         Velocity = vel;
 
-        if (keyboard.IsKeyPressed(Keys.Space) && IsOnGround)
+        if (keyboard.IsKeyPressed(Keybindings.Jump) && IsOnGround)
         {
             vel.Y = IsSlowedDown ? 3f : Physics.JUMP_VEL;
             Velocity = vel;
@@ -339,6 +339,7 @@ public partial class Player : Entity
                 var belowBlockType = world.GetBlock(blockBelowX, blockBelowY, blockBelowZ);
                 var blockBelowMat = BlockRegistry.GetBlockBreakMaterial(belowBlockType);
                 Game.Instance.AudioManager.PlayBlockContactSound(blockBelowMat);
+                BlockRegistry.Get(belowBlockType).OnEntityWalking(world, blockBelowX, blockBelowY, blockBelowZ, Game.Instance.GameRandom);
             }
         }
         else
@@ -363,16 +364,16 @@ public partial class Player : Entity
 
         Vector3 dir = Vector3.Zero;
 
-        if (keyboard.IsKeyDown(Keys.W))
+        if (keyboard.IsKeyDown(Keybindings.MoveForward))
             dir += forward;
 
-        if (keyboard.IsKeyDown(Keys.S))
+        if (keyboard.IsKeyDown(Keybindings.MoveBack))
             dir -= forward;
 
-        if (keyboard.IsKeyDown(Keys.A))
+        if (keyboard.IsKeyDown(Keybindings.MoveLeft))
             dir -= right;
 
-        if (keyboard.IsKeyDown(Keys.D))
+        if (keyboard.IsKeyDown(Keybindings.MoveRight))
             dir += right;
 
         return dir.LengthSquared > 0 ? dir.Normalized() : dir;
@@ -385,7 +386,7 @@ public partial class Player : Entity
         vel.Y -= WATER_GRAVITY * deltaTime;
         vel.Y = Math.Max(vel.Y, -WATER_TERMINAL);
 
-        if (keyboard.IsKeyDown(Keys.Space))
+        if (keyboard.IsKeyDown(Keybindings.Jump))
         {
             var headX = (int)MathF.Floor(Position.X);
             var headY = (int)MathF.Floor(Position.Y);
@@ -399,7 +400,7 @@ public partial class Player : Entity
         }
 
 
-        if (keyboard.IsKeyDown(Keys.LeftControl))
+        if (keyboard.IsKeyDown(Keybindings.FlyDown))
             vel.Y = -SWIM_UP_SPEED;
 
         vel.X *= MathF.Pow(WATER_DRAG, deltaTime * 20);
@@ -463,6 +464,9 @@ public partial class Player : Entity
 
     public override void TakeDamage(int amount)
     {
+        if (Game.Instance.IsCreative)
+            return;
+
         if (mInvincibilityTimer > 0)
             return;
         

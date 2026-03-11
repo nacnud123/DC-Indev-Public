@@ -12,6 +12,7 @@ namespace VoxelEngine.GameEntity;
 public class ArrowEntity : Entity
 {
     public override bool IsTargetable => false;
+    public override float ShadowSize => 0f;
 
     public const float SPEED = 0.6f;
     private const float SPREAD = 0.0075f;
@@ -277,7 +278,7 @@ public class ArrowEntity : Entity
             hitEntity!.TakeDamage(ARROW_DAMAGE);
             
             // Knock target back along the arrow's travel direction with a slight upward kick
-            Vector3 knockback = new Vector3(dir.X, MathF.Abs(dir.Y) + 0.3f, dir.Z) * 6f;
+            Vector3 knockback = new Vector3(dir.X, MathF.Abs(dir.Y) + 0.6f, dir.Z) * 12f;
             hitEntity.Velocity += knockback;
             IsAlive = false;
             return;

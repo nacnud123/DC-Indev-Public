@@ -104,7 +104,7 @@ public class SpiderAi : HostileEntityAi
         Vector3 delta = player.Position - ParentEntity.Position;
         Vector3 knockDir = delta.LengthSquared > 0.01f ? delta.Normalized() : Vector3.UnitZ;
         player.TakeDamage(ATTACK_DAMAGE);
-        player.Velocity += new Vector3(knockDir.X, 0.3f, knockDir.Z) * 5f;
+        player.Velocity += new Vector3(knockDir.X, 0.6f, knockDir.Z) * 10f;
 
         mAttackCooldown = ATTACK_COOLDOWN;
     }

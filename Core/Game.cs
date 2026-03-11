@@ -29,6 +29,7 @@ public enum GameState
     Crafting,
     Furnace,
     Chest,
+    DoubleChest,
     Loading,
     Died
 }
@@ -70,9 +71,11 @@ public class Game : GameWindow
     private LoadingScreen mLoadingScreen = null!;
     private MainMenuScreen mMainMenuScreen = null!;
     private InventoryScreen mInventoryScreen = null!;
+    private CreativeInventoryScreen mCreativeInventoryScreen = null!;
     private CraftingScreen mCraftingScreen = null!;
     private FurnaceScreen mFurnaceScreen = null!;
     private ChestScreen mChestScreen = null!;
+    private DoubleChestScreen mDoubleChestScreen = null!;
     private DeathScreen mDeathScreen = null!;
     private Hotbar mHotbar = null!;
     private HudScreen mHudScreen = null!;
@@ -80,6 +83,7 @@ public class Game : GameWindow
 
     internal Hotbar Hotbar => mHotbar;
     public PlayerInventory? PlayerInventory => mInventory;
+    public bool IsCreative { get; private set; }
 
     // Input State
     private bool mWireframeMode;
@@ -95,6 +99,7 @@ public class Game : GameWindow
     private int mNewWorldSize = 64;
     private int mLoadingFrames;
     private WorldGenSettings mWorldGenSettings = WorldGenSettings.Build(0, 0);
+    private BlobShadowRenderer mBlobShadowRenderer = null!;
 
     public WorldGenSettings GetWorldGenSettings
     {
@@ -181,6 +186,7 @@ public class Game : GameWindow
         InitGl();
         LoadResources();
         InitUi();
+        Keybindings.Load();
 
         CurrentState = GameState.MainMenu;
         CursorState = CursorState.Normal;
@@ -215,6 +221,7 @@ public class Game : GameWindow
         mPaintingRenderer?.Dispose();
         mBlockIconRenderer?.Dispose();
         ParticleSystem?.Dispose();
+        mBlobShadowRenderer?.Dispose();
         mSkyRenderer?.Dispose();
         mCloudRenderer?.Dispose();
 
@@ -265,6 +272,8 @@ public class Game : GameWindow
         mSkyRenderer = new SkyRenderer();
         mSkyRenderer.Init();
 
+        mBlobShadowRenderer = new BlobShadowRenderer();
+
         mCloudRenderer = new CloudRenderer();
         mCloudRenderer.Init();
     }
@@ -284,6 +293,7 @@ public class Game : GameWindow
                         );
 
 
+        IsCreative = worldData.IsCreative;
         this.mTimeOfDay = worldData.WorldTime;
         
         mTimeOfDay -= MathF.Floor(mTimeOfDay);
@@ -395,9 +405,11 @@ public class Game : GameWindow
         mLoadingScreen = new LoadingScreen();
         mMainMenuScreen = new MainMenuScreen();
         mInventoryScreen = new InventoryScreen(mBlockIconRenderer, ItemTexture);
+        mCreativeInventoryScreen = new CreativeInventoryScreen(mBlockIconRenderer, ItemTexture);
         mCraftingScreen = new CraftingScreen(mBlockIconRenderer, ItemTexture);
         mFurnaceScreen = new FurnaceScreen(mBlockIconRenderer, ItemTexture);
         mChestScreen = new ChestScreen(mBlockIconRenderer, ItemTexture);
+        mDoubleChestScreen = new DoubleChestScreen(mBlockIconRenderer, ItemTexture);
         mHudScreen = new HudScreen(IconsTexture);
         mDeathScreen = new DeathScreen();
 
@@ -458,7 +470,7 @@ public class Game : GameWindow
                 return;
 
             case GameState.Inventory:
-                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keybindings.Inventory))
                 {
                     CloseInventory();
                     return;
@@ -466,11 +478,14 @@ public class Game : GameWindow
 
                 UpdateGameLogic(dt);
                 if (CurrentState == GameState.Died) return;
-                mInventoryScreen?.Render();
+                if (IsCreative)
+                    mCreativeInventoryScreen?.Render();
+                else
+                    mInventoryScreen?.Render();
                 return;
 
             case GameState.Crafting:
-                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keybindings.Inventory))
                 {
                     CloseCrafting();
                     return;
@@ -483,7 +498,7 @@ public class Game : GameWindow
                 return;
 
             case GameState.Furnace:
-                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keybindings.Inventory))
                 {
                     CloseFurnace();
                     return;
@@ -496,7 +511,7 @@ public class Game : GameWindow
                 return;
 
             case GameState.Chest:
-                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keys.E))
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keybindings.Inventory))
                 {
                     CloseChest();
                     return;
@@ -508,6 +523,19 @@ public class Game : GameWindow
                 mHotbar?.Render();
                 return;
 
+            case GameState.DoubleChest:
+                if (KeyboardState.IsKeyPressed(Keys.Escape) || KeyboardState.IsKeyPressed(Keybindings.Inventory))
+                {
+                    CloseDoubleChest();
+                    return;
+                }
+
+                UpdateGameLogic(dt);
+                if (CurrentState == GameState.Died) return;
+                mDoubleChestScreen?.Render();
+                mHotbar?.Render();
+                return;
+
             case GameState.Playing:
                 if (KeyboardState.IsKeyPressed(Keys.Escape))
                 {
@@ -515,7 +543,7 @@ public class Game : GameWindow
                     return;
                 }
 
-                if (KeyboardState.IsKeyPressed(Keys.E))
+                if (KeyboardState.IsKeyPressed(Keybindings.Inventory))
                 {
                     OpenInventory();
                     return;
@@ -536,13 +564,13 @@ public class Game : GameWindow
         mPlayer.SelectedBlock = mHotbar?.GetSelectedBlock() ?? BlockType.Air;
 
         // Debug keys
-        if (KeyboardState.IsKeyPressed(Keys.X))
+        if (KeyboardState.IsKeyPressed(Keybindings.Wireframe))
         {
             mWireframeMode = !mWireframeMode;
             GL.PolygonMode(MaterialFace.FrontAndBack, mWireframeMode ? PolygonMode.Line : PolygonMode.Fill);
         }
 
-        if (KeyboardState.IsKeyPressed(Keys.R))
+        if (KeyboardState.IsKeyPressed(Keybindings.ResetPosition))
             mPlayer.ResetPosition();
 
         if (KeyboardState.IsKeyPressed(Keys.F9))
@@ -555,14 +583,14 @@ public class Game : GameWindow
             Title = $"Spawn test: spawned {spawned} hostiles (F9=midnight, F10=burst)";
         }
 
-        if (KeyboardState.IsKeyPressed(Keys.Tab))
+        if (KeyboardState.IsKeyPressed(Keybindings.ToggleCursor))
         {
             mCursorGrabbed = !mCursorGrabbed;
             CursorState = mCursorGrabbed ? CursorState.Grabbed : CursorState.Normal;
             mFirstMouse = true;
         }
 
-        if (KeyboardState.IsKeyPressed(Keys.F7))
+        if (KeyboardState.IsKeyPressed(Keybindings.Screenshot))
             TakeIsoScreenshot();
 
 // Structure saving
@@ -596,10 +624,10 @@ public class Game : GameWindow
             }
         }
 
-        if (KeyboardState.IsKeyPressed(Keys.Equal) || KeyboardState.IsKeyPressed(Keys.KeyPadAdd))
+        if (KeyboardState.IsKeyPressed(Keybindings.RenderDistUp))
             mPlayer.Camera.RenderDistance = MathF.Min(mPlayer.Camera.RenderDistance + 32f, 512f);
 
-        if (KeyboardState.IsKeyPressed(Keys.Minus) || KeyboardState.IsKeyPressed(Keys.KeyPadSubtract))
+        if (KeyboardState.IsKeyPressed(Keybindings.RenderDistDown))
             mPlayer.Camera.RenderDistance = MathF.Max(mPlayer.Camera.RenderDistance - 32f, 32f);
 
         if (mCursorGrabbed)
@@ -627,7 +655,7 @@ public class Game : GameWindow
         if (KeyboardState.IsKeyPressed(Keys.D9)) SelectHotbarSlot(8);
         if (KeyboardState.IsKeyPressed(Keys.D0)) SelectHotbarSlot(9);
 
-        if (KeyboardState.IsKeyPressed(Keys.Q))
+        if (KeyboardState.IsKeyPressed(Keybindings.DropItem))
         {
             var selected = mHotbar.GetSelectedStack();
             if (selected.HasValue)
@@ -661,7 +689,15 @@ public class Game : GameWindow
         {
             var hit = mWorld.Raycast(mPlayer.Camera.Position, mPlayer.Camera.Front);
             if (hit.Type == RaycastHitType.Entity)
+            {
                 hit.Entity!.TakeDamage(10);
+
+                var knockDir = hit.Entity.Position - mPlayer.Position;
+                knockDir.Y = 0;
+                if (knockDir.LengthSquared > 0.001f)
+                    knockDir.Normalize();
+                hit.Entity.Velocity += new OpenTK.Mathematics.Vector3(knockDir.X, 0.7f, knockDir.Z) * 14f;
+            }
         }
 
         if (MouseState.IsButtonPressed(MouseButton.Right))
@@ -772,6 +808,7 @@ public class Game : GameWindow
             RenderSky(view, proj);
             RenderClouds(view, proj);
             RenderWorld(view, proj);
+            RenderShadows(view, proj);
             RenderEntities(view, proj);
             RenderPaintings(view, proj);
             RenderParticles(view, proj);
@@ -908,12 +945,18 @@ public class Game : GameWindow
     }
 
     // night(0.3,0.3,0.5) -> sunset(1,0.6,0.3) -> day(1,1,0.95)
-    private static Vector3 GetSunColor(float dayFactor)
+    private Vector3 GetSunColor(float dayFactor)
     {
         if (dayFactor > 0.5f)
             return Vector3.Lerp(new Vector3(1f, 0.6f, 0.3f), new Vector3(1f, 1f, 0.95f), (dayFactor - 0.5f) * 2f);
 
         return Vector3.Lerp(new Vector3(0.3f, 0.3f, 0.5f), new Vector3(1f, 0.6f, 0.3f), dayFactor * 2f);
+    }
+
+    private void RenderShadows(Matrix4 view, Matrix4 proj)
+    {
+        var allEntities = mWorld.Entities.Append(mPlayer);
+        mBlobShadowRenderer.Render(allEntities, mWorld, view, proj, mPlayer.Camera.Position);
     }
 
     // Calls render the active entities
@@ -1040,10 +1083,11 @@ public class Game : GameWindow
 
     #region Game State
 
-    private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0)
+    private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0, bool isCreative = false)
     {
         mNewWorldSize = worldSize;
         mWorldGenSettings = WorldGenSettings.Build(worldType, worldTheme);
+        IsCreative = isCreative;
         mAudioManager.SfxVol = volumeSFX;
         mAudioManager.MusicVol = volumeMusic;
         mAudioManager.PlayBackgroundMusic();
@@ -1078,7 +1122,10 @@ public class Game : GameWindow
 
     public void CloseInventory()
     {
-        mInventoryScreen?.OnClose();
+        if (IsCreative)
+            mCreativeInventoryScreen?.OnClose();
+        else
+            mInventoryScreen?.OnClose();
         CurrentState = GameState.Playing;
         CursorState = CursorState.Grabbed;
         mFirstMouse = true;
@@ -1133,6 +1180,23 @@ public class Game : GameWindow
         mFirstMouse = true;
     }
 
+    public void OpenDoubleChest(OpenTK.Mathematics.Vector3i canonicalPos)
+    {
+        var chest = BlockEntityManager.GetOrCreateDoubleChest(canonicalPos);
+        mDoubleChestScreen.SetChest(chest);
+        CurrentState = GameState.DoubleChest;
+        CursorState = CursorState.Normal;
+        MousePosition = new Vector2(Size.X / 2f, Size.Y / 2f);
+    }
+
+    public void CloseDoubleChest()
+    {
+        mDoubleChestScreen?.OnClose();
+        CurrentState = GameState.Playing;
+        CursorState = CursorState.Grabbed;
+        mFirstMouse = true;
+    }
+
     // Serialize all saveable world entities to data objects for XML persistence
     private List<SavedEntity> SaveWorldEntities()
     {
@@ -1149,7 +1213,9 @@ public class Game : GameWindow
                     break;
 
                 case Sheep sheep:
-                    list.Add(MakeSavedMob("Sheep", sheep));
+                    var savedSheep = MakeSavedMob("Sheep", sheep);
+                    savedSheep.IsSheared = sheep.IsSheared;
+                    list.Add(savedSheep);
                     break;
 
                 case Zombie zombie:
@@ -1180,7 +1246,7 @@ public class Game : GameWindow
         return list;
     }
 
-    private static SavedEntity MakeSavedMob(string type, Entity e) => new()
+    private SavedEntity MakeSavedMob(string type, Entity e) => new()
     {
         Type = type,
         X = e.Position.X,
@@ -1200,7 +1266,7 @@ public class Game : GameWindow
             Entity? entity = se.Type switch
             {
                 "Pig" => new Pig(pos) { Yaw = se.Yaw, Health = se.Health },
-                "Sheep" => new Sheep(pos) { Yaw = se.Yaw, Health = se.Health },
+                "Sheep" => new Sheep(pos) { Yaw = se.Yaw, Health = se.Health, IsSheared = se.IsSheared },
                 "Zombie" => new Zombie(pos) { Yaw = se.Yaw, Health = se.Health },
                 "Skeleton" => new Skeleton(pos) { Yaw = se.Yaw, Health = se.Health },
                 "Stalker" => new Stalker(pos) { Yaw = se.Yaw, Health = se.Health },
@@ -1240,6 +1306,7 @@ public class Game : GameWindow
         if (saveData != null)
         {
             saveData.HasPlayerPosition = true;
+            saveData.IsCreative = IsCreative;
             saveData.PlayerX = mPlayer.Position.X;
             saveData.PlayerY = mPlayer.Position.Y;
             saveData.PlayerZ = mPlayer.Position.Z;

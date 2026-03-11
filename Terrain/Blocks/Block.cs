@@ -38,6 +38,7 @@ public abstract class Block
     public virtual Vector3 BoundsMax => Vector3.One;
 
     public virtual TextureCoords TopTextureCoords => KDefaultCoords;
+    public virtual TextureCoords GetTopTexture(byte metadata) => TopTextureCoords;
     public virtual TextureCoords BottomTextureCoords => KDefaultCoords;
 
     public virtual TextureCoords FrontTextureCoords => SideTextureCoords;
@@ -57,6 +58,7 @@ public abstract class Block
     public virtual void ScheduledTick(World world, int x, int y, int z, Random random) { }
     public virtual void OnPlaced(World world, int x, int y, int z) { }
     public virtual void OnRemoved(World world, int x, int y, int z) { }
+    public virtual void OnEntityWalking(World world, int x, int y, int z, Random random) { }
 
     public virtual bool CanBlockSupport(BlockType beneath)
     {

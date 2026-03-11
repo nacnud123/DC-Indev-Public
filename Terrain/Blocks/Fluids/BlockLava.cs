@@ -59,7 +59,7 @@ public class BlockLava : Block
         }
     }
 
-    private static void TrySpread(World world, int x, int y, int z)
+    private void TrySpread(World world, int x, int y, int z)
     {
         var neighbor = world.GetBlock(x, y, z);
 
@@ -82,7 +82,7 @@ public class BlockLava : Block
         world.SetBlock(x, y, z, BlockType.Lava);
     }
 
-    private static bool IsNearSponge(World world, int x, int y, int z)
+    private bool IsNearSponge(World world, int x, int y, int z)
     {
         int r = BlockSponge.ABSORB_RADIUS;
         for (int dx = -r; dx <= r; dx++)

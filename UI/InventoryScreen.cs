@@ -1,4 +1,4 @@
-// Survival inventory screen, armor column + 9×3 main grid + 9×1 hotbar row + 2×2 craft grid | DA | 2/26/26
+// Main class for the inventory screen it has the survival inventory screen, armor column + 9×3 main grid + 9×1 hotbar row + 2×2 craft grid | DA | 2/26/26
 
 using System.Numerics;
 using ImGuiNET;
@@ -14,14 +14,14 @@ namespace VoxelEngine.UI;
 
 public class InventoryScreen : InventoryScreenBase
 {
-    // Craft area: 2×2 grid + gap + arrow + gap + result slot, right of the main grid
+    // Craft area
     private const int CRAFT_COLS = 2;
     private const int CRAFT_ROWS = 2;
     private const float CRAFT_GAP = 8f * UIHelper.UI_SCALE;
     private const float ARROW_W = 24f * UIHelper.UI_SCALE;
     private const float CRAFT_AREA_W = CRAFT_COLS * SLOT_SIZE + CRAFT_GAP + ARROW_W + CRAFT_GAP + SLOT_SIZE;
 
-    // Armor column: 1 slot wide, 4 slots tall, left of the main grid
+    // Armor column
     private const int ARMOR_COUNT = 4;
     private const float ARMOR_GAP = 8f * UIHelper.UI_SCALE;
     private const float ARMOR_COL_W = SLOT_SIZE + ARMOR_GAP;
@@ -30,7 +30,7 @@ public class InventoryScreen : InventoryScreenBase
     private const float PANEL_W = ARMOR_COL_W + COLS * SLOT_SIZE + CRAFT_GAP + CRAFT_AREA_W + PADDING * 2;
     private const float PANEL_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP + PADDING * 2;
 
-    // Empty-slot placeholder icons: Head(15,3), Body(15,2), Legs(15,1), Boots(15,0)
+    // Empty-slot placeholder icons
     private static readonly TextureCoords[] ArmorSlotIcons =
     [
         UvHelper.FromTileCoords(15, 3),
@@ -49,8 +49,10 @@ public class InventoryScreen : InventoryScreenBase
     public void OnClose()
     {
         var inv = Game.Instance.PlayerInventory;
+
         if (inv != null)
             mCraftGrid.ReturnItemsTo(inv);
+
         ReturnCursorToInventory();
     }
 
@@ -82,8 +84,7 @@ public class InventoryScreen : InventoryScreenBase
         float resultX = arrowX + ARROW_W + CRAFT_GAP;
         float resultY = arrowY;
 
-        drawList.AddRectFilled(new Vector2(panelX, panelY), new Vector2(panelX + PANEL_W, panelY + PANEL_H), ColorBg,
-            6f);
+        drawList.AddRectFilled(new Vector2(panelX, panelY), new Vector2(panelX + PANEL_W, panelY + PANEL_H), ColorBg, 6f);
 
         for (int i = 0; i < ARMOR_COUNT; i++)
             DrawArmorSlot(drawList, inv, (ArmorSlot)i, armorX, armorColY + i * SLOT_SIZE);
@@ -94,8 +95,7 @@ public class InventoryScreen : InventoryScreenBase
         {
             for (int col = 0; col < CRAFT_COLS; col++)
             {
-                DrawSlot(drawList, mCraftGrid.GetSlot(row * CRAFT_COLS + col), craftX + col * SLOT_SIZE,
-                    craftY + row * SLOT_SIZE);
+                DrawSlot(drawList, mCraftGrid.GetSlot(row * CRAFT_COLS + col), craftX + col * SLOT_SIZE, craftY + row * SLOT_SIZE);
             }
         }
 
@@ -108,6 +108,7 @@ public class InventoryScreen : InventoryScreenBase
         if (hoveredArmor >= 0)
         {
             var stack = inv.GetArmorSlot((ArmorSlot)hoveredArmor);
+
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, ItemRegistry.GetName(stack.Value.Item));
 
@@ -119,6 +120,7 @@ public class InventoryScreen : InventoryScreenBase
         }
 
         int hoveredSlot = GetInvSlotAtMouse(mousePos, slotsX, mainY, hotbarY);
+
         if (hoveredSlot >= 0)
         {
             var stack = inv.GetSlot(hoveredSlot);
@@ -133,6 +135,7 @@ public class InventoryScreen : InventoryScreenBase
         }
 
         int hoveredCraft = GetCraftSlotAtMouse(mousePos, craftX, craftY);
+
         if (hoveredCraft >= 0)
         {
             var stack = mCraftGrid.GetSlot(hoveredCraft);
@@ -146,8 +149,7 @@ public class InventoryScreen : InventoryScreenBase
                 HandleCraftRightClick(hoveredCraft);
         }
 
-        bool mouseOverResult = mousePos.X >= resultX && mousePos.X < resultX + SLOT_SIZE && mousePos.Y >= resultY &&
-                               mousePos.Y < resultY + SLOT_SIZE;
+        bool mouseOverResult = mousePos.X >= resultX && mousePos.X < resultX + SLOT_SIZE && mousePos.Y >= resultY && mousePos.Y < resultY + SLOT_SIZE;
 
         if (mouseOverResult && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             HandleResultClick();
@@ -171,21 +173,19 @@ public class InventoryScreen : InventoryScreenBase
         }
         else
         {
-            // Draw placeholder icon, dimmed so it reads as an empty slot
+            // Placeholder icon
             var uv = ArmorSlotIcons[(int)slot];
             var iconMin = new Vector2(sx + ITEM_PADDING, sy + ITEM_PADDING);
             var iconMax = new Vector2(iconMin.X + ITEM_SIZE, iconMin.Y + ITEM_SIZE);
-            drawList.AddImage(new IntPtr(mItemTexture.Handle), iconMin, iconMax,
-                new Vector2(uv.TopLeft.X, uv.BottomRight.Y),
-                new Vector2(uv.BottomRight.X, uv.TopLeft.Y),
-                ColorBorder);
+            drawList.AddImage(new IntPtr(mItemTexture.Handle), iconMin, iconMax, new Vector2(uv.TopLeft.X, uv.BottomRight.Y), new Vector2(uv.BottomRight.X, uv.TopLeft.Y), ColorBorder);
         }
     }
 
-    private static int GetArmorSlotAtMouse(Vector2 mousePos, float armorX, float armorColY)
+    private int GetArmorSlotAtMouse(Vector2 mousePos, float armorX, float armorColY)
     {
         float relX = mousePos.X - armorX;
         float relY = mousePos.Y - armorColY;
+
         if (relX < 0 || relX >= SLOT_SIZE)
             return -1;
 
@@ -195,10 +195,11 @@ public class InventoryScreen : InventoryScreenBase
         return (int)(relY / SLOT_SIZE);
     }
 
-    private static int GetCraftSlotAtMouse(Vector2 mousePos, float craftX, float craftY)
+    private int GetCraftSlotAtMouse(Vector2 mousePos, float craftX, float craftY)
     {
         float relX = mousePos.X - craftX;
         float relY = mousePos.Y - craftY;
+
         if (relX < 0 || relX >= CRAFT_COLS * SLOT_SIZE)
             return -1;
 
@@ -367,7 +368,7 @@ public class InventoryScreen : InventoryScreenBase
 }
 
 /* =============================================================
-   CREATIVE MODE INVENTORY — kept for future use
+   CREATIVE MODE INVENTORY kept for future use
    =============================================================
 
 // Main inventory screen file, holds stuff related to rendering main menu. Also, the inventory order, which is a stupid way to do it, but it works | DA | 2/5/26

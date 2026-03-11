@@ -1,70 +1,36 @@
-// Main file for passive AI, they kind of just roam around | DA | 2/5/26
+// Main class for passive mob AI. The AI wanders toward grass/lit areas, resumes wandering after being hit | DA | 3/8/26
 using OpenTK.Mathematics;
-using VoxelEngine.Core;
 using VoxelEngine.Terrain;
 
 namespace VoxelEngine.GameEntity.AI;
 
 public class PassiveEntityAi : EntityAi
 {
-    private enum State
-    {
-        Idle,
-        Wandering,
-        Fleeing
-    }
+    private enum State { Idle, Wandering }
 
     private const int IDLE_TICKS = 60;
     private const int WANDER_TICKS = 160;
-    private const int FLEE_TICKS = 100;
     private const int PATH_RECALC_TICKS = 20;
-    private const float FLEE_DISTANCE = 10f;
     private const int WANDER_RADIUS = 10;
+    private const int WANDER_Y_RANGE = 4;
+    private const int WANDER_SAMPLES = 200;
+    private const int RANDOM_REWANDER_CHANCE = 100;
+    private const float FLUID_JUMP_CHANCE = 0.8f;
 
     private State mCurrentState = State.Idle;
-    private int mFleeTimer;
 
-    public override bool IsFleeing => mCurrentState == State.Fleeing;
-
-
-    public PassiveEntityAi(Entity entity) : base(entity)
-    {
-    }
+    public PassiveEntityAi(Entity entity) : base(entity) { }
 
     public override void Tick(World world)
     {
-        UpdateTimers();
+        StateTimer--;
         UpdateState(world);
         ExecuteState(world);
         FaceMovementDirection();
     }
 
-    private void UpdateTimers()
-    {
-        StateTimer--;
-        mFleeTimer--;
-    }
-
-    // Update the state based on state timers
     private void UpdateState(World world)
     {
-        if (WasHurt)
-        {
-            mCurrentState = State.Fleeing;
-            mFleeTimer = FLEE_TICKS;
-            WasHurt = false;
-            CurrentPath = null;
-            return;
-        }
-
-        if (mCurrentState == State.Fleeing && mFleeTimer <= 0)
-        {
-            mCurrentState = State.Idle;
-            StateTimer = IDLE_TICKS;
-            CurrentPath = null;
-            return;
-        }
-
         switch (mCurrentState)
         {
             case State.Idle:
@@ -72,7 +38,7 @@ public class PassiveEntityAi : EntityAi
                 {
                     mCurrentState = State.Wandering;
                     StateTimer = WANDER_TICKS;
-                    PickRandomWanderTarget(world);
+                    PickWanderTarget(world);
                 }
                 break;
 
@@ -87,7 +53,6 @@ public class PassiveEntityAi : EntityAi
         }
     }
 
-    // Do different stuff for each state
     private void ExecuteState(World world)
     {
         switch (mCurrentState)
@@ -99,36 +64,69 @@ public class PassiveEntityAi : EntityAi
             case State.Wandering:
                 MoveTowardTarget(world, ParentEntity.WalkSpeed);
                 break;
-
-            case State.Fleeing:
-                FleeFromPlayer(world);
-                break;
         }
     }
 
-    private void PickRandomWanderTarget(World world)
+    // Samples 200 random positions and picks the highest-scored reachable one. Grass below scores +10; otherwise scores by light level (prefers bright areas).
+    private void PickWanderTarget(World world)
     {
-        for (int attempts = 0; attempts < 10; attempts++)
+        int ox = (int)MathF.Floor(ParentEntity.Position.X);
+        int oy = (int)MathF.Floor(ParentEntity.Position.Y);
+        int oz = (int)MathF.Floor(ParentEntity.Position.Z);
+
+        Vector3i bestTarget = default;
+        float bestScore = float.MinValue;
+        bool found = false;
+
+        for (int i = 0; i < WANDER_SAMPLES; i++)
         {
-            float randomX = ParentEntity.Position.X + Random.Next(-WANDER_RADIUS, WANDER_RADIUS);
-            float randomZ = ParentEntity.Position.Z + Random.Next(-WANDER_RADIUS, WANDER_RADIUS);
-            int targetY = FindGroundLevel(world, randomX, randomZ);
+            int rx = ox + Random.Next(-WANDER_RADIUS, WANDER_RADIUS + 1);
+            int rz = oz + Random.Next(-WANDER_RADIUS, WANDER_RADIUS + 1);
+            int ry = FindGroundLevel(world, rx, rz);
 
-            if (targetY != -1)
+            if (ry == -1 || MathF.Abs(ry - oy) > WANDER_Y_RANGE)
+                continue;
+
+            float score = ScoreWanderPosition(world, rx, ry, rz);
+            if (score > bestScore)
             {
-                CurrentTarget = new Vector3i((int)randomX, targetY, (int)randomZ);
-                RecalculatePath(world);
-
-                if (CurrentPath != null && CurrentPath.Count > 0)
-                    return;
+                bestScore = score;
+                bestTarget = new Vector3i(rx, ry, rz);
+                found = true;
             }
         }
 
-        mCurrentState = State.Idle;
+        if (!found)
+        {
+            mCurrentState = State.Idle;
+            return;
+        }
+
+        CurrentTarget = bestTarget;
+        RecalculatePath(world);
+
+        if (CurrentPath == null || CurrentPath.Count == 0)
+            mCurrentState = State.Idle;
+    }
+
+    // +10 for grass underfoot; otherwise score by ambient light level.
+    private float ScoreWanderPosition(World world, int x, int y, int z)
+    {
+        if (world.GetBlock(x, y - 1, z) == BlockType.Grass)
+            return 10f;
+
+        int light = Math.Max(world.GetSkyLight(x, y, z), world.GetBlockLight(x, y, z));
+        return light / 15f - 0.5f;
     }
 
     private void MoveTowardTarget(World world, float speed)
     {
+        if (Random.Next(RANDOM_REWANDER_CHANCE) == 0)
+        {
+            PickWanderTarget(world);
+            return;
+        }
+
         PathRecalculateTimer--;
         if (PathRecalculateTimer <= 0)
         {
@@ -142,8 +140,8 @@ public class PassiveEntityAi : EntityAi
             return;
         }
 
-        // Pop completed waypoints
         Vector3i waypoint = CurrentPath.Peek();
+
         float dx = waypoint.X + 0.5f - ParentEntity.Position.X;
         float dz = waypoint.Z + 0.5f - ParentEntity.Position.Z;
         float dist = MathF.Sqrt(dx * dx + dz * dz);
@@ -153,6 +151,7 @@ public class PassiveEntityAi : EntityAi
             CurrentPath.Pop();
             if (CurrentPath.Count == 0)
                 return;
+
             waypoint = CurrentPath.Peek();
             dx = waypoint.X + 0.5f - ParentEntity.Position.X;
             dz = waypoint.Z + 0.5f - ParentEntity.Position.Z;
@@ -167,40 +166,24 @@ public class PassiveEntityAi : EntityAi
 
         float velY = ParentEntity.Velocity.Y;
         int currentY = (int)MathF.Floor(ParentEntity.Position.Y);
-        // Jump if next waypoint is above us, or there's a block ahead
-        if (ParentEntity.IsOnGround && (waypoint.Y > currentY || ShouldJump(world, dx, dz)))
-            velY = Physics.JUMP_VEL;
+
+        if (ParentEntity.IsOnGround)
+        {
+            if (IsInFluid(world) && Random.NextSingle() < FLUID_JUMP_CHANCE)
+                velY = Physics.JUMP_VEL;
+            else if (waypoint.Y > currentY || ShouldJump(world, dx, dz))
+                velY = Physics.JUMP_VEL;
+        }
 
         ParentEntity.Velocity = new Vector3(dx * speed, velY, dz * speed);
     }
 
-    // Run directly opposite of the player
-    private void FleeFromPlayer(World world)
+    private bool IsInFluid(World world)
     {
-        Vector3 playerPos = Game.Instance.GetPlayer.Position;
-
-        float dirX = ParentEntity.Position.X - playerPos.X;
-        float dirZ = ParentEntity.Position.Z - playerPos.Z;
-        float distance = MathF.Sqrt(dirX * dirX + dirZ * dirZ);
-
-        if (distance > 0.1f)
-        {
-            dirX /= distance;
-            dirZ /= distance;
-        }
-        else
-        {
-            float angle = Random.NextSingle() * MathF.PI * 2f;
-            dirX = MathF.Cos(angle);
-            dirZ = MathF.Sin(angle);
-        }
-
-        float fleeSpeed = ParentEntity.WalkSpeed * 1.5f;
-        float velY = ParentEntity.Velocity.Y;
-
-        if (ParentEntity.IsOnGround && ShouldJump(world, dirX, dirZ))
-            velY = Physics.JUMP_VEL;
-
-        ParentEntity.Velocity = new Vector3(dirX * fleeSpeed, velY, dirZ * fleeSpeed);
+        int x = (int)MathF.Floor(ParentEntity.Position.X);
+        int y = (int)MathF.Floor(ParentEntity.Position.Y);
+        int z = (int)MathF.Floor(ParentEntity.Position.Z);
+        var block = world.GetBlock(x, y, z);
+        return block == BlockType.Water || block == BlockType.Lava;
     }
 }

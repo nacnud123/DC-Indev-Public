@@ -312,6 +312,7 @@ public partial class World
         int localX = worldX - chunkX * Chunk.WIDTH;
         int localZ = worldZ - chunkZ * Chunk.DEPTH;
         mChunks[chunkX, chunkZ].SetMetadata(localX, worldY, localZ, value);
+        mChunks[chunkX, chunkZ].MarkDirty();
     }
 
     public Chunk? GetChunk(int chunkX, int chunkZ)

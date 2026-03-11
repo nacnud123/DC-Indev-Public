@@ -10,6 +10,7 @@ public class BlockWheatStage0 : BlockWheatBase
     public override BlockType Type => BlockType.WheatStage0;
     public override int Stage => 0;
     public override BlockType NextStage => BlockType.WheatStage1;
+    public override bool IsReplaceable => true;
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(8, 0);
     public override TextureCoords SideTextureCoords => TopTextureCoords;
     public override TextureCoords BottomTextureCoords => TopTextureCoords;

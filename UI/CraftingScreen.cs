@@ -134,7 +134,7 @@ public class CraftingScreen : InventoryScreenBase
         DrawSlot(drawList, mCraftGrid.Result, sx, sy, isSelected: hasResult);
     }
 
-    private static int GetCraftSlotAtMouse(Vector2 mousePos, float craftX, float craftY)
+    private int GetCraftSlotAtMouse(Vector2 mousePos, float craftX, float craftY)
     {
         float relX = mousePos.X - craftX;
         float relY = mousePos.Y - craftY;

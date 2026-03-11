@@ -89,7 +89,7 @@ public class Serialization
         return 0;
     }
 
-    public static WorldSaveData CreateWorld(string worldName, int? customSeed = null, int worldSize = 8, int worldType = 0, int worldTheme = 0, float worldTime = .1f)
+    public static WorldSaveData CreateWorld(string worldName, int? customSeed = null, int worldSize = 8, int worldType = 0, int worldTheme = 0, float worldTime = .1f, bool isCreative = false)
     {
         WorldSaveData worldData = new WorldSaveData
         {
@@ -101,7 +101,8 @@ public class Serialization
 
             WorldType = worldType,
             WorldTheme = worldTheme,
-            WorldTime = worldTime
+            WorldTime = worldTime,
+            IsCreative = isCreative
         };
 
         SaveWorldMetadata(worldData);

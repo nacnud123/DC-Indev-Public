@@ -1,9 +1,10 @@
 // Main menu class, holds stuff related to rendering the main menu. | DA | 2/5/26
-// Updated to look better and include save selection.
+// Updated to look better, include save selection, and support keybinding customisation.
 
 using ImGuiNET;
 using System;
 using System.Numerics;
+using OpenTK.Windowing.GraphicsLibraryFramework;
 using VoxelEngine.Core;
 using VoxelEngine.Saving;
 
@@ -16,7 +17,8 @@ public class MainMenuScreen
         Title,
         WorldSelection,
         NewGame,
-        Options
+        Options,
+        Keybindings
     }
 
     private const int MIN_WORLD_SIZE = 8;
@@ -75,11 +77,12 @@ public class MainMenuScreen
     private int mWorldTheme = 0;
     private int mVolSfx = 85;
     private int mVolMusic = 25;
+    private bool mIsCreative = false;
 
     private MainMenuState mCurrentState;
 
     public event Action OnTitleQuitGame = null!;
-    public event Action<int, int, int, int, int> OnStartGame = null!;
+    public event Action<int, int, int, int, int, bool> OnStartGame = null!;
 
     private List<string> mSplashText = new()
     {
@@ -100,7 +103,9 @@ public class MainMenuScreen
         "DA_RL on steam soon",
         "Thanks ARoachIFoundOnMyPillow for textures!",
         "Thanks TheQuantumBlaze for textures!",
-        "Will it ever leave Alpha? No",
+        "Will it ever leave Alpha? Maybe",
+        "Watch out for bugs!",
+        "No cows",
         "Rip other DuncanCraft projects",
         "All the animals move at the same time",
         "It's a feature not a bug",
@@ -114,6 +119,28 @@ public class MainMenuScreen
     private bool mShowDeleteConfirm = false;
     private readonly byte[] mWorldNameBuffer = new byte[256];
     private List<WorldSaveData> mAvailableWorlds = new();
+
+    private int mRebindingIndex = -1;
+
+    private static readonly (string Label, Keybindings.Action Binding)[] BindingDefs =
+    [
+        ("Move Forward", Keybindings.Action.MoveForward),
+        ("Move Back", Keybindings.Action.MoveBack),
+        ("Move Left", Keybindings.Action.MoveLeft),
+        ("Move Right", Keybindings.Action.MoveRight),
+        ("Jump", Keybindings.Action.Jump),
+        ("Sprint", Keybindings.Action.Sprint),
+        ("Fly Down", Keybindings.Action.FlyDown),
+        ("Toggle Fly", Keybindings.Action.ToggleFly),
+        ("Inventory", Keybindings.Action.Inventory),
+        ("Drop Item", Keybindings.Action.DropItem),
+        ("Wireframe", Keybindings.Action.Wireframe),
+        ("Reset Position", Keybindings.Action.ResetPosition),
+        ("Toggle Cursor", Keybindings.Action.ToggleCursor),
+        ("Screenshot", Keybindings.Action.Screenshot),
+        ("Render Dist Up", Keybindings.Action.RenderDistUp),
+        ("Render Dist Down", Keybindings.Action.RenderDistDown),
+    ];
 
     public MainMenuScreen()
     {
@@ -155,6 +182,9 @@ public class MainMenuScreen
             case MainMenuState.Options:
                 RenderOptionsScreen(windowFlags);
                 break;
+            case MainMenuState.Keybindings:
+                RenderKeybindingsScreen(windowFlags);
+                break;
             default:
                 throw new ArgumentOutOfRangeException();
         }
@@ -175,7 +205,7 @@ public class MainMenuScreen
         // Version (top-left)
         ImGui.SetCursorPos(new Vector2(12, 8));
         ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("Version 1.0B");
+        ImGui.Text("Version 1.0R\nBy: Duncan Armstrong");
         ImGui.PopStyleColor();
 
         // Title
@@ -235,21 +265,21 @@ public class MainMenuScreen
         ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
         string[] controls =
         {
-            "W A S D  -  Move",
+            $"{KeyName(Keybindings.MoveForward)} {KeyName(Keybindings.MoveBack)} {KeyName(Keybindings.MoveLeft)} {KeyName(Keybindings.MoveRight)}  -  Move",
             "LMB  -  Break / Attack",
             "RMB  -  Place block",
             "0-9  -  Select block",
-            "R  -  Reset position",
-            "X  -  Wireframe",
+            $"{KeyName(Keybindings.ResetPosition)}  -  Reset position",
+            $"{KeyName(Keybindings.Wireframe)}  -  Wireframe",
             "Esc  -  Pause",
-            "Tab  -  Toggle cursor",
-            "F  -  Fly / Instant break",
-            "E  -  Inventory",
-            "Space  -  Jump / Fly up",
-            "Ctrl  -  Fly down",
-            "Shift  -  Sprint",
-            "+/-  -  Render distance",
-            "F7  -  Take screenshot"
+            $"{KeyName(Keybindings.ToggleCursor)}  -  Toggle cursor",
+            $"{KeyName(Keybindings.ToggleFly)}  -  Fly / Instant break",
+            $"{KeyName(Keybindings.Inventory)}  -  Inventory",
+            $"{KeyName(Keybindings.Jump)}  -  Jump / Fly up",
+            $"{KeyName(Keybindings.FlyDown)}  -  Fly down",
+            $"{KeyName(Keybindings.Sprint)}  -  Sprint",
+            $"{KeyName(Keybindings.RenderDistUp)}/{KeyName(Keybindings.RenderDistDown)}  -  Render distance",
+            $"{KeyName(Keybindings.Screenshot)}  -  Take screenshot",
         };
         float lineH = ImGui.GetTextLineHeightWithSpacing();
         float totalH = controls.Length * lineH;
@@ -311,9 +341,7 @@ public class MainMenuScreen
             for (int i = 0; i < mAvailableWorlds.Count; i++)
             {
                 var world = mAvailableWorlds[i];
-                string lastPlayed = world.LastPlayed != DateTime.MinValue
-                    ? world.LastPlayed.ToString("yyyy-MM-dd HH:mm")
-                    : "Unknown";
+                string lastPlayed = world.LastPlayed != DateTime.MinValue ? world.LastPlayed.ToString("yyyy-MM-dd HH:mm") : "Unknown";
 
                 bool selected = mSelectedWorld == i;
 
@@ -322,9 +350,7 @@ public class MainMenuScreen
                 {
                     var drawList = ImGui.GetWindowDrawList();
                     var cursorScreen = ImGui.GetCursorScreenPos();
-                    drawList.AddRectFilled(cursorScreen,
-                        new Vector2(cursorScreen.X + listW - 20f, cursorScreen.Y + 48f),
-                        ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f)));
+                    drawList.AddRectFilled(cursorScreen, new Vector2(cursorScreen.X + listW - 20f, cursorScreen.Y + 48f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f)));
                 }
 
                 if (ImGui.Selectable($"##world_{i}", selected, ImGuiSelectableFlags.None, new Vector2(0, 48)))
@@ -337,10 +363,8 @@ public class MainMenuScreen
                 var itemMax = ImGui.GetItemRectMax();
                 var dl = ImGui.GetWindowDrawList();
 
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText),
-                    world.WorldName);
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim),
-                    $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
+                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText), world.WorldName);
+                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim), $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
 
                 // Thin separator line
                 if (i < mAvailableWorlds.Count - 1)
@@ -369,12 +393,13 @@ public class MainMenuScreen
         // Play
         PushDisableableBtn(hasSel, false);
         ImGui.SetCursorPos(new Vector2(bx, btnY));
+
         if (ImGui.Button("Play", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)) && hasSel)
         {
             ClickSound();
             Serialization.s_WorldName = mAvailableWorlds[mSelectedWorld].WorldName;
-            OnStartGame?.Invoke(Serialization.GetWorldSize(mAvailableWorlds[mSelectedWorld].WorldName), mVolSfx,
-                mVolMusic, 0, 0);
+            var selWorld = mAvailableWorlds[mSelectedWorld];
+            OnStartGame?.Invoke(Serialization.GetWorldSize(selWorld.WorldName), mVolSfx, mVolMusic, 0, 0, selWorld.IsCreative);
         }
 
         PopDisableableBtn(hasSel, false);
@@ -399,6 +424,7 @@ public class MainMenuScreen
             mWorldSize = 16;
             mWorldType = 0;
             mWorldTheme = 0;
+            mIsCreative = false;
             SetInputBuffer(mWorldNameBuffer, "New World");
             mCurrentState = MainMenuState.NewGame;
         }
@@ -508,7 +534,8 @@ public class MainMenuScreen
                       + labelH + inputH + rowGap // Name
                       + BUTTON_HEIGHT + rowGap // Type
                       + labelH + inputH + rowGap // Size
-                      + BUTTON_HEIGHT + bigGap // Theme + large gap before actions
+                      + BUTTON_HEIGHT + rowGap // Theme
+                      + BUTTON_HEIGHT + bigGap // Creative + large gap before actions
                       + BUTTON_HEIGHT + rowGap // Create
                       + BUTTON_HEIGHT // Cancel
                       + PANEL_PAD;
@@ -580,6 +607,22 @@ public class MainMenuScreen
         }
 
         PopBtn();
+        y += BUTTON_HEIGHT + rowGap;
+
+        // Creative Mode
+        ImGui.SetCursorPos(new Vector2(fieldX, y));
+        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
+        ImGui.PushStyleColor(ImGuiCol.CheckMark, ColText);
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, ColFrame);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ColFrameHover);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ColFrameActive);
+
+        if (ImGui.Checkbox("##creative", ref mIsCreative))
+            ClickSound();
+
+        ImGui.SameLine();
+        ImGui.Text("Creative Mode");
+        ImGui.PopStyleColor(5);
         y += BUTTON_HEIGHT + bigGap;
 
         // Create
@@ -592,8 +635,8 @@ public class MainMenuScreen
             if (string.IsNullOrEmpty(worldName))
                 worldName = "New World";
             Serialization.s_WorldName = worldName;
-            Serialization.CreateWorld(worldName, null, mWorldSize, mWorldType, mWorldTheme);
-            OnStartGame?.Invoke(mWorldSize, mVolSfx, mVolMusic, mWorldType, mWorldTheme);
+            Serialization.CreateWorld(worldName, null, mWorldSize, mWorldType, mWorldTheme, isCreative: mIsCreative);
+            OnStartGame?.Invoke(mWorldSize, mVolSfx, mVolMusic, mWorldType, mWorldTheme, mIsCreative);
         }
 
         PopBtn();
@@ -627,7 +670,7 @@ public class MainMenuScreen
 
         // Panel
         float formW = 440f;
-        float formH = 180f;
+        float formH = 230f;
         float formX = cx - formW * 0.5f;
         float formY = cy - formH * 0.5f - 20f;
 
@@ -655,8 +698,20 @@ public class MainMenuScreen
         ImGui.SetCursorPos(new Vector2(fieldX, y));
         ImGui.SetNextItemWidth(fieldW);
         ImGui.SliderInt("##musicvolume", ref mVolMusic, 0, 100, "");
+        y += 22f;
 
         ImGui.PopStyleColor();
+
+        y += 16f;
+        PushGreenBtn();
+        ImGui.SetCursorPos(new Vector2(fieldX, y));
+        if (ImGui.Button("Keybindings", new Vector2(fieldW, BUTTON_HEIGHT)))
+        {
+            ClickSound();
+            mCurrentState = MainMenuState.Keybindings;
+        }
+
+        PopBtn();
 
         // Back
         float by = formY + formH + 20f;
@@ -671,6 +726,130 @@ public class MainMenuScreen
         PopBtn();
 
         ImGui.End();
+    }
+
+    // Keybindings
+    private void RenderKeybindingsScreen(ImGuiWindowFlags flags)
+    {
+        ImGui.Begin("KeybindingsMenu", flags);
+
+        var windowSize = ImGui.GetWindowSize();
+        var cx = windowSize.X * 0.5f;
+        var cy = windowSize.Y * 0.5f;
+
+        DrawTitle("Keybindings", cx);
+
+        const float ROW_H = 40f;
+        const int COLS = 2;
+        int numRows = (BindingDefs.Length + COLS - 1) / COLS;
+        float panelW = 760f;
+        float colW = (panelW - 2f) / COLS;
+        float panelH = numRows * ROW_H + PANEL_PAD * 2;
+        float panelX = cx - panelW * 0.5f;
+        float panelY = cy - panelH * 0.5f - 20f;
+
+        DrawPanel(panelX, panelY, panelW, panelH);
+
+        if (mRebindingIndex >= 0)
+            PollRebindKey();
+
+        ImGui.SetCursorPos(new Vector2(panelX + 1, panelY + PANEL_PAD));
+        ImGui.BeginChild("BindingList", new Vector2(panelW - 2, numRows * ROW_H), ImGuiChildFlags.None);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 0));
+
+        var childDrawList = ImGui.GetWindowDrawList();
+        var childOrigin = ImGui.GetWindowPos();
+
+        for (int row = 0; row < numRows; row++)
+        {
+            for (int col = 0; col < COLS; col++)
+            {
+                int i = col * numRows + row;
+                if (i >= BindingDefs.Length)
+                    continue;
+
+                var (label, binding) = BindingDefs[i];
+                bool isRebinding = mRebindingIndex == i;
+                float itemX = col * colW;
+                float itemY = row * ROW_H;
+
+                if (isRebinding || row % 2 == 0)
+                {
+                    var bgPos = new Vector2(childOrigin.X + itemX, childOrigin.Y + itemY);
+                    uint bgColor = isRebinding
+                        ? ImGui.ColorConvertFloat4ToU32(new Vector4(0.10f, 0.40f, 0.10f, 0.8f))
+                        : ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f));
+                    childDrawList.AddRectFilled(bgPos, new Vector2(bgPos.X + colW, bgPos.Y + ROW_H), bgColor);
+                }
+
+                ImGui.SetCursorPos(new Vector2(itemX, itemY));
+                if (ImGui.Selectable($"##bind{i}", isRebinding, ImGuiSelectableFlags.None, new Vector2(colW, ROW_H)))
+                {
+                    ClickSound();
+                    mRebindingIndex = isRebinding ? -1 : i;
+                }
+
+                var itemMin = ImGui.GetItemRectMin();
+                float textY = itemMin.Y + (ROW_H - ImGui.GetTextLineHeight()) * 0.5f;
+                string keyText = isRebinding ? "[Press any key]" : Keybindings.Get(binding).ToString();
+
+                childDrawList.AddText(new Vector2(itemMin.X + 14f, textY),
+                    ImGui.ColorConvertFloat4ToU32(ColText), label);
+                childDrawList.AddText(new Vector2(itemMin.X + colW - 120f, textY),
+                    ImGui.ColorConvertFloat4ToU32(isRebinding ? ColTextDim : ColText), keyText);
+            }
+        }
+
+        // Vertical divider between columns
+        uint divColor = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.08f));
+        childDrawList.AddLine(new Vector2(childOrigin.X + colW, childOrigin.Y), new Vector2(childOrigin.X + colW, childOrigin.Y + numRows * ROW_H), divColor);
+
+        ImGui.PopStyleVar();
+        ImGui.EndChild();
+
+        float backY = panelY + panelH + 20f;
+        PushGreenBtn();
+        ImGui.SetCursorPos(new Vector2(cx - BUTTON_WIDTH * 0.5f, backY));
+        if (ImGui.Button("Back", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
+        {
+            ClickSound();
+            mRebindingIndex = -1;
+            Keybindings.Save();
+            mCurrentState = MainMenuState.Options;
+        }
+
+        PopBtn();
+        ImGui.End();
+    }
+
+    private void PollRebindKey()
+    {
+        var keyboard = Game.Instance.KeyboardState;
+        foreach (Keys k in Enum.GetValues<Keys>())
+        {
+            if (k == Keys.Unknown || !keyboard.IsKeyPressed(k))
+                continue;
+
+            if (k != Keys.Escape)
+            {
+                var target = BindingDefs[mRebindingIndex].Binding;
+                Keys oldKey = Keybindings.Get(target);
+
+                for (int j = 0; j < BindingDefs.Length; j++)
+                {
+                    if (j != mRebindingIndex && Keybindings.Get(BindingDefs[j].Binding) == k)
+                    {
+                        Keybindings.Set(BindingDefs[j].Binding, oldKey);
+                        break;
+                    }
+                }
+
+                Keybindings.Set(target, k);
+            }
+
+            mRebindingIndex = -1;
+            break;
+        }
     }
 
     // Helpers
@@ -692,6 +871,23 @@ public class MainMenuScreen
     {
         Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", mVolSfx);
     }
+
+    private string KeyName(Keys key) => key switch
+    {
+        Keys.LeftShift => "L Shift",
+        Keys.RightShift => "R Shift",
+        Keys.LeftControl => "L Ctrl",
+        Keys.RightControl => "R Ctrl",
+        Keys.RightAlt => "R Alst",
+        Keys.LeftAlt => "L Alt",
+        Keys.Space => "Space",
+        Keys.Tab => "Tab",
+        Keys.Escape => "Esc",
+        Keys.Enter => "Enter",
+        Keys.Equal => "+",
+        Keys.Minus => "-",
+        _ => key.ToString()
+    };
 
     // Drawing helpers
     private void DrawTitle(string text, float cx)
@@ -717,26 +913,26 @@ public class MainMenuScreen
     }
 
     // Button style helpers
-    private static void PushGreenBtn()
+    private void PushGreenBtn()
     {
         ImGui.PushStyleColor(ImGuiCol.Button, BtnGreen);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, BtnGreenHover);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, BtnGreenActive);
     }
 
-    private static void PushRedBtn()
+    private void PushRedBtn()
     {
         ImGui.PushStyleColor(ImGuiCol.Button, BtnRed);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, BtnRedHover);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, BtnRedActive);
     }
 
-    private static void PopBtn()
+    private void PopBtn()
     {
         ImGui.PopStyleColor(3);
     }
 
-    private static void PushDisableableBtn(bool enabled, bool red)
+    private void PushDisableableBtn(bool enabled, bool red)
     {
         if (enabled)
         {
@@ -752,13 +948,13 @@ public class MainMenuScreen
         }
     }
 
-    private static void PopDisableableBtn(bool enabled, bool _)
+    private void PopDisableableBtn(bool enabled, bool _)
     {
         ImGui.PopStyleColor(enabled ? 3 : 4);
     }
 
     // Theme
-    private static void PushTheme()
+    private void PushTheme()
     {
         // Window
         ImGui.PushStyleColor(ImGuiCol.WindowBg, ColBg);
@@ -807,26 +1003,26 @@ public class MainMenuScreen
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(8, 6));
     }
 
-    private static void PopTheme()
+    private void PopTheme()
     {
         ImGui.PopStyleVar(7);
         ImGui.PopStyleColor(19);
     }
 
     // Input buffer helpers
-    private static void SetInputBuffer(byte[] buffer, string value)
+    private void SetInputBuffer(byte[] buffer, string value)
     {
         Array.Clear(buffer, 0, buffer.Length);
         var bytes = System.Text.Encoding.UTF8.GetBytes(value);
         Array.Copy(bytes, buffer, Math.Min(bytes.Length, buffer.Length - 1));
     }
 
-    private static void ClearInputBuffer(byte[] buffer)
+    private void ClearInputBuffer(byte[] buffer)
     {
         Array.Clear(buffer, 0, buffer.Length);
     }
 
-    private static string GetStringFromBuffer(byte[] buffer)
+    private string GetStringFromBuffer(byte[] buffer)
     {
         int length = Array.IndexOf(buffer, (byte)0);
         if (length < 0) length = buffer.Length;

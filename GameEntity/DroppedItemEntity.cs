@@ -12,13 +12,14 @@ namespace VoxelEngine.GameEntity;
 public class DroppedItemEntity : Entity
 {
     public override bool IsTargetable => false;
+    public override float ShadowSize => 0.2f;
 
     private const float ITEM_GRAVITY = 8f;
     private const float TERMINAL_VEL = 20f;
     private const float DRAG = 0.98f;
     private const float GROUND_FRICTION = 0.7f;
     private const float BOUNCE = 0.4f;
-    private const float PICKUP_RADIUS = 3f;
+    private const float PICKUP_RADIUS = 2f;
     private const int MAX_AGE = 6000;
     private const int PICKUP_DELAY = 10;
     private const float SPIN_SPEED = 1.2f;

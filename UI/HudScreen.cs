@@ -144,7 +144,7 @@ public class HudScreen
             new Vector2(uv.BottomRight.X, uv.TopLeft.Y));
     }
 
-    private static bool HasAnyArmor(PlayerInventory inv)
+    private bool HasAnyArmor(PlayerInventory inv)
     {
         for (int s = 0; s < 4; s++)
         {

@@ -13,12 +13,14 @@ public class Sheep : Entity
 {
     private const string BODY_MODEL = "Resources/Entities/Sheep/SheepBody/SheepBody.obj";
     private const string BODY_TEXTURE = "Resources/Entities/Sheep/SheepBody/texture.png";
+    private const string BODY_WOOL_MODEL = "Resources/Entities/Sheep/SheepBodyWool/SheepBodyWool.obj";
+    private const string BODY_WOOL_TEXTURE = "Resources/Entities/Sheep/SheepBodyWool/SheepBodyWool.png";
     private const string HEAD_MODEL = "Resources/Entities/Sheep/SheepHead/SheepHead.obj";
     private const string HEAD_TEXTURE = "Resources/Entities/Sheep/SheepHead/Head.png";
     private const string LEG_MODEL = "Resources/Entities/Sheep/SheepLeg/SheepLeg.obj";
     private const string LEG_TEXTURE = "Resources/Entities/Sheep/SheepLeg/Leg.png";
 
-    private static readonly Vector3 BodyOffset = new(-0.0625f, .125f, 0f);
+    private static readonly Vector3 BodyOffset = new(0f, 0.125f, 0.032f);
     private static readonly Vector3 HeadOffset = new(0.1875f, 0.25f, 0.03125f);
     private static readonly Vector3 FrontRightLegOffset = new(0.0625f, 0, -0.0625f);
     private static readonly Vector3 FrontLeftLegOffset = new(0.0625f, 0, 0.0625f);
@@ -37,6 +39,7 @@ public class Sheep : Entity
     private const float MAX_HEAD_PITCH = MathF.PI / 6f;
 
     private readonly EntityModel mBodyModel;
+    private readonly EntityModel mBodyWoolModel;
     private readonly EntityModel mHeadModel;
     private readonly EntityModel mLegModel;
 
@@ -71,7 +74,7 @@ public class Sheep : Entity
     }
 
     public override int Health { get; set; } = 20;
-
+    public bool IsSheared { get; set; }
 
     // Init sheep / load models in
     public Sheep(Vector3 position)
@@ -79,6 +82,7 @@ public class Sheep : Entity
         Position = position;
         InitShader();
         mBodyModel = EntityModel.Load(BODY_MODEL, BODY_TEXTURE);
+        mBodyWoolModel = EntityModel.Load(BODY_WOOL_MODEL, BODY_WOOL_TEXTURE);
         mHeadModel = EntityModel.Load(HEAD_MODEL, HEAD_TEXTURE);
         mLegModel = EntityModel.Load(LEG_MODEL, LEG_TEXTURE);
         CurrentAI = new PassiveEntityAi(this);
@@ -97,30 +101,35 @@ public class Sheep : Entity
         {
             mIdleSoundTimer = 5f + (float)Game.Instance.GameRandom.NextDouble() * 10f;
             int idx = Game.Instance.GameRandom.Next(1, 4);
-            Game.Instance.AudioManager.PlayAudio(
-                $"Resources/Audio/Entities/Sheep/SheepIdle{idx}.ogg",
-                Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f,
-                    Game.Instance.AudioManager.SfxVol),
-                false);
+
+            Game.Instance.AudioManager.PlayAudio($"Resources/Audio/Entities/Sheep/SheepIdle{idx}.ogg", Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f, Game.Instance.AudioManager.SfxVol), false);
         }
     }
 
-    // What to do when the sheep gets hit
+    // First hit shears the sheep (drops wool, no damage). Subsequent hits deal normal damage.
     public override void TakeDamage(int amount)
     {
+        if (!IsSheared)
+        {
+            IsSheared = true;
+
+            int count = Game.Instance.GameRandom.Next(1, 4);
+            var drop = new DroppedItemEntity(Position, ItemStack.FromBlock(BlockType.White, count), Game.Instance.WorldTexture);
+
+            Game.Instance.GetWorld.AddEntity(drop);
+            return;
+        }
+
         base.TakeDamage(amount);
 
-        Game.Instance.AudioManager.PlayAudio(
-            "Resources/Audio/Entities/Sheep/SheepDie.ogg",
-            Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f,
-                Game.Instance.AudioManager.SfxVol),
-            false);
+        Game.Instance.AudioManager.PlayAudio("Resources/Audio/Entities/Sheep/SheepDie.ogg", Proximity((Game.Instance.GetPlayer.Position - this.Position).Length, 20f, Game.Instance.AudioManager.SfxVol), false);
 
-        if (!IsAlive)
+        if (!IsAlive && !IsSheared)
         {
-            int count = Game.Instance.GameRandom.Next(1, 4); // 1-3
-            var drop = new DroppedItemEntity(Position, ItemStack.FromBlock(BlockType.White, count),
-                Game.Instance.WorldTexture);
+            int count = Game.Instance.GameRandom.Next(1, 4);
+
+            var drop = new DroppedItemEntity(Position, ItemStack.FromBlock(BlockType.White, count), Game.Instance.WorldTexture);
+
             Game.Instance.GetWorld.AddEntity(drop);
         }
     }
@@ -139,12 +148,12 @@ public class Sheep : Entity
         else
         {
             mLegSwing *= SWING_DECAY;
-            
-            if (mLegSwing < 0.01f) 
+
+            if (mLegSwing < 0.01f)
                 mLegSwing = 0f;
         }
 
-        if (hSpeed < 0.01f && CurrentAI is not { IsFleeing: true })
+        if (hSpeed < 0.01f)
         {
             Vector3 toPlayer = Game.Instance.GetPlayer.Position - Position;
             float distSq = toPlayer.LengthSquared;
@@ -152,8 +161,13 @@ public class Sheep : Entity
             if (distSq < HEAD_LOOK_RANGE * HEAD_LOOK_RANGE && distSq > 0.01f)
             {
                 float relativeYaw = MathF.Atan2(toPlayer.X, toPlayer.Z) - MathF.PI / 2f - Yaw;
-                while (relativeYaw > MathF.PI) relativeYaw -= MathF.PI * 2f;
-                while (relativeYaw < -MathF.PI) relativeYaw += MathF.PI * 2f;
+
+                while (relativeYaw > MathF.PI)
+                    relativeYaw -= MathF.PI * 2f;
+
+                while (relativeYaw < -MathF.PI)
+                    relativeYaw += MathF.PI * 2f;
+
                 relativeYaw = Math.Clamp(relativeYaw, -MAX_HEAD_YAW, MAX_HEAD_YAW);
 
                 float dy = (Game.Instance.GetPlayer.Position.Y + 0.9f) - (Position.Y + HeadOffset.Y * Scale);
@@ -173,19 +187,26 @@ public class Sheep : Entity
     // Draw the sheep. Duplicate the legs and draw four of them with different offsets. Leg's have own draw function
     protected override void DrawModel(Matrix4 view, Matrix4 projection)
     {
-        Matrix4 entityBase = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) *
-                             Matrix4.CreateTranslation(Position);
+        Matrix4 entityBase = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) * Matrix4.CreateTranslation(Position);
         Matrix4 vp = view * projection;
 
-        DrawPart(mBodyModel, Matrix4.CreateTranslation(BodyOffset) * entityBase * vp);
+        if (IsSheared)
+        {
+            DrawPart(mBodyModel, Matrix4.CreateTranslation(BodyOffset) * entityBase * vp);
+        }
+        else
+        {
+            Matrix4 woolTransform = Matrix4.CreateScale(1.1f) * Matrix4.CreateTranslation(BodyOffset);
+            DrawPart(mBodyWoolModel, woolTransform * entityBase * vp);
+        }
 
-        Matrix4 headLocal = Matrix4.CreateTranslation(-HeadPivot)
-                            * Matrix4.CreateRotationZ(mHeadPitch) * Matrix4.CreateRotationY(mHeadYaw)
-                            * Matrix4.CreateTranslation(HeadPivot + HeadOffset);
+        Matrix4 headLocal = Matrix4.CreateTranslation(-HeadPivot) * Matrix4.CreateRotationZ(mHeadPitch) * Matrix4.CreateRotationY(mHeadYaw) * Matrix4.CreateTranslation(HeadPivot + HeadOffset);
+
         DrawPart(mHeadModel, headLocal * entityBase * vp);
 
         float swing1 = MathF.Sin(mWalkPhase) * MAX_LEG_SWING * mLegSwing;
         float swing2 = MathF.Sin(mWalkPhase + MathF.PI) * MAX_LEG_SWING * mLegSwing;
+
         DrawLeg(swing1, FrontLeftLegOffset, entityBase, vp);
         DrawLeg(swing1, BackRightLegOffset, entityBase, vp);
         DrawLeg(swing2, FrontRightLegOffset, entityBase, vp);
@@ -196,14 +217,16 @@ public class Sheep : Entity
     protected override void Fall(World world, float dist)
     {
         int damage = (int)MathF.Ceiling(dist - 3f);
-        if (damage > 0) TakeDamage(damage);
+
+        if (damage > 0)
+            TakeDamage(damage);
     }
 
     private void DrawLeg(float swingAngle, Vector3 offset, Matrix4 entityBase, Matrix4 vp)
     {
-        Matrix4 legLocal = Matrix4.CreateTranslation(-LegPivot)
-                           * Matrix4.CreateRotationZ(swingAngle)
-                           * Matrix4.CreateTranslation(LegPivot + offset);
+        Matrix4 legLocal = Matrix4.CreateTranslation(-LegPivot) * Matrix4.CreateRotationZ(swingAngle) * Matrix4.CreateTranslation(LegPivot + offset);
         DrawPart(mLegModel, legLocal * entityBase * vp);
     }
+
+
 }

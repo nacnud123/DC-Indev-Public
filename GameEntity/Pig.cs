@@ -116,7 +116,7 @@ public class Pig : Entity
             if (mLegSwing < 0.01f) mLegSwing = 0f;
         }
 
-        if (hSpeed < 0.01f && CurrentAI is not { IsFleeing: true })
+        if (hSpeed < 0.01f)
         {
             Vector3 toPlayer = Game.Instance.GetPlayer.Position - Position;
             float distSq = toPlayer.LengthSquared;

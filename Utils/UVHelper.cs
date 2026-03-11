@@ -6,7 +6,7 @@ namespace VoxelEngine.Utils
 {
     public class UvHelper
     {
-        private const int TILE_COUNT = 8;
+        public const int TILE_COUNT = 16;
         private const float TILE_SIZE = 1.0f / TILE_COUNT;
 
         public static TextureCoords FromTileCoords(int x, int y)

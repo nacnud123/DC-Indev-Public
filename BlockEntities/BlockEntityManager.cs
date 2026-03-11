@@ -23,6 +23,21 @@ public static class BlockEntityManager
         return chest;
     }
 
+    public static ChestData? GetChestIfExists(Vector3i pos) =>
+        BlockEntities.TryGetValue(pos, out var e) && e is ChestData c ? c : null;
+
+    public static void RegisterChest(Vector3i pos, ChestData chest) => BlockEntities[pos] = chest;
+
+    public static DoubleChestData GetOrCreateDoubleChest(Vector3i pos)
+    {
+        if (BlockEntities.TryGetValue(pos, out var e) && e is DoubleChestData d)
+            return d;
+
+        var dc = new DoubleChestData(pos);
+        BlockEntities[pos] = dc;
+        return dc;
+    }
+
     public static FurnaceData GetOrCreateFurnace(Vector3i pos)
     {
         if (BlockEntities.TryGetValue(pos, out var e) && e is FurnaceData f)
@@ -35,12 +50,14 @@ public static class BlockEntityManager
 
     public static void DestroyAt(Vector3i pos, World world)
     {
-        if (BlockEntities.TryGetValue(pos, out var furnace))
+        if (BlockEntities.TryGetValue(pos, out var entity))
         {
-            furnace.DropContents(world);
+            entity.DropContents(world);
             BlockEntities.Remove(pos);
         }
     }
+
+    public static void Remove(Vector3i pos) => BlockEntities.Remove(pos);
 
     public static void TickFurnaces()
     {
@@ -178,6 +195,17 @@ public static class BlockEntityManager
                 }
                 file.Chests.Add(sc);
             }
+            else if (entity is DoubleChestData dc)
+            {
+                var sdc = new SerializableDoubleChest { X = dc.Position.X, Y = dc.Position.Y, Z = dc.Position.Z };
+                for (int i = 0; i < DoubleChestData.CHEST_SLOTS; i++)
+                {
+                    var slot = dc.GetSlot(i);
+                    if (slot.HasValue)
+                        sdc.Slots.Add(new SerializableChestSlot { Index = i, Stack = SerializableStack.From(slot.Value) });
+                }
+                file.DoubleChests.Add(sdc);
+            }
         }
 
         string path = Path.Combine(worldSavePath, "block_entities.xml");
@@ -219,6 +247,15 @@ public static class BlockEntityManager
             foreach (var s in entry.Slots)
                 chest.SetSlot(s.Index, s.Stack.ToItemStack());
             BlockEntities[pos] = chest;
+        }
+
+        foreach (var entry in file.DoubleChests)
+        {
+            var pos = new Vector3i(entry.X, entry.Y, entry.Z);
+            var dc  = new DoubleChestData(pos);
+            foreach (var s in entry.Slots)
+                dc.SetSlot(s.Index, s.Stack.ToItemStack());
+            BlockEntities[pos] = dc;
         }
     }
 }

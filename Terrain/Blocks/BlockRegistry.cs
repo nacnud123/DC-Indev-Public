@@ -71,6 +71,7 @@ public static class BlockRegistry
         Register(new BlockFurnace());
         Register(new BlockFurnaceLit());
         Register(new BlockChest());
+        Register(new BlockDoubleChest());
 
         // Colored
         Register(new BlockBlack());

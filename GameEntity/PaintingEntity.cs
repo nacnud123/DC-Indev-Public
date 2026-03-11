@@ -11,6 +11,7 @@ namespace VoxelEngine.GameEntity;
 public class PaintingEntity : Entity
 {
     public override bool IsTargetable => true;
+    public override float ShadowSize => 0f;
 
     public Vector3i AnchorPos;
     public byte Facing;

@@ -147,7 +147,7 @@ namespace VoxelEngine.Audio
                 PlayAudio(path, volume, false);
         }
 
-        private static string? GetBreakSoundPath(BlockBreakMaterial material)
+        private string? GetBreakSoundPath(BlockBreakMaterial material)
         {
             return material switch
             {

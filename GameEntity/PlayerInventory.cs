@@ -219,7 +219,7 @@ public class PlayerInventory
         }
     }
 
-    private static int GetMaxStackSize(ItemStack stack)
+    private int GetMaxStackSize(ItemStack stack)
     {
         if (stack.IsBlock)
             return BlockRegistry.Get(stack.Block).MaxStackSize;

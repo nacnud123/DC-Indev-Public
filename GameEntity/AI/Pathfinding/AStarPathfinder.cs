@@ -147,7 +147,7 @@ public class AStarPathfinder
     /// <summary>
     /// Checks if a position is walkable (has ground below and space for entity).
     /// </summary>
-    private static bool IsWalkable(World world, Vector3i position)
+    private bool IsWalkable(World world, Vector3i position)
     {
         // Need solid ground below
         BlockType groundBlock = world.GetBlock(position.X, position.Y - 1, position.Z);
@@ -170,7 +170,7 @@ public class AStarPathfinder
     /// <summary>
     /// Calculates the movement cost between two positions.
     /// </summary>
-    private static int CalculateGScore(Vector3i neighbour, Vector3i current)
+    private int CalculateGScore(Vector3i neighbour, Vector3i current)
     {
         int gScore = 10;
         int dy = Math.Abs(current.Y - neighbour.Y);
@@ -182,7 +182,7 @@ public class AStarPathfinder
     /// <summary>
     /// Calculates Manhattan distance heuristic for 3D.
     /// </summary>
-    private static int CalculateHeuristic(Vector3i from, Vector3i to)
+    private int CalculateHeuristic(Vector3i from, Vector3i to)
     {
         return (Math.Abs(from.X - to.X) + Math.Abs(from.Y - to.Y) + Math.Abs(from.Z - to.Z)) * 10;
     }
@@ -190,7 +190,7 @@ public class AStarPathfinder
     /// <summary>
     /// Builds the final path from goal node back to start.
     /// </summary>
-    private static Stack<Vector3i> BuildPath(PathNode goalNode, Vector3i start)
+    private Stack<Vector3i> BuildPath(PathNode goalNode, Vector3i start)
     {
         Stack<Vector3i> path = new();
         var current = goalNode;

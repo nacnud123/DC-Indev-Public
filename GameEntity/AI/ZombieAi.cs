@@ -34,7 +34,7 @@ public class ZombieAi : HostileEntityAi
         // Knock player away from the zombie with a slight upward kick
         Vector3 delta = player.Position - ParentEntity.Position;
         Vector3 knockDir = delta.LengthSquared > 0.01f ? delta.Normalized() : Vector3.UnitZ;
-        player.Velocity += new Vector3(knockDir.X, 0.3f, knockDir.Z) * 6f;
+        player.Velocity += new Vector3(knockDir.X, 0.6f, knockDir.Z) * 12f;
 
         mAttackCooldown = ATTACK_COOLDOWN;
     }

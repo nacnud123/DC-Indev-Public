@@ -48,7 +48,7 @@ public abstract class BlockWheatBase : Block
         return ItemStack.FromItem(ItemType.Seeds);
     }
 
-    protected static void SpawnDrop(World world, int x, int y, int z, ItemStack stack)
+    protected void SpawnDrop(World world, int x, int y, int z, ItemStack stack)
     {
         var rng = Game.Instance.GameRandom;
         float sx = x + (float)rng.NextDouble() * 0.7f + 0.15f;

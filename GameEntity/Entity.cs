@@ -20,6 +20,7 @@ public class Entity
     public static float SunlightLevel = 1f;
 
     public virtual bool IsTargetable => true;
+    public virtual float ShadowSize => 0.5f;
     public virtual int Health { get; set; } = 100;
     public virtual float Width { get; set; } = 0.6f;
     public virtual float Height { get; set; } = 1.8f;
@@ -151,11 +152,13 @@ public class Entity
                 var bx = (int)MathF.Floor(mPos.X);
                 var by = (int)MathF.Floor(mPos.Y - 0.05f);
                 var bz = (int)MathF.Floor(mPos.Z);
-                var mat = BlockRegistry.GetBlockBreakMaterial(world.GetBlock(bx, by, bz));
+                var stepBlock = world.GetBlock(bx, by, bz);
+                var mat = BlockRegistry.GetBlockBreakMaterial(stepBlock);
 
                 int volume = Proximity((Game.Instance.GetPlayer.Position - this.Position).Length ,20f, Game.Instance.AudioManager.SfxVol);
-                
+
                 Game.Instance.AudioManager.PlayBlockContactSound(mat, volume);
+                BlockRegistry.Get(stepBlock).OnEntityWalking(world, bx, by, bz, Game.Instance.GameRandom);
             }
         }
         else

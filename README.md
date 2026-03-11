@@ -1,6 +1,6 @@
 # DC Indev
 
-DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using OpenTK. It features procedural terrain with caves and trees, entity AI, lighting, particles, and a full block inventory. This was created as an exploration of building a voxel game with no game engine. Here you will find the latest build of the game along with the source code. The goal of the game is to make it a gameplay and feature clone of Minecraft Indev 20100223.
+DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using OpenTK. It features procedural terrain with caves and trees, entity AI, lighting, particles, and a full block inventory. This was created as an exploration of building a voxel game with no game engine. Here you will find the latest build of the game along with the source code. The goal of this project was to make it a gameplay and feature clone of Minecraft Indev 20100223.
 
 ## Features
 
@@ -21,8 +21,10 @@ DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using Ope
 - Crafting
 - Survival mechanics
 - Paintings  
+- Remappable controls  
+- Creative mode
 
-## Controls
+## Default Controls
 
 W A S D - Move around  
 Left click - Break block  
@@ -37,9 +39,8 @@ I - Toggle inventory
 Esc - Pause / Exit inventory  
 F7 - Take screenshot
 
-### Disclaimer
-
-I still consider this project to be in active development, so expect a few bugs here and there. If you find one, please report it as an issue. Thanks!
+## The End
+With the release of version 1.0R I feel that DC Indev is a finished project, I may still update it to fix bugs but for now the project is done! If you do find a bug or an error, please report it as an issue. Thanks for playing!
 
 <img width="1903" height="993" alt="InGame1" src="https://github.com/user-attachments/assets/da563935-31e0-4fad-b96b-e5aa19f38132" />
 <img width="1903" height="993" alt="InGame7" src="https://github.com/user-attachments/assets/6dcecc39-1031-41dd-93d7-cb1d3d16c906" />

@@ -1,3 +1,4 @@
+using VoxelEngine.Core;
 using VoxelEngine.Items;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
@@ -17,4 +18,6 @@ public class BlockGravel : Block
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(6, 2);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;
     public override TextureCoords SideTextureCoords => TopTextureCoords;
+
+    public override ItemStack? GetDrop(byte metadata) => Game.Instance.GameRandom.NextSingle() < 0.1f ? ItemStack.FromItem(ItemType.Flint) : ItemStack.FromBlock(BlockType.Gravel);
 }

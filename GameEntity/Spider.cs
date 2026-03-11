@@ -131,7 +131,7 @@ public class Spider : Entity
         DrawPart(mLegModel, legLocal * entityBase * vp);
     }
 
-    private static Matrix4 RotationMatrix(Vector3 deg) =>
+    private Matrix4 RotationMatrix(Vector3 deg) =>
         Matrix4.CreateRotationX(MathHelper.DegreesToRadians(deg.X))
         * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(deg.Y))
         * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(deg.Z));

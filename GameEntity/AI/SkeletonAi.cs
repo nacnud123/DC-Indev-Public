@@ -39,6 +39,7 @@ public class SkeletonAi : HostileEntityAi
 
         Vector3 dir = new Vector3(dx, dy + horizDist, dz).Normalized();
         world.AddEntity(new ArrowEntity(mSkeleton, origin, dir, ARROW_SPREAD));
+        Game.Instance.AudioManager.PlayAudio("Resources/Audio/Bow/BowRelease.ogg", Game.Instance.AudioManager.SfxVol);
 
         mShootCooldown = SHOOT_COOLDOWN;
     }

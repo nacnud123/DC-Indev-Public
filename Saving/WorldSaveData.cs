@@ -34,6 +34,7 @@ public class SavedEntity
     public float X, Y, Z;
     public float Yaw;
     public int Health;
+    public bool IsSheared;
 
     // DroppedItemEntity only — null for mobs
     public SerializableStack? Stack;
@@ -59,6 +60,8 @@ public class WorldSaveData
     public float PlayerYaw;
     public float PlayerPitch;
     public bool HasPlayerPosition;
+
+    public bool IsCreative;
 
     public List<SavedSlot> Inventory = new();
     public List<SavedPainting> Paintings = new();

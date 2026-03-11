@@ -58,6 +58,7 @@ public enum BlockType : byte
     Furnace,
     FurnaceLit,
     Chest,
+    DoubleChest,
 
     // Colored Blocks
     Black,

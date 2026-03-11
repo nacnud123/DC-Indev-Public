@@ -6,6 +6,7 @@ using OpenTK.Mathematics;
 using VoxelEngine.Rendering;
 using VoxelEngine.Saving;
 using VoxelEngine.Terrain.Blocks;
+using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain;
 
@@ -274,6 +275,10 @@ public class Chunk
                         BuildLavaFaces(transVertices, x, y, z, wx, wz, block);
                     else if (block == BlockType.Furnace || block == BlockType.FurnaceLit || block == BlockType.Chest)
                         BuildFacingBlockFaces(vertices, x, y, z, wx, wz, block);
+                    else if (block == BlockType.DoubleChest)
+                        BuildDoubleChestFaces(vertices, x, y, z, wx, wz);
+                    else if (block == BlockType.Farmland)
+                        BuildFarmlandFaces(vertices, x, y, z, wx, wz);
                     else
                         BuildBlockFaces(vertices, x, y, z, wx, wz, block);
                 }
@@ -302,6 +307,28 @@ public class Chunk
         }
     }
 
+    private void BuildFarmlandFaces(List<float> verts, int x, int y, int z, float wx, float wz)
+    {
+        byte meta = (byte)GetMetadata(x, y, z);
+        var topTex = BlockRegistry.Get(BlockType.Farmland).GetTopTexture(meta);
+        var bottomTex = BlockRegistry.GetBottomTexture(BlockType.Farmland);
+        var sideTex = BlockRegistry.GetSideTexture(BlockType.Farmland);
+
+        foreach (var (face, dx, dy, dz) in FaceDirections)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (!IsTransparent(nx, ny, nz)) continue;
+
+            var tex = face switch
+            {
+                Face.Top => topTex,
+                Face.Bottom => bottomTex,
+                _ => sideTex
+            };
+            ChunkMeshBuilder.AddFace(verts, wx, y, wz, face, tex, GetSkyLightAt(nx, ny, nz), GetBlockLightAt(nx, ny, nz));
+        }
+    }
+
     private void BuildFacingBlockFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)
     {
         int facing = GetMetadata(x, y, z);
@@ -320,7 +347,7 @@ public class Chunk
             {
                 Face.Top => topTex,
                 Face.Bottom => bottomTex,
-                _ => GetFacingTexture(face, facing, frontTex, sideTex)
+                _ => GetFacingTexture(face, facing, frontTex, sideTex, sideTex)
             };
 
             ChunkMeshBuilder.AddFace(verts, wx, y, wz, face, tex, GetSkyLightAt(nx, ny, nz), GetBlockLightAt(nx, ny, nz));
@@ -329,18 +356,59 @@ public class Chunk
 
     // Metadata encoding: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X).
     // The block faces the player, so its front is opposite to the camera's look direction.
-    private static TextureCoords GetFacingTexture(Face geometricFace, int facing, TextureCoords frontTex, TextureCoords sideTex)
+    private TextureCoords GetFacingTexture(Face geometricFace, int facing, TextureCoords frontTex, TextureCoords backTex, TextureCoords sideTex)
     {
-        Face frontFace = facing switch
+        (Face frontFace, Face backFace) = facing switch
         {
-            0 => Face.Front,
-            1 => Face.Back,
-            2 => Face.Left,
-            3 => Face.Right,
-            _ => Face.Front
+            0 => (Face.Front, Face.Back),
+            1 => (Face.Back, Face.Front),
+            2 => (Face.Left, Face.Right),
+            3 => (Face.Right, Face.Left),
+            _ => (Face.Front, Face.Back)
         };
 
-        return geometricFace == frontFace ? frontTex : sideTex;
+        if (geometricFace == frontFace) return frontTex;
+        if (geometricFace == backFace) return backTex;
+        return sideTex;
+    }
+
+    private void BuildDoubleChestFaces(List<float> verts, int x, int y, int z, float wx, float wz)
+    {
+        int facing = GetMetadata(x, y, z);
+        var topTex    = BlockRegistry.GetTopTexture(BlockType.DoubleChest);
+        var bottomTex = BlockRegistry.GetBottomTexture(BlockType.DoubleChest);
+        var sideTex   = BlockRegistry.GetSideTexture(BlockType.DoubleChest);
+
+        bool isCanonical = IsDoubleChestCanonical(x, y, z);
+        var frontTex = isCanonical ? UvHelper.FromTileCoords(0, 8) : UvHelper.FromTileCoords(1, 8);
+        var backTex  = isCanonical ? UvHelper.FromTileCoords(1, 9) : UvHelper.FromTileCoords(0, 9);
+
+        foreach (var (face, dx, dy, dz) in FaceDirections)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (!IsTransparent(nx, ny, nz))
+                continue;
+
+            var tex = face switch
+            {
+                Face.Top    => topTex,
+                Face.Bottom => bottomTex,
+                _           => GetFacingTexture(face, facing, frontTex, backTex, sideTex)
+            };
+
+            ChunkMeshBuilder.AddFace(verts, wx, y, wz, face, tex, GetSkyLightAt(nx, ny, nz), GetBlockLightAt(nx, ny, nz));
+        }
+    }
+
+    private bool IsDoubleChestCanonical(int x, int y, int z)
+    {
+        (int dx, int dz)[] neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+        foreach (var (dx, dz) in neighbors)
+        {
+            if (GetBlockAt(x + dx, y, z + dz) == BlockType.DoubleChest)
+                return dx > 0 || dz > 0;
+        }
+        return true;
     }
 
     private void BuildSlabFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)

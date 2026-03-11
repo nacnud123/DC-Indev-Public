@@ -149,8 +149,46 @@ public partial class Player
         {
             if (Game.Instance.CurrentState == GameState.Chest)
                 Game.Instance.CloseChest();
-            
+
             BlockEntityManager.DestroyAt(blockPos, world);
+        }
+
+        if (blockType == BlockType.DoubleChest)
+        {
+            if (Game.Instance.CurrentState == GameState.DoubleChest)
+                Game.Instance.CloseDoubleChest();
+
+            var otherPos = GetDoubleChestNeighbor(world, blockPos);
+            var canonicalPos = GetDoubleChestCanonical(blockPos, otherPos);
+            bool breakingCanonical = blockPos == canonicalPos;
+
+            var dc = BlockEntityManager.GetOrCreateDoubleChest(canonicalPos);
+            var center = new Vector3(blockPos.X + 0.5f, blockPos.Y + 0.5f, blockPos.Z + 0.5f);
+
+            int dropStart = breakingCanonical ? 0 : 27;
+            for (int i = dropStart; i < dropStart + ChestData.CHEST_SLOTS; i++)
+            {
+                var item = dc.GetSlot(i);
+                if (item.HasValue)
+                    world.AddEntity(new DroppedItemEntity(center, item.Value, Game.Instance.WorldTexture));
+            }
+
+            if (otherPos.HasValue)
+            {
+                int surviveStart = breakingCanonical ? 27 : 0;
+                var surviving = new ChestData(otherPos.Value);
+                for (int i = 0; i < ChestData.CHEST_SLOTS; i++)
+                    surviving.SetSlot(i, dc.GetSlot(surviveStart + i));
+
+                BlockEntityManager.Remove(canonicalPos);
+                BlockEntityManager.RegisterChest(otherPos.Value, surviving);
+                world.SetBlock(otherPos.Value.X, otherPos.Value.Y, otherPos.Value.Z, BlockType.Chest);
+                world.SetChunkAsModified(otherPos.Value.X, otherPos.Value.Y, otherPos.Value.Z);
+            }
+            else
+            {
+                BlockEntityManager.Remove(canonicalPos);
+            }
         }
 
         byte meta = (byte)world.GetMetadata(blockPos.X, blockPos.Y, blockPos.Z);
@@ -213,6 +251,9 @@ public partial class Player
             if (tempBlock == BlockType.Chest && Game.Instance.CurrentState == GameState.Chest)
                 Game.Instance.CloseChest();
 
+            if (tempBlock == BlockType.DoubleChest && Game.Instance.CurrentState == GameState.DoubleChest)
+                Game.Instance.CloseDoubleChest();
+
             BreakBlock(world, blockPos);
         }
         else if (placeBlock)
@@ -234,6 +275,14 @@ public partial class Player
             if (hitBlock == BlockType.Chest)
             {
                 Game.Instance.OpenChest(blockPos);
+                return;
+            }
+
+            if (hitBlock == BlockType.DoubleChest)
+            {
+                var otherPos = GetDoubleChestNeighbor(world, blockPos);
+                var canonicalPos = GetDoubleChestCanonical(blockPos, otherPos);
+                Game.Instance.OpenDoubleChest(canonicalPos);
                 return;
             }
 
@@ -262,6 +311,48 @@ public partial class Player
                 world.SetChunkAsModified(blockPos.X, blockPos.Y, blockPos.Z);
                 ConsumeSelectedHotbarItem();
                 return;
+            }
+
+            if (mSelectedBlock == BlockType.Chest)
+            {
+                var pp = placePos.Value;
+                Vector3i[] neighbors =
+                {
+                    new(pp.X + 1, pp.Y, pp.Z),
+                    new(pp.X - 1, pp.Y, pp.Z),
+                    new(pp.X, pp.Y, pp.Z + 1),
+                    new(pp.X, pp.Y, pp.Z - 1),
+                };
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (world.GetBlock(neighbor.X, neighbor.Y, neighbor.Z) != BlockType.Chest)
+                        continue;
+
+                    var canonicalPos = GetDoubleChestCanonical(pp, neighbor);
+
+                    var oldChest = BlockEntityManager.GetChestIfExists(neighbor);
+                    BlockEntityManager.Remove(neighbor);
+
+                    var dc = BlockEntityManager.GetOrCreateDoubleChest(canonicalPos);
+                    if (oldChest != null)
+                    {
+                        int destStart = canonicalPos == neighbor ? 0 : 27;
+                        for (int i = 0; i < ChestData.CHEST_SLOTS; i++)
+                            dc.SetSlot(destStart + i, oldChest.GetSlot(i));
+                    }
+
+                    byte facing = (byte)world.GetMetadata(neighbor.X, neighbor.Y, neighbor.Z);
+                    world.SetBlock(neighbor.X, neighbor.Y, neighbor.Z, BlockType.DoubleChest);
+                    world.SetBlock(pp.X, pp.Y, pp.Z, BlockType.DoubleChest);
+                    world.SetMetadata(neighbor.X, neighbor.Y, neighbor.Z, facing);
+                    world.SetMetadata(pp.X, pp.Y, pp.Z, facing);
+                    Game.Instance.AudioManager.PlayBlockContactSound(BlockRegistry.GetBlockBreakMaterial(BlockType.Chest));
+                    world.SetChunkAsModified(neighbor.X, neighbor.Y, neighbor.Z);
+                    world.SetChunkAsModified(pp.X, pp.Y, pp.Z);
+                    ConsumeSelectedHotbarItem();
+                    return;
+                }
             }
 
             var placeBMin = BlockRegistry.GetBoundsMin(mSelectedBlock);
@@ -388,6 +479,9 @@ public partial class Player
 
     private void ConsumeSelectedHotbarItem()
     {
+        if (Game.Instance.IsCreative)
+            return;
+
         var inv = Game.Instance.PlayerInventory;
         var hotbar = Game.Instance.Hotbar;
 
@@ -401,14 +495,14 @@ public partial class Player
 
     public void UseHeldItem(World world, ItemType itemType)
     {
-        var def = ItemRegistry.Get(itemType);
+        var item = ItemRegistry.Get(itemType);
 
-        if (def.IsFood)
+        if (item.IsFood)
         {
             if (Health >= PLAYER_MAX_HEALTH)
                 return;
 
-            Health = Math.Min(Health + def.FoodRestore, PLAYER_MAX_HEALTH);
+            Health = Math.Min(Health + item.FoodRestore, PLAYER_MAX_HEALTH);
             var inv = Game.Instance.PlayerInventory;
             var hotbar = Game.Instance.Hotbar;
 
@@ -422,13 +516,10 @@ public partial class Player
             return;
         }
 
-        if (def.OnUse == null)
-            return;
-
         bool used;
-        if (def.SkipBlockRaycast)
+        if (item.SkipBlockRaycast)
         {
-            used = def.OnUse(world, Vector3i.Zero, null);
+            used = item.OnUse(world, Vector3i.Zero, null);
         }
         else
         {
@@ -436,7 +527,7 @@ public partial class Player
             if (hit.Type != RaycastHitType.Block)
                 return;
 
-            used = def.OnUse(world, hit.BlockPos, hit.PlacePos);
+            used = item.OnUse(world, hit.BlockPos, hit.PlacePos);
         }
 
         if (!used)
@@ -448,7 +539,7 @@ public partial class Player
             return;
 
         int slotIndex = PlayerInventory.HOTBAR_START + hotbar2.SelectedSlotIndex;
-        if (def.IsTool)
+        if (item.IsTool)
             inv2.DamageTool(slotIndex);
         else
             inv2.ConsumeOne(slotIndex);
@@ -460,13 +551,43 @@ public partial class Player
         set => mSelectedBlock = value;
     }
 
-    private ItemDef? GetHeldTool()
+    private Item? GetHeldTool()
     {
         var stack = Game.Instance.Hotbar?.GetSelectedStack();
-        if (stack == null || stack.Value.IsBlock) 
+        if (stack == null || stack.Value.IsBlock)
             return null;
-        
-        var def = ItemRegistry.Get(stack.Value.Item);
-        return def.IsTool ? def : null;
+
+        var item = ItemRegistry.Get(stack.Value.Item);
+        return item.IsTool ? item : null;
+    }
+
+    private Vector3i? GetDoubleChestNeighbor(World world, Vector3i pos)
+    {
+        Vector3i[] neighbors =
+        {
+            new(pos.X + 1, pos.Y, pos.Z),
+            new(pos.X - 1, pos.Y, pos.Z),
+            new(pos.X, pos.Y, pos.Z + 1),
+            new(pos.X, pos.Y, pos.Z - 1),
+        };
+
+        foreach (var n in neighbors)
+        {
+            if (world.GetBlock(n.X, n.Y, n.Z) == BlockType.DoubleChest)
+                return n;
+        }
+
+        return null;
+    }
+
+    private Vector3i GetDoubleChestCanonical(Vector3i a, Vector3i? b)
+    {
+        if (!b.HasValue)
+            return a;
+
+        if (a.X != b.Value.X)
+            return a.X < b.Value.X ? a : b.Value;
+
+        return a.Z < b.Value.Z ? a : b.Value;
     }
 }

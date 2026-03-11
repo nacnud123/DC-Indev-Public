@@ -56,7 +56,7 @@ public class BlockWater : Block
             TrySpread(world, x + dx, y, z + dz);
     }
 
-    private static void TrySpread(World world, int x, int y, int z)
+    private void TrySpread(World world, int x, int y, int z)
     {
         var neighbor = world.GetBlock(x, y, z);
         if (neighbor == BlockType.Water || BlockRegistry.IsSolid(neighbor))
@@ -80,7 +80,7 @@ public class BlockWater : Block
         world.SetBlock(x, y, z, BlockType.Water);
     }
 
-    private static bool IsNearSponge(World world, int x, int y, int z)
+    private bool IsNearSponge(World world, int x, int y, int z)
     {
         int r = BlockSponge.ABSORB_RADIUS;
         for (int dx = -r; dx <= r; dx++)

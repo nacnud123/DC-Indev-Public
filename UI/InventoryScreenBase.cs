@@ -64,8 +64,7 @@ public abstract class InventoryScreenBase
         int selectedHotbar = Game.Instance.Hotbar?.SelectedSlotIndex ?? -1;
         for (int col = 0; col < COLS; col++)
         {
-            DrawInvSlot(drawList, inv, PlayerInventory.HOTBAR_START + col, contentX + col * SLOT_SIZE, hotbarY,
-                col == selectedHotbar);
+            DrawInvSlot(drawList, inv, PlayerInventory.HOTBAR_START + col, contentX + col * SLOT_SIZE, hotbarY, col == selectedHotbar);
         }
     }
 
@@ -84,19 +83,16 @@ public abstract class InventoryScreenBase
         {
             var countStr = mCursorStack.Value.Count.ToString();
             var textSize = ImGui.CalcTextSize(countStr);
-            DrawShadowedText(drawList, new Vector2(cx + ITEM_SIZE - textSize.X - 2f, cy + ITEM_SIZE - textSize.Y - 1f),
-                countStr);
+            DrawShadowedText(drawList, new Vector2(cx + ITEM_SIZE - textSize.X - 2f, cy + ITEM_SIZE - textSize.Y - 1f), countStr);
         }
     }
 
-    protected void DrawInvSlot(ImDrawListPtr drawList, PlayerInventory inv, int slotIndex, float sx, float sy,
-        bool isSelected)
+    protected void DrawInvSlot(ImDrawListPtr drawList, PlayerInventory inv, int slotIndex, float sx, float sy, bool isSelected)
     {
         var min = new Vector2(sx, sy);
         var max = new Vector2(sx + SLOT_SIZE, sy + SLOT_SIZE);
         drawList.AddRectFilled(min, max, ColorSlot);
-        drawList.AddRect(min, max, isSelected ? ColorBorderSel : ColorBorder, 0f, ImDrawFlags.None,
-            isSelected ? 2f : 1f);
+        drawList.AddRect(min, max, isSelected ? ColorBorderSel : ColorBorder, 0f, ImDrawFlags.None, isSelected ? 2f : 1f);
 
         var stack = inv.GetSlot(slotIndex);
         if (!stack.HasValue)
@@ -113,8 +109,7 @@ public abstract class InventoryScreenBase
         var min = new Vector2(sx, sy);
         var max = new Vector2(sx + SLOT_SIZE, sy + SLOT_SIZE);
         drawList.AddRectFilled(min, max, ColorSlot);
-        drawList.AddRect(min, max, isSelected ? ColorBorderSel : ColorBorder, 0f, ImDrawFlags.None,
-            isSelected ? 2f : 1f);
+        drawList.AddRect(min, max, isSelected ? ColorBorderSel : ColorBorder, 0f, ImDrawFlags.None, isSelected ? 2f : 1f);
 
         if (!stack.HasValue)
             return;
@@ -147,9 +142,7 @@ public abstract class InventoryScreenBase
         else
         {
             var uv = ItemRegistry.GetItemCoords(stack.Item);
-            drawList.AddImage(new IntPtr(mItemTexture.Handle), min, max,
-                new Vector2(uv.TopLeft.X, uv.BottomRight.Y),
-                new Vector2(uv.BottomRight.X, uv.TopLeft.Y));
+            drawList.AddImage(new IntPtr(mItemTexture.Handle), min, max, new Vector2(uv.TopLeft.X, uv.BottomRight.Y), new Vector2(uv.BottomRight.X, uv.TopLeft.Y));
         }
     }
 
@@ -227,7 +220,7 @@ public abstract class InventoryScreenBase
         }
     }
 
-    protected static int GetInvSlotAtMouse(Vector2 mousePos, float slotsX, float mainY, float hotbarY)
+    protected int GetInvSlotAtMouse(Vector2 mousePos, float slotsX, float mainY, float hotbarY)
     {
         float relX = mousePos.X - slotsX;
         if (relX < 0 || relX >= COLS * SLOT_SIZE)
@@ -248,20 +241,17 @@ public abstract class InventoryScreenBase
         return -1;
     }
 
-    protected static string GetName(ItemStack stack) =>
-        stack.IsBlock ? BlockRegistry.GetName(stack.Block) : ItemRegistry.GetName(stack.Item);
+    protected string GetName(ItemStack stack) => stack.IsBlock ? BlockRegistry.GetName(stack.Block) : ItemRegistry.GetName(stack.Item);
 
-    protected static int GetMaxStackSize(ItemStack stack) => stack.IsBlock
-        ? BlockRegistry.Get(stack.Block).MaxStackSize
-        : ItemRegistry.Get(stack.Item).MaxStackSize;
+    protected int GetMaxStackSize(ItemStack stack) => stack.IsBlock ? BlockRegistry.Get(stack.Block).MaxStackSize : ItemRegistry.Get(stack.Item).MaxStackSize;
 
-    protected static void DrawShadowedText(ImDrawListPtr drawList, Vector2 pos, string text)
+    protected void DrawShadowedText(ImDrawListPtr drawList, Vector2 pos, string text)
     {
         drawList.AddText(pos + Vector2.One, ColorShadow, text);
         drawList.AddText(pos, ColorWhite, text);
     }
 
-    protected static void DrawTooltip(ImDrawListPtr drawList, Vector2 mousePos, string text)
+    protected void DrawTooltip(ImDrawListPtr drawList, Vector2 mousePos, string text)
     {
         var textSize = ImGui.CalcTextSize(text);
         var padding = new Vector2(8f, 6f);

@@ -273,7 +273,7 @@ public class FurnaceScreen : InventoryScreenBase
         }
     }
 
-    private static bool HitsSlot(Vector2 mouse, float sx, float sy) =>
+    private bool HitsSlot(Vector2 mouse, float sx, float sy) =>
         mouse.X >= sx && mouse.X < sx + SLOT_SIZE &&
         mouse.Y >= sy && mouse.Y < sy + SLOT_SIZE;
 }
