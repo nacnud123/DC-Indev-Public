@@ -23,6 +23,8 @@ DC Indev is a Minecraft-inspired voxel engine built from scratch in C# using Ope
 - Paintings  
 - Remappable controls  
 - Creative mode
+- ASCII Shader
+
 
 ## Default Controls
 
@@ -47,4 +49,5 @@ With the release of version 1.0R I feel that DC Indev is a finished project, I m
 <img width="1919" height="1007" alt="Screenshot_20260305_101605" src="https://github.com/user-attachments/assets/1420c302-8656-4b0a-8896-c181f277deca" />
 <img width="1919" height="1007" alt="Screenshot_20260305_102001" src="https://github.com/user-attachments/assets/43ce6c4d-b311-4690-a367-bb0a311539f2" />
 <img width="1919" height="1003" alt="Screenshot_20260305_102037" src="https://github.com/user-attachments/assets/ff3d67b0-ceaa-4977-8226-d9efa2136ab1" />
+<img width="2050" height="1166" alt="Screenshot_20260609_120047" src="https://github.com/user-attachments/assets/0ccce551-6ecb-4f65-9c23-336239697c34" />
 
