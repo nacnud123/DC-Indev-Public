@@ -63,7 +63,13 @@ public class Shader : IDisposable
         if (mUniforms.TryGetValue(name, out int loc)) 
             GL.Uniform1(loc, v);
     }
-
+    
+    public void SetVector2(string name, Vector2 v)
+    {
+        if (mUniforms.TryGetValue(name, out int loc))
+            GL.Uniform2(loc, v);
+    }
+    
     public void SetVector3(string name, Vector3 v)
     {
         if (mUniforms.TryGetValue(name, out int loc)) 

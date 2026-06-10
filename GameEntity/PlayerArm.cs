@@ -1,5 +1,6 @@
 // Renders the player's first-person arm and held item. Handles block, thick-sprite item, and bare-arm display with swing, equip-dip, and walk-bob animations. | DA | 2/21/26
 
+using System.IO;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using StbImageSharp;
@@ -41,32 +42,8 @@ public class PlayerArm
 
     private const float THICK_DEPTH = 2.0f / 16f;
 
-    private static readonly string VertSrc = @"
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec2 aUV;
-layout(location=2) in float aShade;
-out vec2 uv;
-out float shade;
-uniform mat4 mvp;
-void main() {
-    gl_Position = mvp * vec4(aPos, 1.0);
-    uv = aUV;
-    shade = aShade;
-}";
-
-    private static readonly string FragSrc = @"
-#version 330 core
-in vec2 uv;
-in float shade;
-out vec4 FragColor;
-uniform sampler2D tex;
-uniform float lightLevel;
-void main() {
-    vec4 c = texture(tex, uv);
-    if (c.a < 0.5) discard;
-    FragColor = vec4(c.rgb * shade * lightLevel, c.a);
-}";
+    private const string VERT_SHADER = "Shaders/PlayerArmVert.glsl";
+    private const string FRAG_SHADER = "Shaders/PlayerArmFrag.glsl";
 
     // State
 
@@ -129,7 +106,7 @@ void main() {
 
         mWorldTexture = worldTexture;
         mItemTexture = itemTexture;
-        mShader = new Shader(VertSrc, FragSrc);
+        mShader = new Shader(File.ReadAllText(VERT_SHADER), File.ReadAllText(FRAG_SHADER));
 
         mVao = GL.GenVertexArray();
         mVbo = GL.GenBuffer();

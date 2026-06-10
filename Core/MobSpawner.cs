@@ -35,9 +35,13 @@ public class MobSpawner
                 continue;
 
             if (e is Zombie or Skeleton or Stalker or Spider)
+            {
                 hostileCount++;
+            }
             else if (e is Pig or Sheep)
+            {
                 passiveCount++;
+            }
         }
 
         int hostileCap = GetHostileCap();
@@ -54,6 +58,7 @@ public class MobSpawner
             for (int i = 0; i < HOSTILE_LOOPS_PER_TICK && hostileCount < hostileCap; i++)
             {
                 bool uniformY = (i == HOSTILE_LOOPS_PER_TICK - 1);
+                
                 if (TrySpawnHostile(playerPos, skylightSubtracted, uniformY))
                     hostileCount++;
             }
@@ -72,6 +77,7 @@ public class MobSpawner
     private bool TrySpawnHostile(Vector3 playerPos, int skylightSubtracted, bool uniformY = false)
     {
         int worldSize = mWorld.SizeInChunks * Chunk.WIDTH;
+        
         if (worldSize <= 0)
             return false;
 
@@ -92,6 +98,7 @@ public class MobSpawner
             {
                 x += mRandom.Next(6) - mRandom.Next(6);
                 z += mRandom.Next(6) - mRandom.Next(6);
+                
                 if (!InBounds(x, ay, z, worldSize))
                     continue;
 
@@ -264,14 +271,14 @@ public class MobSpawner
             {
                 for (int z = (int)MathF.Floor(box.Min.Z); z <= (int)MathF.Floor(box.Max.Z); z++)
                 {
-                    if (!InBounds(x, Math.Clamp(y, 1, Chunk.HEIGHT - 2), z, worldSize)) 
+                    if (!InBounds(x, Math.Clamp(y, 1, Chunk.HEIGHT - 2), z, worldSize))
                         continue;
 
                     var bt = mWorld.GetBlock(x, y, z);
-                    if (bt == BlockType.Air || !BlockRegistry.IsSolid(bt)) 
+                    if (bt == BlockType.Air || !BlockRegistry.IsSolid(bt))
                         continue;
-                    
-                    if (Aabb.BlockAabb(x, y, z).Intersects(box)) 
+
+                    if (Aabb.BlockAabb(x, y, z).Intersects(box))
                         return false;
                 }
             }
@@ -295,7 +302,7 @@ public class MobSpawner
     public int DebugSpawnHostilesNow(int candidateCount, bool ignoreCap)
     {
         int hostileCount = mWorld.Entities.Count(e => e.IsAlive && e is Zombie or Skeleton or Stalker or Spider);
-        if (!ignoreCap && hostileCount >= GetHostileCap()) 
+        if (!ignoreCap && hostileCount >= GetHostileCap())
             return 0;
 
         Vector3 playerPos = Game.Instance.GetPlayer.Position;
@@ -304,9 +311,9 @@ public class MobSpawner
 
         for (int i = 0; i < candidateCount; i++)
         {
-            if (!ignoreCap && hostileCount >= GetHostileCap()) 
+            if (!ignoreCap && hostileCount >= GetHostileCap())
                 break;
-            
+
             if (TrySpawnHostile(playerPos, skylightSubtracted, uniformY: false))
             {
                 spawned++;

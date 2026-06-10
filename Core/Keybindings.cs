@@ -8,11 +8,22 @@ public static class Keybindings
 {
     public enum Action
     {
-        MoveForward, MoveBack, MoveLeft, MoveRight,
-        Jump, Sprint, FlyDown, ToggleFly,
-        Inventory, DropItem,
-        Wireframe, ResetPosition, ToggleCursor, Screenshot,
-        RenderDistUp, RenderDistDown
+        MoveForward,
+        MoveBack,
+        MoveLeft,
+        MoveRight,
+        Jump,
+        Sprint,
+        FlyDown,
+        ToggleFly,
+        Inventory,
+        DropItem,
+        Wireframe,
+        ResetPosition,
+        ToggleCursor,
+        Screenshot,
+        RenderDistUp,
+        RenderDistDown
     }
 
     private static readonly Dictionary<Action, Keys> Bindings = new()
@@ -72,8 +83,11 @@ public static class Keybindings
         foreach (var line in File.ReadAllLines(SavePath))
         {
             var parts = line.Split('=');
-            if (parts.Length == 2 && Enum.TryParse<Action>(parts[0], out var action) && Enum.TryParse<Keys>(parts[1], out var key))
+            if (parts.Length == 2 && Enum.TryParse<Action>(parts[0], out var action) &&
+                Enum.TryParse<Keys>(parts[1], out var key))
+            {
                 Bindings[action] = key;
+            }
         }
     }
 }

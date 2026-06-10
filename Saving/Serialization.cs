@@ -14,13 +14,15 @@ public struct SaveBlock
 
 public class Serialization
 {
-    public static string s_WorldName = "Testing";
+    public static string WorldName { get; set; } = "Testing";
 
     public const string SAVE_LOCATION = "DCIndevSaves";
 
-    public static string SaveLocation()
+    public static string SaveLocation() => SaveLocation(WorldName);
+
+    private static string SaveLocation(string worldName)
     {
-        string saveLocation = SAVE_LOCATION + "/" + s_WorldName + "/";
+        string saveLocation = SAVE_LOCATION + "/" + worldName + "/";
 
         if (!Directory.Exists(saveLocation))
         {
@@ -35,7 +37,7 @@ public class Serialization
 
     public static WorldSaveData? LoadWorldData(string worldName)
     {
-        string metaDataFilePath = Path.Combine(SaveLocation(), GetWorldDataFile());
+        string metaDataFilePath = Path.Combine(SaveLocation(worldName), GetWorldDataFile());
 
         if (!File.Exists(metaDataFilePath))
         {
@@ -49,17 +51,16 @@ public class Serialization
         }
     }
 
-    public static void SaveWorldMetadata(WorldSaveData saveData)
-    {
-        string savePath = SaveLocation();
+    public static void SaveWorldMetadata(WorldSaveData saveData) =>
+        SaveWorldMetadata(WorldName, saveData);
 
-        string metadataPath = Path.Combine(savePath, GetWorldDataFile());
+    private static void SaveWorldMetadata(string worldName, WorldSaveData saveData)
+    {
+        string metadataPath = Path.Combine(SaveLocation(worldName), GetWorldDataFile());
 
         var serializer = new XmlSerializer(typeof(WorldSaveData));
-        using (var stream = new FileStream(metadataPath, FileMode.Create))
-        {
-            serializer.Serialize(stream, saveData);
-        }
+        using var stream = new FileStream(metadataPath, FileMode.Create);
+        serializer.Serialize(stream, saveData);
     }
 
     public static void UpdateLastPlayed(string worldName)
@@ -67,14 +68,8 @@ public class Serialization
         var worldData = LoadWorldData(worldName);
         if (worldData != null)
         {
-            var updatedData = worldData;
-            updatedData.LastPlayed = DateTime.Now;
-
-            string oldWorldName = s_WorldName;
-            s_WorldName = worldName;
-
-            SaveWorldMetadata(updatedData);
-            s_WorldName = oldWorldName;
+            worldData.LastPlayed = DateTime.Now;
+            SaveWorldMetadata(worldName, worldData);
         }
     }
 
@@ -239,10 +234,7 @@ public class Serialization
         foreach (var dir in worldDirs)
         {
             string worldName = Path.GetFileName(dir);
-            string oldWorldName = s_WorldName;
-            s_WorldName = worldName;
             var worldData = LoadWorldData(worldName);
-            s_WorldName = oldWorldName;
             if (worldData != null)
             {
                 var data = worldData;

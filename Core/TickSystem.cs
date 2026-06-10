@@ -1,4 +1,5 @@
 // Main file for the tick system, defines TPS and has function to convert deltaTime into a fixed number of ticks | DA | 2/5/26
+
 namespace VoxelEngine.Core;
 
 public class TickSystem

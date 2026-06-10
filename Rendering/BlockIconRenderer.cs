@@ -1,6 +1,7 @@
 ﻿// Pre-renders 3D isometric block icons to FBO textures for inventory/hotbar display | DA | 2/16/26
 using System;
 using System.Collections.Generic;
+using System.IO;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using VoxelEngine.Terrain;
@@ -12,31 +13,8 @@ public class BlockIconRenderer : IDisposable
 {
     private const int ICON_SIZE = 64;
 
-    private static readonly string VertexShaderSrc = @"
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec2 aUV;
-layout(location=2) in float aShade;
-out vec2 uv;
-out float shade;
-uniform mat4 mvp;
-void main() {
-    gl_Position = mvp * vec4(aPos, 1.0);
-    uv = aUV;
-    shade = aShade;
-}";
-
-    private static readonly string FragmentShaderSrc = @"
-#version 330 core
-in vec2 uv;
-in float shade;
-out vec4 FragColor;
-uniform sampler2D tex;
-void main() {
-    vec4 c = texture(tex, uv);
-    if (c.a < 0.1) discard;
-    FragColor = vec4(c.rgb * shade, c.a);
-}";
+    private const string VERT_SHADER = "Shaders/BlockIconVert.glsl";
+    private const string FRAG_SHADER = "Shaders/BlockIconFrag.glsl";
 
     // Face shading values (kept in sync with ChunkMeshBuilder shading)
     private const float SHADE_TOP    = 1.0f;
@@ -53,7 +31,7 @@ void main() {
 
     public void Init(Texture worldTexture)
     {
-        mShader = new Shader(VertexShaderSrc, FragmentShaderSrc);
+        mShader = new Shader(File.ReadAllText(VERT_SHADER), File.ReadAllText(FRAG_SHADER));
 
         mVao = GL.GenVertexArray();
         mVbo = GL.GenBuffer();

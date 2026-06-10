@@ -10,7 +10,7 @@ using VoxelEngine.Saving;
 
 namespace VoxelEngine.UI;
 
-public class MainMenuScreen
+public partial class MainMenuScreen
 {
     private enum MainMenuState
     {
@@ -72,12 +72,33 @@ public class MainMenuScreen
     private static readonly string[] WorldTypes = ["Island", "Inland", "Floating", "Flat"];
     private static readonly string[] WorldThemes = ["Normal", "Hell", "Paradise", "Woods"];
 
+    private static readonly (string Label, Keybindings.Action Binding)[] BindingDefs =
+    [
+        ("Move Forward", Keybindings.Action.MoveForward),
+        ("Move Back", Keybindings.Action.MoveBack),
+        ("Move Left", Keybindings.Action.MoveLeft),
+        ("Move Right", Keybindings.Action.MoveRight),
+        ("Jump", Keybindings.Action.Jump),
+        ("Sprint", Keybindings.Action.Sprint),
+        ("Fly Down", Keybindings.Action.FlyDown),
+        ("Toggle Fly", Keybindings.Action.ToggleFly),
+        ("Inventory", Keybindings.Action.Inventory),
+        ("Drop Item", Keybindings.Action.DropItem),
+        ("Wireframe", Keybindings.Action.Wireframe),
+        ("Reset Position", Keybindings.Action.ResetPosition),
+        ("Toggle Cursor", Keybindings.Action.ToggleCursor),
+        ("Screenshot", Keybindings.Action.Screenshot),
+        ("Render Dist Up", Keybindings.Action.RenderDistUp),
+        ("Render Dist Down", Keybindings.Action.RenderDistDown),
+    ];
+
     private int mWorldSize = 64;
     private int mWorldType = 0;
     private int mWorldTheme = 0;
     private int mVolSfx = 85;
     private int mVolMusic = 25;
     private bool mIsCreative = false;
+    private bool mAsciiEnabled = false;
 
     private MainMenuState mCurrentState;
 
@@ -121,26 +142,6 @@ public class MainMenuScreen
     private List<WorldSaveData> mAvailableWorlds = new();
 
     private int mRebindingIndex = -1;
-
-    private static readonly (string Label, Keybindings.Action Binding)[] BindingDefs =
-    [
-        ("Move Forward", Keybindings.Action.MoveForward),
-        ("Move Back", Keybindings.Action.MoveBack),
-        ("Move Left", Keybindings.Action.MoveLeft),
-        ("Move Right", Keybindings.Action.MoveRight),
-        ("Jump", Keybindings.Action.Jump),
-        ("Sprint", Keybindings.Action.Sprint),
-        ("Fly Down", Keybindings.Action.FlyDown),
-        ("Toggle Fly", Keybindings.Action.ToggleFly),
-        ("Inventory", Keybindings.Action.Inventory),
-        ("Drop Item", Keybindings.Action.DropItem),
-        ("Wireframe", Keybindings.Action.Wireframe),
-        ("Reset Position", Keybindings.Action.ResetPosition),
-        ("Toggle Cursor", Keybindings.Action.ToggleCursor),
-        ("Screenshot", Keybindings.Action.Screenshot),
-        ("Render Dist Up", Keybindings.Action.RenderDistUp),
-        ("Render Dist Down", Keybindings.Action.RenderDistDown),
-    ];
 
     public MainMenuScreen()
     {
@@ -192,667 +193,8 @@ public class MainMenuScreen
         PopTheme();
     }
 
-    // Title Screen
-
-    private void RenderTitleScreen(ImGuiWindowFlags windowFlags)
-    {
-        ImGui.Begin("TitleScreenMainMenu", windowFlags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var cx = windowSize.X * 0.5f;
-        var cy = windowSize.Y * 0.5f;
-
-        // Version (top-left)
-        ImGui.SetCursorPos(new Vector2(12, 8));
-        ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("Version 1.0R\nBy: Duncan Armstrong");
-        ImGui.PopStyleColor();
-
-        // Title
-        ImGui.PushFont(ImGuiController.fontLarge);
-        var titleText = "DC Indev";
-        var ts = ImGui.CalcTextSize(titleText);
-        ImGui.SetCursorPos(new Vector2(cx - ts.X * 0.5f, cy - 160f));
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-        ImGui.Text(titleText);
-        ImGui.PopStyleColor();
-        ImGui.PopFont();
-
-        // Splash text (dimmer, centered)
-        var ss = ImGui.CalcTextSize(mCurrentSplash);
-        ImGui.SetCursorPos(new Vector2(cx - ss.X * 0.5f, cy - 115f));
-        ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text(mCurrentSplash);
-        ImGui.PopStyleColor();
-
-        // Buttons
-        float bx = cx - BUTTON_WIDTH * 0.5f;
-        float by = cy - 30f;
-
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by));
-        if (ImGui.Button("Start", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldsLoaded = false;
-            mSelectedWorld = -1;
-            mCurrentState = MainMenuState.WorldSelection;
-        }
-
-        PopBtn();
-
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by + BUTTON_HEIGHT + BUTTON_SPACING));
-        if (ImGui.Button("Options", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mCurrentState = MainMenuState.Options;
-        }
-
-        PopBtn();
-
-        PushRedBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by + (BUTTON_HEIGHT + BUTTON_SPACING) * 2));
-        if (ImGui.Button("Quit", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            OnTitleQuitGame?.Invoke();
-        }
-
-        PopBtn();
-
-        // Controls (bottom-left)
-        ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        string[] controls =
-        {
-            $"{KeyName(Keybindings.MoveForward)} {KeyName(Keybindings.MoveBack)} {KeyName(Keybindings.MoveLeft)} {KeyName(Keybindings.MoveRight)}  -  Move",
-            "LMB  -  Break / Attack",
-            "RMB  -  Place block",
-            "0-9  -  Select block",
-            $"{KeyName(Keybindings.ResetPosition)}  -  Reset position",
-            $"{KeyName(Keybindings.Wireframe)}  -  Wireframe",
-            "Esc  -  Pause",
-            $"{KeyName(Keybindings.ToggleCursor)}  -  Toggle cursor",
-            $"{KeyName(Keybindings.ToggleFly)}  -  Fly / Instant break",
-            $"{KeyName(Keybindings.Inventory)}  -  Inventory",
-            $"{KeyName(Keybindings.Jump)}  -  Jump / Fly up",
-            $"{KeyName(Keybindings.FlyDown)}  -  Fly down",
-            $"{KeyName(Keybindings.Sprint)}  -  Sprint",
-            $"{KeyName(Keybindings.RenderDistUp)}/{KeyName(Keybindings.RenderDistDown)}  -  Render distance",
-            $"{KeyName(Keybindings.Screenshot)}  -  Take screenshot",
-        };
-        float lineH = ImGui.GetTextLineHeightWithSpacing();
-        float totalH = controls.Length * lineH;
-        float startY = windowSize.Y - totalH - 14f;
-
-        for (int i = 0; i < controls.Length; i++)
-        {
-            ImGui.SetCursorPos(new Vector2(16f, startY + i * lineH));
-            ImGui.Text(controls[i]);
-        }
-
-        ImGui.PopStyleColor();
-
-        ImGui.End();
-    }
-
-    // World Selection
-    private void RenderWorldSelectionScreen(ImGuiWindowFlags flags)
-    {
-        if (!mWorldsLoaded)
-        {
-            RefreshWorldList();
-            mWorldsLoaded = true;
-        }
-
-        ImGui.Begin("WorldSelectionMenu", flags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var cx = windowSize.X * 0.5f;
-
-        // Title
-        DrawTitle("Select World", cx);
-
-        // World list panel
-        float listW = MathF.Min(600f, windowSize.X - 80f);
-        float listH = windowSize.Y - 220f;
-        float listX = cx - listW * 0.5f;
-        float listY = 90f;
-
-        // Panel background
-        DrawPanel(listX, listY, listW, listH);
-
-        ImGui.SetCursorPos(new Vector2(listX + 1, listY + 1));
-        ImGui.BeginChild("WorldList", new Vector2(listW - 2, listH - 2), ImGuiChildFlags.None);
-
-        if (mAvailableWorlds.Count == 0)
-        {
-            ImGui.PushStyleColor(ImGuiCol.Text, ColTextMuted);
-            var noText = "No worlds found";
-            var ntSize = ImGui.CalcTextSize(noText);
-            ImGui.SetCursorPos(new Vector2((listW - 2) * 0.5f - ntSize.X * 0.5f, (listH - 2) * 0.5f - ntSize.Y * 0.5f));
-            ImGui.Text(noText);
-            ImGui.PopStyleColor();
-        }
-        else
-        {
-            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 0));
-
-            for (int i = 0; i < mAvailableWorlds.Count; i++)
-            {
-                var world = mAvailableWorlds[i];
-                string lastPlayed = world.LastPlayed != DateTime.MinValue ? world.LastPlayed.ToString("yyyy-MM-dd HH:mm") : "Unknown";
-
-                bool selected = mSelectedWorld == i;
-
-                // Alternate row shading
-                if (i % 2 == 0)
-                {
-                    var drawList = ImGui.GetWindowDrawList();
-                    var cursorScreen = ImGui.GetCursorScreenPos();
-                    drawList.AddRectFilled(cursorScreen, new Vector2(cursorScreen.X + listW - 20f, cursorScreen.Y + 48f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f)));
-                }
-
-                if (ImGui.Selectable($"##world_{i}", selected, ImGuiSelectableFlags.None, new Vector2(0, 48)))
-                {
-                    mSelectedWorld = i;
-                }
-
-                // Draw world name and date on top of the selectable
-                var itemMin = ImGui.GetItemRectMin();
-                var itemMax = ImGui.GetItemRectMax();
-                var dl = ImGui.GetWindowDrawList();
-
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText), world.WorldName);
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim), $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
-
-                // Thin separator line
-                if (i < mAvailableWorlds.Count - 1)
-                {
-                    dl.AddLine(new Vector2(itemMin.X + 8f, itemMax.Y), new Vector2(itemMax.X - 8f, itemMax.Y),
-                        ImGui.ColorConvertFloat4ToU32(ColSeparator), 1f);
-                }
-            }
-
-            ImGui.PopStyleVar();
-        }
-
-        ImGui.EndChild();
-
-        // DEL key
-        bool hasSel = mSelectedWorld >= 0 && mSelectedWorld < mAvailableWorlds.Count;
-
-        if (hasSel && ImGui.IsKeyPressed(ImGuiKey.Delete))
-            mShowDeleteConfirm = true;
-
-        // Bottom buttons
-        float btnY = windowSize.Y - 62f;
-        float totalW = BUTTON_WIDTH * 4 + BUTTON_SPACING * 3;
-        float bx = cx - totalW * 0.5f;
-
-        // Play
-        PushDisableableBtn(hasSel, false);
-        ImGui.SetCursorPos(new Vector2(bx, btnY));
-
-        if (ImGui.Button("Play", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)) && hasSel)
-        {
-            ClickSound();
-            Serialization.s_WorldName = mAvailableWorlds[mSelectedWorld].WorldName;
-            var selWorld = mAvailableWorlds[mSelectedWorld];
-            OnStartGame?.Invoke(Serialization.GetWorldSize(selWorld.WorldName), mVolSfx, mVolMusic, 0, 0, selWorld.IsCreative);
-        }
-
-        PopDisableableBtn(hasSel, false);
-
-        // Delete
-        PushDisableableBtn(hasSel, true);
-        ImGui.SetCursorPos(new Vector2(bx + (BUTTON_WIDTH + BUTTON_SPACING), btnY));
-        if (ImGui.Button("Delete", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)) && hasSel)
-        {
-            ClickSound();
-            mShowDeleteConfirm = true;
-        }
-
-        PopDisableableBtn(hasSel, true);
-
-        // New World
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx + (BUTTON_WIDTH + BUTTON_SPACING) * 2, btnY));
-        if (ImGui.Button("New World", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldSize = 16;
-            mWorldType = 0;
-            mWorldTheme = 0;
-            mIsCreative = false;
-            SetInputBuffer(mWorldNameBuffer, "New World");
-            mCurrentState = MainMenuState.NewGame;
-        }
-
-        PopBtn();
-
-        // Back
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx + (BUTTON_WIDTH + BUTTON_SPACING) * 3, btnY));
-        if (ImGui.Button("Back", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mCurrentState = MainMenuState.Title;
-        }
-
-        PopBtn();
-
-        // Delete confirmation popup
-        if (mShowDeleteConfirm && hasSel)
-        {
-            ImGui.OpenPopup("Delete World?");
-            mShowDeleteConfirm = false;
-        }
-
-        RenderDeletePopup(cx, windowSize.Y);
-
-        ImGui.End();
-    }
-
-    private void RenderDeletePopup(float cx, float winH)
-    {
-        bool hasSel = mSelectedWorld >= 0 && mSelectedWorld < mAvailableWorlds.Count;
-
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(20, 16));
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, ROUNDING);
-        ImGui.PushStyleColor(ImGuiCol.PopupBg, ColPanel);
-        ImGui.PushStyleColor(ImGuiCol.Border, ColPanelBorder);
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-
-        if (ImGui.BeginPopupModal("Delete World?", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoMove))
-        {
-            var popupW = 360f;
-            ImGui.SetWindowSize(new Vector2(popupW, 0));
-            ImGui.SetWindowPos(new Vector2(cx - popupW * 0.5f, winH * 0.5f - 70f));
-
-            string name = hasSel ? mAvailableWorlds[mSelectedWorld].WorldName : "";
-            ImGui.Text($"Delete \"{name}\"?");
-            ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-            ImGui.Text("This cannot be undone.");
-            ImGui.PopStyleColor();
-
-            ImGui.Spacing();
-            ImGui.Spacing();
-
-            float bw = (popupW - 40f - BUTTON_SPACING) * 0.5f;
-
-            PushRedBtn();
-            if (ImGui.Button("Delete", new Vector2(bw, 36)))
-            {
-                ClickSound();
-                Serialization.DeleteWorld(name);
-                mSelectedWorld = -1;
-                mWorldsLoaded = false;
-                RefreshWorldList();
-                mWorldsLoaded = true;
-                ImGui.CloseCurrentPopup();
-            }
-
-            PopBtn();
-
-            ImGui.SameLine(0, BUTTON_SPACING);
-
-            PushGreenBtn();
-            if (ImGui.Button("Cancel", new Vector2(bw, 36)))
-            {
-                ImGui.CloseCurrentPopup();
-            }
-
-            PopBtn();
-
-            ImGui.EndPopup();
-        }
-
-        ImGui.PopStyleColor(3);
-        ImGui.PopStyleVar(2);
-    }
-
-    // New Game
-
-    private void RenderNewGameScreen(ImGuiWindowFlags flags)
-    {
-        ImGui.Begin("NewGameMenu", flags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var cx = windowSize.X * 0.5f;
-        var cy = windowSize.Y * 0.5f;
-
-        DrawTitle("Create New World", cx);
-
-        const float labelH = 22f;
-        const float inputH = 22f;
-        const float rowGap = 10f;
-        const float bigGap = 50f;
-
-        float formW = 440f;
-        float formH = PANEL_PAD
-                      + labelH + inputH + rowGap // Name
-                      + BUTTON_HEIGHT + rowGap // Type
-                      + labelH + inputH + rowGap // Size
-                      + BUTTON_HEIGHT + rowGap // Theme
-                      + BUTTON_HEIGHT + bigGap // Creative + large gap before actions
-                      + BUTTON_HEIGHT + rowGap // Create
-                      + BUTTON_HEIGHT // Cancel
-                      + PANEL_PAD;
-
-        float formX = cx - formW * 0.5f;
-        float formY = cy - formH * 0.5f - 20f;
-
-        DrawPanel(formX, formY, formW, formH);
-
-        float fieldW = formW - PANEL_PAD * 2;
-        float fieldX = formX + PANEL_PAD;
-        float y = formY + PANEL_PAD;
-
-        // World Name
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.Text("World Name");
-        ImGui.PopStyleColor();
-        y += labelH;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.SetNextItemWidth(fieldW);
-        ImGui.InputText("##worldname", mWorldNameBuffer, (uint)mWorldNameBuffer.Length);
-        y += inputH + rowGap;
-
-        // Type
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button($"Type: {WorldTypes[mWorldType]} >##type", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldType = (mWorldType + 1) % WorldTypes.Length;
-        }
-
-        PopBtn();
-        y += BUTTON_HEIGHT + rowGap;
-
-        // World Size
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.Text("World Size");
-        ImGui.SameLine();
-        ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("(even, 8-4096)");
-        ImGui.PopStyleColor(2);
-        y += labelH;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.SetNextItemWidth(fieldW);
-        var previous = mWorldSize;
-        if (ImGui.InputInt("##worldsize", ref mWorldSize))
-        {
-            ClickSound();
-            mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
-            if ((mWorldSize & 1) != 0)
-            {
-                mWorldSize += mWorldSize > previous ? 1 : -1;
-                mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
-            }
-        }
-
-        y += inputH + rowGap;
-
-        // Theme
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button($"Theme: {WorldThemes[mWorldTheme]} >##theme", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldTheme = (mWorldTheme + 1) % WorldThemes.Length;
-        }
-
-        PopBtn();
-        y += BUTTON_HEIGHT + rowGap;
-
-        // Creative Mode
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-        ImGui.PushStyleColor(ImGuiCol.CheckMark, ColText);
-        ImGui.PushStyleColor(ImGuiCol.FrameBg, ColFrame);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ColFrameHover);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ColFrameActive);
-
-        if (ImGui.Checkbox("##creative", ref mIsCreative))
-            ClickSound();
-
-        ImGui.SameLine();
-        ImGui.Text("Creative Mode");
-        ImGui.PopStyleColor(5);
-        y += BUTTON_HEIGHT + bigGap;
-
-        // Create
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button("Create", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            string worldName = GetStringFromBuffer(mWorldNameBuffer).Trim();
-            if (string.IsNullOrEmpty(worldName))
-                worldName = "New World";
-            Serialization.s_WorldName = worldName;
-            Serialization.CreateWorld(worldName, null, mWorldSize, mWorldType, mWorldTheme, isCreative: mIsCreative);
-            OnStartGame?.Invoke(mWorldSize, mVolSfx, mVolMusic, mWorldType, mWorldTheme, mIsCreative);
-        }
-
-        PopBtn();
-        y += BUTTON_HEIGHT + rowGap;
-
-        // Cancel
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button("Cancel", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldsLoaded = false;
-            mCurrentState = MainMenuState.WorldSelection;
-        }
-
-        PopBtn();
-
-        ImGui.End();
-    }
-
-    // Options
-    private void RenderOptionsScreen(ImGuiWindowFlags flags)
-    {
-        ImGui.Begin("OptionsMenu", flags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var cx = windowSize.X * 0.5f;
-        var cy = windowSize.Y * 0.5f;
-
-        DrawTitle("Options", cx);
-
-        // Panel
-        float formW = 440f;
-        float formH = 230f;
-        float formX = cx - formW * 0.5f;
-        float formY = cy - formH * 0.5f - 20f;
-
-        DrawPanel(formX, formY, formW, formH);
-
-        float fieldW = formW - PANEL_PAD * 2;
-        float fieldX = formX + PANEL_PAD;
-        float y = formY + PANEL_PAD;
-
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-
-        // SFX Volume
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.Text($"SFX Volume  {mVolSfx}");
-        y += 22f;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.SetNextItemWidth(fieldW);
-        ImGui.SliderInt("##sfxvolume", ref mVolSfx, 0, 100, "");
-
-        // Music Volume
-        y += 44f;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.Text($"Music Volume  {mVolMusic}");
-        y += 22f;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.SetNextItemWidth(fieldW);
-        ImGui.SliderInt("##musicvolume", ref mVolMusic, 0, 100, "");
-        y += 22f;
-
-        ImGui.PopStyleColor();
-
-        y += 16f;
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button("Keybindings", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mCurrentState = MainMenuState.Keybindings;
-        }
-
-        PopBtn();
-
-        // Back
-        float by = formY + formH + 20f;
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(cx - BUTTON_WIDTH * 0.5f, by));
-        if (ImGui.Button("Back", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mCurrentState = MainMenuState.Title;
-        }
-
-        PopBtn();
-
-        ImGui.End();
-    }
-
-    // Keybindings
-    private void RenderKeybindingsScreen(ImGuiWindowFlags flags)
-    {
-        ImGui.Begin("KeybindingsMenu", flags);
-
-        var windowSize = ImGui.GetWindowSize();
-        var cx = windowSize.X * 0.5f;
-        var cy = windowSize.Y * 0.5f;
-
-        DrawTitle("Keybindings", cx);
-
-        const float ROW_H = 40f;
-        const int COLS = 2;
-        int numRows = (BindingDefs.Length + COLS - 1) / COLS;
-        float panelW = 760f;
-        float colW = (panelW - 2f) / COLS;
-        float panelH = numRows * ROW_H + PANEL_PAD * 2;
-        float panelX = cx - panelW * 0.5f;
-        float panelY = cy - panelH * 0.5f - 20f;
-
-        DrawPanel(panelX, panelY, panelW, panelH);
-
-        if (mRebindingIndex >= 0)
-            PollRebindKey();
-
-        ImGui.SetCursorPos(new Vector2(panelX + 1, panelY + PANEL_PAD));
-        ImGui.BeginChild("BindingList", new Vector2(panelW - 2, numRows * ROW_H), ImGuiChildFlags.None);
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 0));
-
-        var childDrawList = ImGui.GetWindowDrawList();
-        var childOrigin = ImGui.GetWindowPos();
-
-        for (int row = 0; row < numRows; row++)
-        {
-            for (int col = 0; col < COLS; col++)
-            {
-                int i = col * numRows + row;
-                if (i >= BindingDefs.Length)
-                    continue;
-
-                var (label, binding) = BindingDefs[i];
-                bool isRebinding = mRebindingIndex == i;
-                float itemX = col * colW;
-                float itemY = row * ROW_H;
-
-                if (isRebinding || row % 2 == 0)
-                {
-                    var bgPos = new Vector2(childOrigin.X + itemX, childOrigin.Y + itemY);
-                    uint bgColor = isRebinding
-                        ? ImGui.ColorConvertFloat4ToU32(new Vector4(0.10f, 0.40f, 0.10f, 0.8f))
-                        : ImGui.ColorConvertFloat4ToU32(new Vector4(0.06f, 0.08f, 0.06f, 0.5f));
-                    childDrawList.AddRectFilled(bgPos, new Vector2(bgPos.X + colW, bgPos.Y + ROW_H), bgColor);
-                }
-
-                ImGui.SetCursorPos(new Vector2(itemX, itemY));
-                if (ImGui.Selectable($"##bind{i}", isRebinding, ImGuiSelectableFlags.None, new Vector2(colW, ROW_H)))
-                {
-                    ClickSound();
-                    mRebindingIndex = isRebinding ? -1 : i;
-                }
-
-                var itemMin = ImGui.GetItemRectMin();
-                float textY = itemMin.Y + (ROW_H - ImGui.GetTextLineHeight()) * 0.5f;
-                string keyText = isRebinding ? "[Press any key]" : Keybindings.Get(binding).ToString();
-
-                childDrawList.AddText(new Vector2(itemMin.X + 14f, textY),
-                    ImGui.ColorConvertFloat4ToU32(ColText), label);
-                childDrawList.AddText(new Vector2(itemMin.X + colW - 120f, textY),
-                    ImGui.ColorConvertFloat4ToU32(isRebinding ? ColTextDim : ColText), keyText);
-            }
-        }
-
-        // Vertical divider between columns
-        uint divColor = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.08f));
-        childDrawList.AddLine(new Vector2(childOrigin.X + colW, childOrigin.Y), new Vector2(childOrigin.X + colW, childOrigin.Y + numRows * ROW_H), divColor);
-
-        ImGui.PopStyleVar();
-        ImGui.EndChild();
-
-        float backY = panelY + panelH + 20f;
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(cx - BUTTON_WIDTH * 0.5f, backY));
-        if (ImGui.Button("Back", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mRebindingIndex = -1;
-            Keybindings.Save();
-            mCurrentState = MainMenuState.Options;
-        }
-
-        PopBtn();
-        ImGui.End();
-    }
-
-    private void PollRebindKey()
-    {
-        var keyboard = Game.Instance.KeyboardState;
-        foreach (Keys k in Enum.GetValues<Keys>())
-        {
-            if (k == Keys.Unknown || !keyboard.IsKeyPressed(k))
-                continue;
-
-            if (k != Keys.Escape)
-            {
-                var target = BindingDefs[mRebindingIndex].Binding;
-                Keys oldKey = Keybindings.Get(target);
-
-                for (int j = 0; j < BindingDefs.Length; j++)
-                {
-                    if (j != mRebindingIndex && Keybindings.Get(BindingDefs[j].Binding) == k)
-                    {
-                        Keybindings.Set(BindingDefs[j].Binding, oldKey);
-                        break;
-                    }
-                }
-
-                Keybindings.Set(target, k);
-            }
-
-            mRebindingIndex = -1;
-            break;
-        }
-    }
-
     // Helpers
+
     public void ResetToTitle()
     {
         mCurrentState = MainMenuState.Title;
@@ -890,6 +232,7 @@ public class MainMenuScreen
     };
 
     // Drawing helpers
+
     private void DrawTitle(string text, float cx)
     {
         ImGui.PushFont(ImGuiController.fontLarge);
@@ -913,6 +256,7 @@ public class MainMenuScreen
     }
 
     // Button style helpers
+
     private void PushGreenBtn()
     {
         ImGui.PushStyleColor(ImGuiCol.Button, BtnGreen);
@@ -954,44 +298,36 @@ public class MainMenuScreen
     }
 
     // Theme
+
     private void PushTheme()
     {
-        // Window
         ImGui.PushStyleColor(ImGuiCol.WindowBg, ColBg);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0, 0, 0, 0));
         ImGui.PushStyleColor(ImGuiCol.Border, ColPanelBorder);
 
-        // Frames (input fields, sliders)
         ImGui.PushStyleColor(ImGuiCol.FrameBg, ColFrame);
         ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ColFrameHover);
         ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ColFrameActive);
 
-        // Slider grab
         ImGui.PushStyleColor(ImGuiCol.SliderGrab, ColSliderGrab);
         ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, ColSliderGrabAct);
 
-        // Check / radio
         ImGui.PushStyleColor(ImGuiCol.CheckMark, ColCheck);
 
-        // Header (selectable)
         ImGui.PushStyleColor(ImGuiCol.Header, ColHeader);
         ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ColHeaderHover);
         ImGui.PushStyleColor(ImGuiCol.HeaderActive, ColHeaderActive);
 
-        // Scrollbar
         ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, ColScrollbar);
         ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, ColScrollbarGrab);
         ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, ColScrollbarHover);
         ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, ColScrollbarAct);
 
-        // Separator
         ImGui.PushStyleColor(ImGuiCol.Separator, ColSeparator);
 
-        // Text
         ImGui.PushStyleColor(ImGuiCol.Text, ColText);
         ImGui.PushStyleColor(ImGuiCol.TextDisabled, ColTextDim);
 
-        // Rounding
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, ROUNDING);
         ImGui.PushStyleVar(ImGuiStyleVar.GrabRounding, ROUNDING);
         ImGui.PushStyleVar(ImGuiStyleVar.ScrollbarRounding, ROUNDING);
@@ -999,7 +335,6 @@ public class MainMenuScreen
         ImGui.PushStyleVar(ImGuiStyleVar.PopupRounding, ROUNDING);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
 
-        // Padding
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(8, 6));
     }
 
@@ -1010,6 +345,7 @@ public class MainMenuScreen
     }
 
     // Input buffer helpers
+
     private void SetInputBuffer(byte[] buffer, string value)
     {
         Array.Clear(buffer, 0, buffer.Length);

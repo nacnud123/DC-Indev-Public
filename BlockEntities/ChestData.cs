@@ -76,6 +76,7 @@ public class ChestData : IBlockEntity
     {
         if (stack.IsBlock)
             return BlockRegistry.Get(stack.Block).MaxStackSize;
+        
         return ItemRegistry.Get(stack.Item).MaxStackSize;
     }
 }

@@ -15,9 +15,18 @@ public class Entity
     internal static Shader? _shader;
     private static bool _shaderInitialized;
 
+    // Frame-constant lighting state — set each frame by GameRenderer before rendering
     public static Vector3 LightDir = new(-0.5f, -1f, -0.3f);
     public static float AmbientStrength = 0.4f;
     public static float SunlightLevel = 1f;
+    internal static Vector3 CameraPosition; // eye position for fire billboard yaw
+    internal static Texture? SharedWorldTexture; // world atlas for fire billboard
+
+    // Tick-constant audio/game state — set by Game before ticking entities
+    internal static Vector3 ListenerPosition; // player position for step-sound proximity
+    internal static int SfxVol;
+    internal static Action<Terrain.BlockBreakMaterial, int>? PlayStepSoundCallback;
+    internal static Random? SharedRandom;
 
     public virtual bool IsTargetable => true;
     public virtual float ShadowSize => 0.5f;
@@ -155,10 +164,9 @@ public class Entity
                 var stepBlock = world.GetBlock(bx, by, bz);
                 var mat = BlockRegistry.GetBlockBreakMaterial(stepBlock);
 
-                int volume = Proximity((Game.Instance.GetPlayer.Position - this.Position).Length ,20f, Game.Instance.AudioManager.SfxVol);
-
-                Game.Instance.AudioManager.PlayBlockContactSound(mat, volume);
-                BlockRegistry.Get(stepBlock).OnEntityWalking(world, bx, by, bz, Game.Instance.GameRandom);
+                int volume = Proximity((ListenerPosition - this.Position).Length, 20f, SfxVol);
+                PlayStepSoundCallback?.Invoke(mat, volume);
+                BlockRegistry.Get(stepBlock).OnEntityWalking(world, bx, by, bz, SharedRandom ?? new Random());
             }
         }
         else
@@ -254,9 +262,8 @@ public class Entity
     {
         EnsureFireVao();
 
-        var camPos = Game.Instance.GetPlayer.Camera.Position;
-        float dx = camPos.X - mPos.X;
-        float dz = camPos.Z - mPos.Z;
+        float dx = CameraPosition.X - mPos.X;
+        float dz = CameraPosition.Z - mPos.Z;
         float yaw = MathF.Atan2(dx, dz);
 
         Matrix4 mvp =
@@ -269,7 +276,7 @@ public class Entity
         _shader?.SetMatrix4("mvp", mvp);
         _shader?.SetFloat("uHitFlash", 0f);
 
-        Game.Instance.WorldTexture.Use(TextureUnit.Texture0);
+        SharedWorldTexture?.Use(TextureUnit.Texture0);
         GL.BindVertexArray(_fireVao);
         GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
     }

@@ -1,4 +1,5 @@
 // Main class that manages block entities in the game world. Handles creation, retrieval, and destruction of block entities. | DA | 3/5/26
+
 using System.Xml.Serialization;
 using OpenTK.Mathematics;
 using VoxelEngine.Core;
@@ -174,14 +175,14 @@ public static class BlockEntityManager
             {
                 file.Furnaces.Add(new SerializableFurnace
                 {
-                    X                 = f.Position.X,
-                    Y                 = f.Position.Y,
-                    Z                 = f.Position.Z,
-                    Input             = f.InputSlot.HasValue  ? SerializableStack.From(f.InputSlot.Value)  : null,
-                    Fuel              = f.FuelSlot.HasValue   ? SerializableStack.From(f.FuelSlot.Value)   : null,
-                    Output            = f.OutputSlot.HasValue ? SerializableStack.From(f.OutputSlot.Value) : null,
+                    X = f.Position.X,
+                    Y = f.Position.Y,
+                    Z = f.Position.Z,
+                    Input = f.InputSlot.HasValue ? SerializableStack.From(f.InputSlot.Value) : null,
+                    Fuel = f.FuelSlot.HasValue ? SerializableStack.From(f.FuelSlot.Value) : null,
+                    Output = f.OutputSlot.HasValue ? SerializableStack.From(f.OutputSlot.Value) : null,
                     BurnTimeRemaining = f.BurnTimeRemaining,
-                    SmeltProgress     = f.SmeltProgress,
+                    SmeltProgress = f.SmeltProgress,
                 });
             }
             else if (entity is ChestData c)
@@ -191,8 +192,10 @@ public static class BlockEntityManager
                 {
                     var slot = c.GetSlot(i);
                     if (slot.HasValue)
-                        sc.Slots.Add(new SerializableChestSlot { Index = i, Stack = SerializableStack.From(slot.Value) });
+                        sc.Slots.Add(
+                            new SerializableChestSlot { Index = i, Stack = SerializableStack.From(slot.Value) });
                 }
+
                 file.Chests.Add(sc);
             }
             else if (entity is DoubleChestData dc)
@@ -202,8 +205,10 @@ public static class BlockEntityManager
                 {
                     var slot = dc.GetSlot(i);
                     if (slot.HasValue)
-                        sdc.Slots.Add(new SerializableChestSlot { Index = i, Stack = SerializableStack.From(slot.Value) });
+                        sdc.Slots.Add(new SerializableChestSlot
+                            { Index = i, Stack = SerializableStack.From(slot.Value) });
                 }
+
                 file.DoubleChests.Add(sdc);
             }
         }
@@ -232,17 +237,17 @@ public static class BlockEntityManager
             var pos = new Vector3i(entry.X, entry.Y, entry.Z);
             BlockEntities[pos] = new FurnaceData(pos)
             {
-                InputSlot         = entry.Input?.ToItemStack(),
-                FuelSlot          = entry.Fuel?.ToItemStack(),
-                OutputSlot        = entry.Output?.ToItemStack(),
+                InputSlot = entry.Input?.ToItemStack(),
+                FuelSlot = entry.Fuel?.ToItemStack(),
+                OutputSlot = entry.Output?.ToItemStack(),
                 BurnTimeRemaining = entry.BurnTimeRemaining,
-                SmeltProgress     = entry.SmeltProgress,
+                SmeltProgress = entry.SmeltProgress,
             };
         }
 
         foreach (var entry in file.Chests)
         {
-            var pos   = new Vector3i(entry.X, entry.Y, entry.Z);
+            var pos = new Vector3i(entry.X, entry.Y, entry.Z);
             var chest = new ChestData(pos);
             foreach (var s in entry.Slots)
                 chest.SetSlot(s.Index, s.Stack.ToItemStack());
@@ -252,7 +257,7 @@ public static class BlockEntityManager
         foreach (var entry in file.DoubleChests)
         {
             var pos = new Vector3i(entry.X, entry.Y, entry.Z);
-            var dc  = new DoubleChestData(pos);
+            var dc = new DoubleChestData(pos);
             foreach (var s in entry.Slots)
                 dc.SetSlot(s.Index, s.Stack.ToItemStack());
             BlockEntities[pos] = dc;

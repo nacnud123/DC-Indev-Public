@@ -45,7 +45,7 @@ public static class BlockRegistry
         Register(new BlockPlanks());
         Register(new BlockWoodSlab());
         Register(new BlockDoubleWoodSlab());
-        Register(new WoodStiars());
+        Register(new WoodStairs());
 
         // Decoration
         Register(new BlockFlower());

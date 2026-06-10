@@ -1,5 +1,6 @@
 // The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26
 // Updated with more complex sound playing functions, also added the ability to play background music.
+
 using SFML.Audio;
 using System;
 using System.Collections.Generic;
@@ -94,8 +95,11 @@ namespace VoxelEngine.Audio
         // Landing thud
         public void PlayLandingSound(BlockBreakMaterial material)
         {
-            if (mDisposed) return;
+            if (mDisposed) 
+                return;
+            
             string? path = GetContactSoundPath(material);
+            
             if (path != null)
                 PlayAudio(path, SfxVol / 2, false, 0.75f);
         }
@@ -117,32 +121,39 @@ namespace VoxelEngine.Audio
                 try
                 {
                     sound.Stop();
+                    sound.Dispose();
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error stopping sound: {ex.Message}");
                 }
             }
+
+            mActiveSounds.Clear();
         }
 
         // Play break, walk, dig, or place sounds for a block material.
         public void PlayBlockBreakSound(BlockBreakMaterial material)
         {
-            if (mDisposed) return;
+            if (mDisposed) 
+                return;
 
             string? path = GetBreakSoundPath(material);
+            
             if (path != null)
                 PlayAudio(path, SfxVol, false);
         }
 
         public void PlayBlockContactSound(BlockBreakMaterial material, int volume = -1)
         {
-            if (mDisposed) return;
+            if (mDisposed) 
+                return;
 
             if (volume == -1)
                 volume = SfxVol;
 
             string? path = GetContactSoundPath(material);
+            
             if (path != null)
                 PlayAudio(path, volume, false);
         }
@@ -184,12 +195,13 @@ namespace VoxelEngine.Audio
         private string RandomContactSound(string folder, string prefix, int count)
         {
             int index = Game.Instance.GameRandom.Next(1, count + 1);
+            
             return $"Resources/Audio/Walking/{folder}/{prefix}{index}.ogg";
         }
 
         public void PlayPickupSound()
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             PlayAudio("Resources/Audio/ItemPop.ogg", SfxVol, false);
@@ -197,7 +209,7 @@ namespace VoxelEngine.Audio
 
         public void PlayMunchSound()
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             PlayAudio("Resources/Audio/Eat.ogg", SfxVol, false);
@@ -205,7 +217,7 @@ namespace VoxelEngine.Audio
 
         public void PlayPlayerHurtSound()
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             PlayAudio("Resources/Audio/PlayerHurt.ogg", SfxVol, false);
@@ -213,7 +225,8 @@ namespace VoxelEngine.Audio
 
         public void CleanupFinishedSounds()
         {
-            if (mDisposed) return;
+            if (mDisposed) 
+                return;
 
             for (int i = mActiveSounds.Count - 1; i >= 0; i--)
             {
@@ -278,6 +291,7 @@ namespace VoxelEngine.Audio
                         Console.WriteLine($"Error disposing sound: {ex.Message}");
                     }
                 }
+
                 mActiveSounds.Clear();
 
                 // Dispose all sound buffers
@@ -292,6 +306,7 @@ namespace VoxelEngine.Audio
                         Console.WriteLine($"Error disposing sound buffer: {ex.Message}");
                     }
                 }
+
                 mSoundBuffers.Clear();
 
                 Console.WriteLine("AudioManager disposed successfully");

@@ -1,4 +1,5 @@
 // The main class used for the Furnace block entity. Just holds reference to the furnace's inventory and burn state. Also, has function to drop it's contents. | DA | 3/5/26
+
 using OpenTK.Mathematics;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
@@ -29,6 +30,7 @@ public class FurnaceData : IBlockEntity
     public void DropContents(World world)
     {
         var center = new Vector3(Position.X + 0.5f, Position.Y + 0.5f, Position.Z + 0.5f);
+
         if (InputSlot.HasValue)
             world.AddEntity(new DroppedItemEntity(center, InputSlot.Value, Game.Instance.WorldTexture));
 

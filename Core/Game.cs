@@ -53,17 +53,13 @@ public class Game : GameWindow
 
     // Rendering
     private Shader mShader = null!;
-    private Crosshair mCrosshair = null!;
-    private BlockHighlight mBlockHighlight = null!;
-    private BlockBreakOverlay mBlockBreakOverlay = null!;
-    private Texture mBreakTexture = null!;
+    private GameRenderer mRenderer = null!;
     public Texture WorldTexture { get; private set; } = null!;
     public Texture ItemTexture { get; private set; } = null!;
     public Texture IconsTexture { get; private set; } = null!;
     public Texture PaintingsTexture { get; private set; } = null!;
     public ParticleSystem ParticleSystem { get; private set; } = null!;
     private BlockIconRenderer mBlockIconRenderer = null!;
-    private PaintingRenderer mPaintingRenderer = null!;
 
     // UI
     private ImGuiController mImGuiController = null!;
@@ -99,7 +95,6 @@ public class Game : GameWindow
     private int mNewWorldSize = 64;
     private int mLoadingFrames;
     private WorldGenSettings mWorldGenSettings = WorldGenSettings.Build(0, 0);
-    private BlobShadowRenderer mBlobShadowRenderer = null!;
 
     public WorldGenSettings GetWorldGenSettings
     {
@@ -138,6 +133,13 @@ public class Game : GameWindow
     // Global Random
     private Random mGameRandom = new Random();
 
+    private AsciiFramebuffer mAsciiFbo;
+    private Shader mAsciiShader;
+    private FullscreenQuad mFsQuad;
+    private int mAsciiAtlas;
+    private int mAsciiCharCount;
+    public bool AsciiEnabled { get; set; } = false;
+
     public Random GameRandom
     {
         get => mGameRandom;
@@ -145,12 +147,6 @@ public class Game : GameWindow
 
     // Game State
     public GameState CurrentState { get; private set; }
-
-    // SkyBox
-    private SkyRenderer mSkyRenderer = null!;
-
-    // Clouds
-    private CloudRenderer mCloudRenderer = null!;
 
     #endregion
 
@@ -190,6 +186,11 @@ public class Game : GameWindow
 
         CurrentState = GameState.MainMenu;
         CursorState = CursorState.Normal;
+
+        mAsciiFbo = new AsciiFramebuffer(Size.X, Size.Y);
+        mAsciiShader = new Shader(File.ReadAllText("Shaders/ascii.vert"), File.ReadAllText("Shaders/ascii.frag"));
+        mFsQuad = new FullscreenQuad();
+        (mAsciiAtlas, mAsciiCharCount) = LoadAsciiAtlas();
     }
 
     protected override void OnResize(ResizeEventArgs e)
@@ -199,6 +200,12 @@ public class Game : GameWindow
 
         if (mPlayer != null)
             mPlayer.Camera.AspectRatio = e.Width / (float)e.Height;
+
+        if (mAsciiFbo != null)
+        {
+            mAsciiFbo.Dispose();
+            mAsciiFbo = new AsciiFramebuffer(e.Width, e.Height);
+        }
 
         mImGuiController?.WindowResized(ClientSize.X, ClientSize.Y);
     }
@@ -210,20 +217,13 @@ public class Game : GameWindow
 
         mWorld?.Dispose();
         mShader?.Dispose();
-        mCrosshair?.Dispose();
-        mBlockHighlight?.Dispose();
-        mBlockBreakOverlay?.Dispose();
-        mBreakTexture?.Dispose();
         WorldTexture?.Dispose();
         ItemTexture?.Dispose();
         IconsTexture?.Dispose();
         PaintingsTexture?.Dispose();
-        mPaintingRenderer?.Dispose();
         mBlockIconRenderer?.Dispose();
         ParticleSystem?.Dispose();
-        mBlobShadowRenderer?.Dispose();
-        mSkyRenderer?.Dispose();
-        mCloudRenderer?.Dispose();
+        mRenderer?.Dispose();
 
         EntityModel.DisposeAll();
         ArrowEntity.DisposeMesh();
@@ -250,42 +250,32 @@ public class Game : GameWindow
     {
         mShader = new Shader(File.ReadAllText("Shaders/vertex.glsl"), File.ReadAllText("Shaders/fragment.glsl"));
         WorldTexture = Texture.LoadFromFile("Resources/world.png");
-
         ItemTexture = Texture.LoadFromFile("Resources/Items.png");
         IconsTexture = Texture.LoadFromFile("Resources/Icons.png");
         PaintingsTexture = Texture.LoadFromFile("Resources/Paintings.png");
 
-        mPaintingRenderer = new PaintingRenderer();
-        mPaintingRenderer.Init();
-
         mBlockIconRenderer = new BlockIconRenderer();
         mBlockIconRenderer.Init(WorldTexture);
-
-        mCrosshair = new Crosshair();
-        mBlockHighlight = new BlockHighlight();
-        mBlockBreakOverlay = new BlockBreakOverlay();
-        mBreakTexture = Texture.LoadFromFile("Resources/break.png");
 
         mTickSystem = new TickSystem();
         ParticleSystem = new ParticleSystem();
 
-        mSkyRenderer = new SkyRenderer();
-        mSkyRenderer.Init();
+        mRenderer = new GameRenderer();
+        mRenderer.Init(mShader, WorldTexture, PaintingsTexture, ParticleSystem);
 
-        mBlobShadowRenderer = new BlobShadowRenderer();
-
-        mCloudRenderer = new CloudRenderer();
-        mCloudRenderer.Init();
+        Entity.SharedWorldTexture = WorldTexture;
+        Entity.SharedRandom = mGameRandom;
+        Entity.PlayStepSoundCallback = mAudioManager.PlayBlockContactSound;
     }
 
     // Actually start the world generation
     private void InitWorld()
     {
-        bool isNewWorld = !Serialization.HasSavedChunks(Serialization.s_WorldName);
+        bool isNewWorld = !Serialization.HasSavedChunks(Serialization.WorldName);
 
-        var worldData = Serialization.LoadWorldData(Serialization.s_WorldName)
+        var worldData = Serialization.LoadWorldData(Serialization.WorldName)
                         ?? Serialization.CreateWorld(
-                            Serialization.s_WorldName,
+                            Serialization.WorldName,
                             customSeed: null,
                             worldSize: mNewWorldSize,
                             worldType: (int)mWorldGenSettings.Type,
@@ -295,14 +285,14 @@ public class Game : GameWindow
 
         IsCreative = worldData.IsCreative;
         this.mTimeOfDay = worldData.WorldTime;
-        
+
         mTimeOfDay -= MathF.Floor(mTimeOfDay);
         if (mTimeOfDay < 0f)
             mTimeOfDay += 1f;
-        
+
         mWorldGenSettings = WorldGenSettings.Build(worldData.WorldType, worldData.WorldTheme);
 
-        mCloudRenderer?.ResetOffset();
+        mRenderer.ResetCloudOffset();
 
         mWorld = new World(mNewWorldSize, worldData.Seed, mWorldGenSettings);
         mWorld.BuildAllMeshes();
@@ -366,6 +356,7 @@ public class Game : GameWindow
             LoadWorldEntities(worldData.Entities);
 
         mMobSpawner = new MobSpawner(mWorld, mGameRandom);
+        mRenderer.SetSession(mWorld, mPlayer, mTickSystem, mPlayerArm, mHotbar, mHudScreen);
 
         // Place structures on new worlds and mark all chunks modified so they persist
         if (isNewWorld)
@@ -553,7 +544,7 @@ public class Game : GameWindow
                 UpdateGameLogic(dt);
                 if (CurrentState == GameState.Died) return;
                 mHotbar?.Render();
-                RenderHudOverlay();
+                mRenderer.RenderHudOverlay();
                 break;
         }
     }
@@ -755,6 +746,9 @@ public class Game : GameWindow
 
     private void UpdateGameLogic(float dt)
     {
+        Entity.ListenerPosition = mPlayer.Position;
+        Entity.SfxVol = mAudioManager.SfxVol;
+
         // Advance day/night cycle
         mTimeOfDay += dt / DAY_LENGTH;
         if (mTimeOfDay >= 1f)
@@ -771,7 +765,7 @@ public class Game : GameWindow
             mWorld.RandomDisplayUpdates(mPlayer.Position);
             mWorld.DoScheduledTick();
             mWorld.DoRandomTick();
-            mCloudRenderer?.Tick();
+            mRenderer.TickClouds();
             BlockEntityManager.TickFurnaces();
         }
 
@@ -796,255 +790,50 @@ public class Game : GameWindow
     {
         base.OnRenderFrame(args);
 
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
         if (mWorld != null && mPlayer != null)
         {
             UpdateTitle(args.Time);
 
-            var view = mPlayer.Camera.GetViewMatrix();
-            var proj = mPlayer.Camera.GetProjectionMatrix();
+            if (AsciiEnabled)
+            {
+                GL.BindFramebuffer(FramebufferTarget.Framebuffer, mAsciiFbo.Fbo);
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+                mRenderer.RenderFrame(mTimeOfDay, mWorldGenSettings);
 
-            RenderSky(view, proj);
-            RenderClouds(view, proj);
-            RenderWorld(view, proj);
-            RenderShadows(view, proj);
-            RenderEntities(view, proj);
-            RenderPaintings(view, proj);
-            RenderParticles(view, proj);
-            RenderBlockHighlight(view, proj);
-            mPlayerArm?.Render(mPlayer.Camera, mHotbar.GetSelectedStack());
-            RenderHud();
+                GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                GL.Clear(ClearBufferMask.ColorBufferBit);
+                GL.Disable(EnableCap.DepthTest);
+
+                mAsciiShader.Use();
+                mAsciiShader.SetVector2("uScreenSize", new Vector2(Size.X, Size.Y));
+                mAsciiShader.SetVector2("uCharSize", new Vector2(8, 8));
+                mAsciiShader.SetInt("uCharCount", mAsciiCharCount);
+
+                GL.ActiveTexture(TextureUnit.Texture0);
+                GL.BindTexture(TextureTarget.Texture2D, mAsciiFbo.ColorTexture);
+                mAsciiShader.SetInt("uScene", 0);
+
+                GL.ActiveTexture(TextureUnit.Texture1);
+                GL.BindTexture(TextureTarget.Texture2D, mAsciiAtlas);
+                mAsciiShader.SetInt("uAsciiAtlas", 1);
+
+                mFsQuad.Draw();
+                GL.Enable(EnableCap.DepthTest);
+            }
+            else
+            {
+                GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+                mRenderer.RenderFrame(mTimeOfDay, mWorldGenSettings);
+            }
+        }
+        else
+        {
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         }
 
         mImGuiController?.Render();
         SwapBuffers();
-    }
-
-    // Render the sky
-    private void RenderSky(Matrix4 view, Matrix4 proj)
-    {
-        float sunAngle = mTimeOfDay * MathF.PI * 2f;
-        float sunLightLevel = Math.Clamp(MathF.Sin(sunAngle) * 2f, .05f, 1.0f);
-        float dayFactor = (sunLightLevel - 0.05f) / 0.95f;
-
-        mSkyRenderer.Render(
-            mPlayer.Position,
-            mTimeOfDay,
-            mWorldGenSettings,
-            dayFactor,
-            view,
-            proj);
-    }
-
-    // Render the sky
-    private void RenderClouds(Matrix4 view, Matrix4 proj)
-    {
-        float sunAngle = mTimeOfDay * MathF.PI * 2f;
-        float sunLightLevel = Math.Clamp(MathF.Sin(sunAngle) * 2f, .05f, 1.0f);
-        float dayFactor = (sunLightLevel - .05f) / .95f;
-
-        float partialTick = mTickSystem.GetPartialTick();
-        float fogDist = mPlayer.Camera.RenderDistance;
-
-        Vector3 nightSky = mWorldGenSettings.DaySkyColor * 0.02f;
-        Vector3 fogColor = Vector3.Lerp(nightSky, mWorldGenSettings.DayFogColor, dayFactor);
-
-        mCloudRenderer.Render(
-            mPlayer.Position,
-            mWorldGenSettings,
-            dayFactor,
-            partialTick,
-            fogColor,
-            fogDist,
-            view,
-            proj);
-    }
-
-    // Main render world function, gives shaders world data.
-    private void RenderWorld(Matrix4 view, Matrix4 proj)
-    {
-        float sunAngle = mTimeOfDay * MathF.PI * 2f;
-        float sunlightLevel = Math.Clamp(MathF.Sin(sunAngle) * 2f, 0.05f, 1.0f);
-        float dayFactor = (sunlightLevel - 0.05f) / 0.95f;
-
-        Vector3 lightDir = new Vector3(-MathF.Cos(sunAngle), -MathF.Sin(sunAngle), -0.3f).Normalized();
-        Vector3 lightColor = GetSunColor(dayFactor);
-        Vector3 nightSky = mWorldGenSettings.DaySkyColor * 0.02f;
-        Vector3 skyColor = Vector3.Lerp(nightSky, mWorldGenSettings.DaySkyColor, dayFactor);
-        Vector3 fogColor = Vector3.Lerp(nightSky, mWorldGenSettings.DayFogColor, dayFactor);
-        float ambientStrength = 0.08f + dayFactor * 0.22f;
-
-        Entity.LightDir = lightDir;
-        Entity.AmbientStrength = ambientStrength + 0.1f;
-        Entity.SunlightLevel = sunlightLevel;
-
-        float fogDist = mPlayer.Camera.RenderDistance;
-
-        mShader.Use();
-        mShader.SetMatrix4("model", Matrix4.Identity);
-        mShader.SetMatrix4("view", view);
-        mShader.SetMatrix4("projection", proj);
-        mShader.SetVector3("lightDir", lightDir);
-        mShader.SetVector3("lightColor", lightColor);
-        mShader.SetFloat("ambientStrength", ambientStrength);
-        mShader.SetFloat("sunlightLevel", sunlightLevel);
-        mShader.SetVector3("fogColor", fogColor);
-
-        if (mPlayer.IsUnderWater)
-        {
-            mShader.SetFloat("fogStart", 2.0f);
-            mShader.SetFloat("fogEnd", fogDist - 5f);
-            mShader.SetVector3("fogColor", new Vector3(.05f, .1f, .3f));
-            GL.ClearColor(.05f, .1f, .3f, 1.0f);
-        }
-        else if (mPlayer.IsUnderLava)
-        {
-            mShader.SetFloat("fogStart", 0.5f);
-            mShader.SetFloat("fogEnd", 3.0f);
-            mShader.SetVector3("fogColor", new Vector3(.4f, .1f, .05f));
-            GL.ClearColor(.4f, .1f, .05f, 1.0f);
-        }
-        else
-        {
-            mShader.SetFloat("fogStart", fogDist * 0.4f);
-            mShader.SetFloat("fogEnd", fogDist * 0.9f);
-            mShader.SetVector3("fogColor", fogColor);
-            GL.ClearColor(skyColor.X, skyColor.Y, skyColor.Z, 1.0f);
-        }
-
-        int fluidType = mPlayer.IsUnderWater ? 1 : mPlayer.IsUnderLava ? 2 : 0;
-        mShader.SetInt("fluidType", fluidType);
-
-        WorldTexture.Use(TextureUnit.Texture0);
-        mShader.SetInt("blockTexture", 0);
-
-        // Opaque pass
-        mShader.SetFloat("alphaOverride", 0.0f);
-        mWorld.Render(mPlayer.Camera);
-
-        // Transparent pass (water)
-        GL.Enable(EnableCap.Blend);
-        GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-
-        GL.Enable(EnableCap.PolygonOffsetFill);
-        GL.PolygonOffset(-1f, -1f);
-
-        GL.DepthMask(false);
-        GL.Disable(EnableCap.CullFace);
-
-        mShader.SetFloat("alphaOverride", 0.7f);
-        mWorld.RenderTransparent(mPlayer.Camera);
-
-        GL.Enable(EnableCap.CullFace);
-        GL.DepthMask(true);
-
-        GL.Disable(EnableCap.PolygonOffsetFill);
-        GL.Disable(EnableCap.Blend);
-        mShader.SetFloat("alphaOverride", 0.0f);
-    }
-
-    // night(0.3,0.3,0.5) -> sunset(1,0.6,0.3) -> day(1,1,0.95)
-    private Vector3 GetSunColor(float dayFactor)
-    {
-        if (dayFactor > 0.5f)
-            return Vector3.Lerp(new Vector3(1f, 0.6f, 0.3f), new Vector3(1f, 1f, 0.95f), (dayFactor - 0.5f) * 2f);
-
-        return Vector3.Lerp(new Vector3(0.3f, 0.3f, 0.5f), new Vector3(1f, 0.6f, 0.3f), dayFactor * 2f);
-    }
-
-    private void RenderShadows(Matrix4 view, Matrix4 proj)
-    {
-        var allEntities = mWorld.Entities.Append(mPlayer);
-        mBlobShadowRenderer.Render(allEntities, mWorld, view, proj, mPlayer.Camera.Position);
-    }
-
-    // Calls render the active entities
-    private void RenderEntities(Matrix4 view, Matrix4 proj)
-    {
-        mWorld.RenderEntities(view, proj, mPlayer.Camera.Position, mPlayer.Camera.RenderDistance);
-    }
-
-    private void RenderPaintings(Matrix4 view, Matrix4 proj)
-    {
-        var paintings = mWorld.Entities.OfType<PaintingEntity>();
-        mPaintingRenderer.Render(paintings, PaintingsTexture, view, proj);
-    }
-
-    // Calls render on active particles
-    private void RenderParticles(Matrix4 view, Matrix4 proj)
-    {
-        GL.DepthMask(false);
-        ParticleSystem.Render(view, proj, WorldTexture);
-        ParticleSystem.RenderSmoke(view, proj);
-        GL.DepthMask(true);
-    }
-
-    // Render the block highlight on the active block
-    private void RenderBlockHighlight(Matrix4 view, Matrix4 proj)
-    {
-        var hit = mWorld.Raycast(mPlayer.Camera.Position, mPlayer.Camera.Front);
-
-        if (hit.Type == RaycastHitType.Block)
-        {
-            var boundsMin = Terrain.Blocks.BlockRegistry.GetBoundsMin(hit.BlockType);
-            var boundsMax = Terrain.Blocks.BlockRegistry.GetBoundsMax(hit.BlockType);
-
-            // Wall torches have metadata-dependent bounds
-            if (hit.BlockType == BlockType.Torch)
-            {
-                int meta = mWorld.GetMetadata(hit.BlockPos.X, hit.BlockPos.Y, hit.BlockPos.Z);
-                if (meta > 0)
-                    (boundsMin, boundsMax) = Terrain.Blocks.BlockTorch.GetWallTorchBounds(meta - 1);
-            }
-
-            mBlockHighlight.Render(hit.BlockPos, view, proj, boundsMin, boundsMax);
-        }
-
-        int breakStage = mPlayer.GetBreakStage();
-        if (breakStage >= 0 && mPlayer.BreakingBlockPos.HasValue)
-        {
-            mBlockBreakOverlay.Render(mPlayer.BreakingBlockPos.Value, breakStage, view, proj, mBreakTexture);
-        }
-    }
-
-    // Renders the hud
-    private void RenderHud()
-    {
-        GL.Disable(EnableCap.DepthTest);
-        mCrosshair.Render();
-        GL.Enable(EnableCap.DepthTest);
-    }
-
-    private void RenderHudOverlay()
-    {
-        if (mHudScreen == null || mHotbar == null) return;
-        var display = ImGui.GetIO().DisplaySize;
-        mHudScreen.Render(
-            mHotbar.GetHotbarX(display.X),
-            mHotbar.GetHotbarY(display.Y),
-            mHotbar.HotbarWidth);
-
-        if (mPlayer.IsOnFire)
-            RenderFireOverlay(display);
-    }
-
-    private void RenderFireOverlay(System.Numerics.Vector2 display)
-    {
-        var fireUv = UvHelper.FromTileCoords(6, 7);
-
-        // UvHelper uses OpenGL bottom-left origin; ImGui expects top-left, so flip Y
-        var uvMin = new System.Numerics.Vector2(fireUv.TopLeft.X, fireUv.BottomRight.Y);
-        var uvMax = new System.Numerics.Vector2(fireUv.BottomRight.X, fireUv.TopLeft.Y);
-
-        uint tint = 0x990066FF; // ABGR: semi-transparent orange-red
-
-        ImGui.GetBackgroundDrawList().AddImage(
-            new IntPtr(WorldTexture.Handle),
-            System.Numerics.Vector2.Zero,
-            display,
-            uvMin, uvMax,
-            tint);
     }
 
     // Update the title bar with debug information
@@ -1079,11 +868,156 @@ public class Game : GameWindow
         }
     }
 
+    private (int texId, int charCount) LoadAsciiAtlas()
+    {
+        string chars = " .'`^\",:;il!i+_-?|/\\(){}[]<>tfjrxnuvczXYUJCLQ0OZmwqpdbkhaoegsyISTADEFGHKNPRVegsyIo*#MW&8%B@$23456791█";
+        int charW = 8, charH = 8;
+
+        var glyphs = new Dictionary<char, ulong>
+        {
+            [' '] = 0x0000000000000000UL,
+            ['.'] = 0x0000000000003018UL,
+            ['\''] = 0x0808080000000000UL,
+            ['`'] = 0x1008000000000000UL,
+            ['^'] = 0x183C660000000000UL,
+            ['"'] = 0x6666220000000000UL,
+            [','] = 0x0000000000183018UL,
+            [':'] = 0x0000001818000000UL,
+            [';'] = 0x0000001818083000UL,
+            ['i'] = 0x0018001818181800UL,
+            ['l'] = 0x1818181818181800UL,
+            ['!'] = 0x1818181818001800UL,
+            ['+'] = 0x00183C3C18000000UL,
+            ['_'] = 0x000000000000FF00UL,
+            ['-'] = 0x000000FF00000000UL,
+            ['?'] = 0x3C42020C08000800UL,
+            ['|'] = 0x0808080808080800UL,
+            ['/'] = 0x0204081020408000UL,
+            ['\\'] = 0x4020100804020000UL,
+            ['('] = 0x0C181818180C0000UL,
+            [')'] = 0x300C0C0C0C300000UL,
+            ['{'] = 0x0E181830181E0000UL,
+            ['}'] = 0x700C0C060C700000UL,
+            ['['] = 0x3C303030303C0000UL,
+            [']'] = 0x3C0C0C0C0C3C0000UL,
+            ['<'] = 0x0C183060180C0000UL,
+            ['>'] = 0x306018060C300000UL,
+            ['t'] = 0x08083E0808080600UL,
+            ['f'] = 0x0E18187E18181800UL,
+            ['j'] = 0x0606060606663C00UL,
+            ['r'] = 0x0000366E66606000UL,
+            ['x'] = 0x0000663C183C6600UL,
+            ['n'] = 0x00006E7666666600UL,
+            ['u'] = 0x0000666666663E00UL,
+            ['v'] = 0x0000666666663C00UL,
+            ['c'] = 0x00003C6660603C00UL,
+            ['z'] = 0x00007E060C187E00UL,
+            ['X'] = 0x6666663C3C666600UL,
+            ['Y'] = 0x6666663C18181800UL,
+            ['U'] = 0x6666666666663C00UL,
+            ['J'] = 0x1E0C0C0C6C6C3800UL,
+            ['C'] = 0x3C66606060663C00UL,
+            ['L'] = 0x60606060607E0000UL,
+            ['Q'] = 0x3C66666676663C06UL,
+            ['0'] = 0x3C66666E76663C00UL,
+            ['O'] = 0x3C66666666663C00UL,
+            ['Z'] = 0x7E060C1830607E00UL,
+            ['m'] = 0x0000ECFED6D6C600UL,
+            ['w'] = 0x0000C6C6D6FE6C00UL,
+            ['q'] = 0x00003E66663E063EUL,
+            ['p'] = 0x00006E76666E6060UL,
+            ['d'] = 0x06063E6666663E00UL,
+            ['b'] = 0x60606E7666667E00UL,
+            ['k'] = 0x006066787866E600UL,
+            ['h'] = 0x60606E7666666600UL,
+            ['a'] = 0x00003C063E663E00UL,
+            ['o'] = 0x00003C6666663C00UL,
+            ['e'] = 0x00003C667E603C00UL,
+            ['g'] = 0x00003E66663E063CUL,
+            ['s'] = 0x00003C603C063C00UL,
+            ['y'] = 0x00006666663E063CUL,
+            ['I'] = 0x3C181818181818UL,
+            ['S'] = 0x3C66603C06663C00UL,
+            ['T'] = 0x7E181818181818UL,
+            ['A'] = 0x183C667E66666600UL,
+            ['D'] = 0x7C66666666667C00UL,
+            ['E'] = 0x7E60607C60607E00UL,
+            ['F'] = 0x7E60607C60606000UL,
+            ['G'] = 0x3C66606E66663C00UL,
+            ['H'] = 0x6666667E66666600UL,
+            ['K'] = 0x666C7870786C6600UL,
+            ['N'] = 0x66767E6E66666600UL,
+            ['P'] = 0x7C66667C60606000UL,
+            ['R'] = 0x7C66667C6C666600UL,
+            ['V'] = 0x6666666666663C00UL,
+            ['*'] = 0x0066663CFF3C6600UL,
+            ['#'] = 0x367F36367F360000UL,
+            ['M'] = 0xC6EEFED6C6C6C600UL,
+            ['W'] = 0xC6C6C6D6FEEEC600UL,
+            ['&'] = 0x386C6C3876DCCE76UL,
+            ['8'] = 0x3C66663C66663C00UL,
+            ['%'] = 0x6066060C18306600UL,
+            ['B'] = 0x7C66667C66667C00UL,
+            ['@'] = 0x3C66736B6B3E0000UL,
+            ['$'] = 0x187E603C067E1800UL,
+            ['2'] = 0x3C66060C18307E00UL,
+            ['3'] = 0x3C66061C06663C00UL,
+            ['4'] = 0x060E1E667F060600UL,
+            ['5'] = 0x7E607C0606663C00UL,
+            ['6'] = 0x1C30607C66663C00UL,
+            ['7'] = 0x7E060C1830303000UL,
+            ['9'] = 0x3C66663E06663C00UL,
+            ['1'] = 0x0C1C0C0C0C0C3C00UL,
+            ['█'] = 0xFFFFFFFFFFFFFFFFUL,
+        };
+
+        int width = chars.Length * charW;
+        byte[] pixels = new byte[width * charH * 4]; // RGBA
+
+        for (int ci = 0; ci < chars.Length; ci++)
+        {
+            ulong glyph = glyphs.TryGetValue(chars[ci], out var g) ? g : 0UL;
+            for (int row = 0; row < charH; row++)
+            {
+                byte rowBits = (byte)((glyph >> (56 - row * 8)) & 0xFF);
+                for (int col = 0; col < charW; col++)
+                {
+                    bool lit = (rowBits & (0x80 >> col)) != 0;
+                    int idx = ((row * width) + (ci * charW + col)) * 4;
+                    byte val = lit ? (byte)255 : (byte)0;
+                    pixels[idx + 0] = val; // R
+                    pixels[idx + 1] = val; // G
+                    pixels[idx + 2] = val; // B
+                    pixels[idx + 3] = val; // A
+                }
+            }
+        }
+
+        int texId = GL.GenTexture();
+        GL.BindTexture(TextureTarget.Texture2D, texId);
+
+        GL.TexImage2D(
+            TextureTarget.Texture2D, 0,
+            PixelInternalFormat.Rgba,
+            width, charH, 0,
+            OpenTK.Graphics.OpenGL4.PixelFormat.Rgba,
+            PixelType.UnsignedByte,
+            pixels);
+
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        return (texId, chars.Length);
+    }
+
     #endregion
 
     #region Game State
 
-    private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0, bool isCreative = false)
+    private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0,
+        bool isCreative = false)
     {
         mNewWorldSize = worldSize;
         mWorldGenSettings = WorldGenSettings.Build(worldType, worldTheme);
@@ -1197,89 +1131,11 @@ public class Game : GameWindow
         mFirstMouse = true;
     }
 
-    // Serialize all saveable world entities to data objects for XML persistence
-    private List<SavedEntity> SaveWorldEntities()
-    {
-        var list = new List<SavedEntity>();
-        foreach (var entity in mWorld.Entities)
-        {
-            switch (entity)
-            {
-                case PaintingEntity:
-                    break; // paintings are saved separately
+    private List<SavedEntity> SaveWorldEntities() =>
+        WorldEntitySerializer.Save(mWorld.Entities);
 
-                case Pig pig:
-                    list.Add(MakeSavedMob("Pig", pig));
-                    break;
-
-                case Sheep sheep:
-                    var savedSheep = MakeSavedMob("Sheep", sheep);
-                    savedSheep.IsSheared = sheep.IsSheared;
-                    list.Add(savedSheep);
-                    break;
-
-                case Zombie zombie:
-                    list.Add(MakeSavedMob("Zombie", zombie));
-                    break;
-
-                case Skeleton skeleton:
-                    list.Add(MakeSavedMob("Skeleton", skeleton));
-                    break;
-
-                case Stalker stalker:
-                    list.Add(MakeSavedMob("Stalker", stalker));
-                    break;
-
-                case DroppedItemEntity drop:
-                    list.Add(new SavedEntity
-                    {
-                        Type = "DroppedItem",
-                        X = drop.Position.X,
-                        Y = drop.Position.Y,
-                        Z = drop.Position.Z,
-                        Stack = SerializableStack.From(drop.Stack),
-                    });
-                    break;
-            }
-        }
-
-        return list;
-    }
-
-    private SavedEntity MakeSavedMob(string type, Entity e) => new()
-    {
-        Type = type,
-        X = e.Position.X,
-        Y = e.Position.Y,
-        Z = e.Position.Z,
-        Yaw = e.Yaw,
-        Health = e.Health,
-    };
-
-    // Reconstruct world entities from saved data and add them to the world
-    private void LoadWorldEntities(List<SavedEntity> saved)
-    {
-        foreach (var se in saved)
-        {
-            var pos = new Vector3(se.X, se.Y, se.Z);
-
-            Entity? entity = se.Type switch
-            {
-                "Pig" => new Pig(pos) { Yaw = se.Yaw, Health = se.Health },
-                "Sheep" => new Sheep(pos) { Yaw = se.Yaw, Health = se.Health, IsSheared = se.IsSheared },
-                "Zombie" => new Zombie(pos) { Yaw = se.Yaw, Health = se.Health },
-                "Skeleton" => new Skeleton(pos) { Yaw = se.Yaw, Health = se.Health },
-                "Stalker" => new Stalker(pos) { Yaw = se.Yaw, Health = se.Health },
-                "DroppedItem" => se.Stack != null
-                    ? new DroppedItemEntity(pos, se.Stack.ToItemStack(), WorldTexture)
-                    : null,
-                _ => null,
-            };
-
-            if (entity != null)
-                mWorld.AddEntity(entity);
-        }
-    }
+    private void LoadWorldEntities(List<SavedEntity> saved) =>
+        WorldEntitySerializer.Load(saved, mWorld, WorldTexture);
 
     private void SaveWorldToDisk()
     {
@@ -1302,7 +1158,7 @@ public class Game : GameWindow
         BlockEntityManager.Save(Serialization.SaveLocation());
 
         // Save player position and inventory
-        var saveData = Serialization.LoadWorldData(Serialization.s_WorldName);
+        var saveData = Serialization.LoadWorldData(Serialization.WorldName);
         if (saveData != null)
         {
             saveData.HasPlayerPosition = true;
@@ -1333,7 +1189,7 @@ public class Game : GameWindow
         }
         else
         {
-            Serialization.UpdateLastPlayed(Serialization.s_WorldName);
+            Serialization.UpdateLastPlayed(Serialization.WorldName);
         }
     }
 
@@ -1341,6 +1197,7 @@ public class Game : GameWindow
 
     private void TeardownWorld()
     {
+        mRenderer.ClearSession();
         BlockEntityManager.Clear();
         mWorld?.Dispose();
         mWorld = null!;

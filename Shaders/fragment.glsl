@@ -43,6 +43,7 @@ void main()
 
     // Combine and apply face shading
     vec3 lighting = max(skyContrib, blockContrib) * fragColor.b;
+    lighting = max(lighting, vec3(0.04));  // ← never go fully black
     vec3 baseColor = texColor.rgb * lighting;
 
     // Fog
