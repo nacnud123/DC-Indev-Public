@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier chestplate (Chest slot); highest durability tier, grants 8 armor points (best in the game).</summary>
 public class ItemDiamondChest : ItemArmor
 {
     public override ItemType Type => ItemType.DiamondChest;

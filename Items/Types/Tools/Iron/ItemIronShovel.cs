@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier shovel; solid mid-game mining speed/attack with good durability.</summary>
 public class ItemIronShovel : ItemShovel
 {
     public override ItemType Type => ItemType.IronShovel;

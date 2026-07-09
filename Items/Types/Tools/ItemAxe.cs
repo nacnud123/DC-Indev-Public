@@ -1,6 +1,7 @@
 // Abstract axe — subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
 namespace VoxelEngine.Items;
 
+/// <summary>Abstract base for all axe tiers — fast at wood-type blocks, moderate attack damage; subclasses supply Type, Name, ToolTier, ItemCoords.</summary>
 public abstract class ItemAxe : ItemTool
 {
     public override ToolType ToolType => ToolType.Axe;

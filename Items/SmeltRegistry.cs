@@ -3,10 +3,13 @@ using VoxelEngine.Terrain;
 
 namespace VoxelEngine.Items;
 
+/// <summary>One furnace recipe: an input stack that smelts into an output stack over a fixed number of ticks.</summary>
 public class SmeltRecipe
 {
     public ItemStack Input;
     public ItemStack Output;
+
+    /// <summary>Game ticks required to fully smelt one input into one output (default 200, matching Minecraft-style furnace timing).</summary>
     public int TicksToSmelt;
 
     public SmeltRecipe(ItemStack input, ItemStack output, int ticksToSmelt = 200)
@@ -17,6 +20,9 @@ public class SmeltRecipe
     }
 }
 
+/// <summary>
+/// Static registry of furnace smelting recipes and fuel burn-time values. Recipes are matched against a furnace's input slot by stack equality (item/block type only, per <see cref="ItemStack.Equals"/>). Fuel values are keyed by the block/item's enum name string rather than the type itself so both BlockType and ItemType fuels share one dictionary.
+/// </summary>
 public static class SmeltRegistry
 {
     private static readonly List<SmeltRecipe> Recipes = new();
@@ -28,6 +34,7 @@ public static class SmeltRegistry
         RegisterFuels();
     }
 
+    /// <summary>Finds the smelt recipe whose input matches the given stack (type-only comparison), or null if none.</summary>
     public static SmeltRecipe? FindMatch(ItemStack? input)
     {
         if (!input.HasValue) return null;
@@ -36,6 +43,7 @@ public static class SmeltRegistry
         return null;
     }
 
+    /// <summary>Looks up how many smelt-ticks worth of burn time a given fuel stack provides; 0 if it isn't a valid fuel.</summary>
     public static int GetFuelValue(ItemStack? fuel)
     {
         if (!fuel.HasValue) return 0;
@@ -43,6 +51,7 @@ public static class SmeltRegistry
         return FuelValues.GetValueOrDefault(key, 0);
     }
 
+    // Registers every ore-smelting, glass-making, stone-cooking, and food-cooking recipe.
     private static void RegisterRecipes()
     {
         ItemStack B(BlockType b) => ItemStack.FromBlock(b);
@@ -58,6 +67,7 @@ public static class SmeltRegistry
         Recipes.Add(new SmeltRecipe(I(ItemType.RawPork),      I(ItemType.CookedPork)));
     }
 
+    // Registers fuel burn durations, in smelt-ticks. Coal burns longest; plank/leaf-derived fuels are shorter, and wood-family blocks that aren't obviously fuel (workbench, chest, stairs) still burn since they're made of wood.
     private static void RegisterFuels()
     {
         void Fuel(string key, int ticks) => FuelValues[key] = ticks;

@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier leggings (Legs slot); grants 5 armor points.</summary>
 public class ItemIronLegs : ItemArmor
 {
     public override ItemType Type => ItemType.IronLegs;

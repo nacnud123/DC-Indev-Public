@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier hoe; behaves identically to every other hoe tier (tilling), differs only in durability.</summary>
 public class ItemDiamondHoe : ItemHoe
 {
     public override ItemType Type => ItemType.DiamondHoe;

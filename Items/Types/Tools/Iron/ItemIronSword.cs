@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier sword; solid mid-game mining speed/attack with good durability.</summary>
 public class ItemIronSword : ItemSword
 {
     public override ItemType Type => ItemType.IronSword;

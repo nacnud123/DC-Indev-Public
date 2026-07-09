@@ -10,6 +10,9 @@ using VoxelEngine.Rendering;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Single-chest UI: a 9x3 chest grid (backed by <see cref="ChestData"/>, keyed to a world position by <c>BlockEntityManager</c>) above the shared player inventory/hotbar. Click handling mirrors <see cref="InventoryScreenBase.HandleInvSlotLeft"/>/Right but targets the chest's own slot storage instead of <see cref="PlayerInventory"/>.
+/// </summary>
 public class ChestScreen : InventoryScreenBase
 {
     private const int CHEST_ROWS = 3;
@@ -26,6 +29,7 @@ public class ChestScreen : InventoryScreenBase
     {
     }
 
+    // Rebinds the screen to whichever chest block entity was just opened.
     public void SetChest(ChestData chest) => mChest = chest;
 
     public void OnClose()

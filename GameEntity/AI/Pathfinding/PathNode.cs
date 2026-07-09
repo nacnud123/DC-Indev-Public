@@ -1,26 +1,26 @@
 // AStar node | DA | 2/5/26
-using OpenTK.Mathematics;
+
 
 namespace VoxelEngine.GameEntity.AI.Pathfinding;
 
 /// <summary>
-/// Represents a node in the A* pathfinding grid.
+/// Represents a single node in the A* search graph, one per unique block position visited during a search. Instances are created and cached by <see cref="AStarPathfinder"/>'s GetOrCreateNode and are mutated in place as the search progresses (rather than replaced), which is why costs and Parent get overwritten when a cheaper path to the same position is found.
 /// </summary>
 public class PathNode
 {
-    /// <summary> F = G + H (total estimated cost) </summary>
+    /// <summary> F = G + H (total estimated cost). This is the value the open-set priority queue sorts by. </summary>
     public int F { get; set; }
 
-    /// <summary> G = cost from start to this node </summary>
+    /// <summary> G = actual accumulated movement cost from the start node to this node (see AStarPathfinder.CalculateGScore). </summary>
     public int G { get; set; }
 
-    /// <summary> H = heuristic estimate from this node to goal </summary>
+    /// <summary> H = heuristic (Manhattan-distance) estimate of remaining cost from this node to the goal; never updated once set for a given search. </summary>
     public int H { get; set; }
 
-    /// <summary> Parent node in the path </summary>
+    /// <summary> Predecessor node on the current best-known path from start to this node; used to walk the path back to front once the goal is reached. Null for the start node. </summary>
     public PathNode? Parent { get; set; }
 
-    /// <summary> Position in world coordinates (block position) </summary>
+    /// <summary> Block-grid position this node represents (integer world coordinates, one node per block). </summary>
     public Vector3i Position { get; set; }
 
     public PathNode(Vector3i position)
@@ -28,6 +28,7 @@ public class PathNode
         Position = position;
     }
 
+    // Resets search-specific state so a cached node can be reused for a new search without stale cost/parent data leaking in. Note: not currently called by AStarPathfinder (which instead clears its whole node cache per search), but kept available for alternate reuse strategies.
     public void Reset()
     {
         F = 0;

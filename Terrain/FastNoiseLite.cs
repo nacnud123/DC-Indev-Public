@@ -1,51 +1,6 @@
-// MIT License
-//
-// Copyright(c) 2023 Jordan Peck (jordan.me2@gmail.com)
-// Copyright(c) 2023 Contributors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files(the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and / or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions :
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-//
-// .'',;:cldxkO00KKXXNNWWWNNXKOkxdollcc::::::;:::ccllloooolllllllllooollc:,'...        ...........',;cldxkO000Okxdlc::;;;,,;;;::cclllllll
-// ..',;:ldxO0KXXNNNNNNNNXXK0kxdolcc::::::;;;,,,,,,;;;;;;;;;;:::cclllllc:;'....       ...........',;:ldxO0KXXXK0Okxdolc::;;;;::cllodddddo
-// ...',:loxO0KXNNNNNXXKK0Okxdolc::;::::::::;;;,,'''''.....''',;:clllllc:;,'............''''''''',;:loxO0KXNNNNNXK0Okxdollccccllodxxxxxxd
-// ....';:ldkO0KXXXKK00Okxdolcc:;;;;;::cclllcc:;;,''..... ....',;clooddolcc:;;;;,,;;;;;::::;;;;;;:cloxk0KXNWWWWWWNXKK0Okxddoooddxxkkkkkxx
-// .....';:ldxkOOOOOkxxdolcc:;;;,,,;;:cllooooolcc:;'...      ..,:codxkkkxddooollloooooooollcc:::::clodkO0KXNWWWWWWNNXK00Okxxxxxxxxkkkkxxx
-// . ....';:cloddddo___________,,,,;;:clooddddoolc:,...      ..,:ldx__00OOOkkk___kkkkkkxxdollc::::cclodkO0KXXNNNNNNXXK0OOkxxxxxxxxxxxxddd
-// .......',;:cccc:|           |,,,;;:cclooddddoll:;'..     ..';cox|  \KKK000|   |KK00OOkxdocc___;::clldxxkO0KKKKK00Okkxdddddddddddddddoo
-// .......'',,,,,''|   ________|',,;;::cclloooooolc:;'......___:ldk|   \KK000|   |XKKK0Okxolc|   |;;::cclodxxkkkkxxdoolllcclllooodddooooo
-// ''......''''....|   |  ....'',,,,;;;::cclloooollc:;,''.'|   |oxk|    \OOO0|   |KKK00Oxdoll|___|;;;;;::ccllllllcc::;;,,;;;:cclloooooooo
-// ;;,''.......... |   |_____',,;;;____:___cllo________.___|   |___|     \xkk|   |KK_______ool___:::;________;;;_______...'',;;:ccclllloo
-// c:;,''......... |         |:::/     '   |lo/        |           |      \dx|   |0/       \d|   |cc/        |'/       \......',,;;:ccllo
-// ol:;,'..........|    _____|ll/    __    |o/   ______|____    ___|   |   \o|   |/   ___   \|   |o/   ______|/   ___   \ .......'',;:clo
-// dlc;,...........|   |::clooo|    /  |   |x\___   \KXKKK0|   |dol|   |\   \|   |   |   |   |   |d\___   \..|   |  /   /       ....',:cl
-// xoc;'...  .....'|   |llodddd|    \__|   |_____\   \KKK0O|   |lc:|   |'\       |   |___|   |   |_____\   \.|   |_/___/...      ...',;:c
-// dlc;'... ....',;|   |oddddddo\          |          |Okkx|   |::;|   |..\      |\         /|   |          | \         |...    ....',;:c
-// ol:,'.......',:c|___|xxxddollc\_____,___|_________/ddoll|___|,,,|___|...\_____|:\ ______/l|___|_________/...\________|'........',;::cc
-// c:;'.......';:codxxkkkkxxolc::;::clodxkOO0OOkkxdollc::;;,,''''',,,,''''''''''',,'''''',;:loxkkOOkxol:;,'''',,;:ccllcc:;,'''''',;::ccll
-// ;,'.......',:codxkOO0OOkxdlc:;,,;;:cldxxkkxxdolc:;;,,''.....'',;;:::;;,,,'''''........,;cldkO0KK0Okdoc::;;::cloodddoolc:;;;;;::ccllooo
-// .........',;:lodxOO0000Okdoc:,,',,;:clloddoolc:;,''.......'',;:clooollc:;;,,''.......',:ldkOKXNNXX0Oxdolllloddxxxxxxdolccccccllooodddd
-// .    .....';:cldxkO0000Okxol:;,''',,;::cccc:;,,'.......'',;:cldxxkkxxdolc:;;,'.......';coxOKXNWWWNXKOkxddddxxkkkkkkxdoollllooddxxxxkkk
-//       ....',;:codxkO000OOxdoc:;,''',,,;;;;,''.......',,;:clodkO00000Okxolc::;,,''..',;:ldxOKXNWWWNNK0OkkkkkkkkkkkxxddooooodxxkOOOOO000
-//       ....',;;clodxkkOOOkkdolc:;,,,,,,,,'..........,;:clodxkO0KKXKK0Okxdolcc::;;,,,;;:codkO0XXNNNNXKK0OOOOOkkkkxxdoollloodxkO0KKKXXXXX
-//
-// VERSION: 1.1.1
-// https://github.com/Auburn/FastNoiseLite
+// MIT License Copyright(c) 2023 Jordan Peck (jordan.me2@gmail.com) Copyright(c) 2023 Contributors Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and / or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions : The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. .'',;:cldxkO00KKXXNNWWWNNXKOkxdollcc::::::;:::ccllloooolllllllllooollc:,'...        ...........',;cldxkO000Okxdlc::;;;,,;;;::cclllllll ..',;:ldxO0KXXNNNNNNNNXXK0kxdolcc::::::;;;,,,,,,;;;;;;;;;;:::cclllllc:;'....       ...........',;:ldxO0KXXXK0Okxdolc::;;;;::cllodddddo ...',:loxO0KXNNNNNXXKK0Okxdolc::;::::::::;;;,,'''''.....''',;:clllllc:;,'............''''''''',;:loxO0KXNNNNNXK0Okxdollccccllodxxxxxxd ....';:ldkO0KXXXKK00Okxdolcc:;;;;;::cclllcc:;;,''..... ....',;clooddolcc:;;;;,,;;;;;::::;;;;;;:cloxk0KXNWWWWWWNXKK0Okxddoooddxxkkkkkxx .....';:ldxkOOOOOkxxdolcc:;;;,,,;;:cllooooolcc:;'...      ..,:codxkkkxddooollloooooooollcc:::::clodkO0KXNWWWWWWNNXK00Okxxxxxxxxkkkkxxx . ....';:cloddddo___________,,,,;;:clooddddoolc:,...      ..,:ldx__00OOOkkk___kkkkkkxxdollc::::cclodkO0KXXNNNNNNXXK0OOkxxxxxxxxxxxxddd .......',;:cccc:|           |,,,;;:cclooddddoll:;'..     ..';cox|  \KKK000|   |KK00OOkxdocc___;::clldxxkO0KKKKK00Okkxdddddddddddddddoo .......'',,,,,''|   ________|',,;;::cclloooooolc:;'......___:ldk|   \KK000|   |XKKK0Okxolc|   |;;::cclodxxkkkkxxdoolllcclllooodddooooo ''......''''....|   |  ....'',,,,;;;::cclloooollc:;,''.'|   |oxk|    \OOO0|   |KKK00Oxdoll|___|;;;;;::ccllllllcc::;;,,;;;:cclloooooooo ;;,''.......... |   |_____',,;;;____:___cllo________.___|   |___|     \xkk|   |KK_______ool___:::;________;;;_______...'',;;:ccclllloo c:;,''......... |         |:::/     '   |lo/        |           |      \dx|   |0/       \d|   |cc/        |'/       \......',,;;:ccllo ol:;,'..........|    _____|ll/    __    |o/   ______|____    ___|   |   \o|   |/   ___   \|   |o/   ______|/   ___   \ .......'',;:clo dlc;,...........|   |::clooo|    /  |   |x\___   \KXKKK0|   |dol|   |\   \|   |   |   |   |   |d\___   \..|   |  /   /       ....',:cl xoc;'...  .....'|   |llodddd|    \__|   |_____\   \KKK0O|   |lc:|   |'\       |   |___|   |   |_____\   \.|   |_/___/...      ...',;:c dlc;'... ....',;|   |oddddddo\          |          |Okkx|   |::;|   |..\      |\         /|   |          | \         |...    ....',;:c ol:,'.......',:c|___|xxxddollc\_____,___|_________/ddoll|___|,,,|___|...\_____|:\ ______/l|___|_________/...\________|'........',;::cc c:;'.......';:codxxkkkkxxolc::;::clodxkOO0OOkkxdollc::;;,,''''',,,,''''''''''',,'''''',;:loxkkOOkxol:;,'''',,;:ccllcc:;,'''''',;::ccll ;,'.......',:codxkOO0OOkxdlc:;,,;;:cldxxkkxxdolc:;;,,''.....'',;;:::;;,,,'''''........,;cldkO0KK0Okdoc::;;::cloodddoolc:;;;;;::ccllooo .........',;:lodxOO0000Okdoc:,,',,;:clloddoolc:;,''.......'',;:clooollc:;;,,''.......',:ldkOKXNNXX0Oxdolllloddxxxxxxdolccccccllooodddd .    .....';:cldxkO0000Okxol:;,''',,;::cccc:;,,'.......'',;:cldxxkkxxdolc:;;,'.......';coxOKXNWWWNXKOkxddddxxkkkkkkxdoollllooddxxxxkkk ....',;:codxkO000OOxdoc:;,''',,,;;;;,''.......',,;:clodkO00000Okxolc::;,,''..',;:ldxOKXNWWWNNK0OkkkkkkkkkkkxxddooooodxxkOOOOO000 ....',;;clodxkkOOOkkdolc:;,,,,,,,,'..........,;:clodxkO0KKXKK0Okxdolcc::;;,,,;;:codkO0XXNNNNXKK0OOOOOkkkkxxdoollloodxkO0KKKXXXXX VERSION: 1.1.1 https://github.com/Auburn/FastNoiseLite
+
+// --------------------------------------------------------------------------- FastNoiseLite (C# port) - vendored third-party noise-generation library. This file is a direct port of Jordan Peck / Auburn's FastNoiseLite and is NOT original engine code; only light documentation has been added on top of the upstream source (see license/header above and the project link). It provides a single configurable noise generator (FastNoiseLite) exposing: - Noise types: OpenSimplex2, OpenSimplex2S, Cellular/Voronoi, Perlin, ValueCubic, and Value noise. - Fractal layering: FBm, Ridged, PingPong, and progressive/independent domain-warp fractal modes, built from octaves/lacunarity/gain settings. - Cellular (Voronoi-style) distance functions and return types for cell-pattern noise (e.g. stone/ore vein patterns, biome blobs). - Domain warping (2D/3D) to distort input coordinates before sampling, useful for more organic-looking terrain and cave shapes. In this codebase it is consumed by Terrain/Noise.cs, which wraps/configures FastNoiseLite instances for use by Terrain/TerrainGen.cs during world generation (heightmaps, caves, ore placement, biome blending, etc.). ---------------------------------------------------------------------------
 
 using System;
 using System.Runtime.CompilerServices;
@@ -62,57 +17,104 @@ public class FastNoiseLite
     private const short INLINE = 256; // MethodImplOptions.AggressiveInlining;
     private const short OPTIMISE = 512; // MethodImplOptions.AggressiveOptimization;
 
-    public enum NoiseType 
-    { 
+    /// <summary>
+    /// The underlying noise algorithm used to generate values.
+    /// </summary>
+    public enum NoiseType
+    {
+        /// <summary>Simplex-based gradient noise; smooth, no visible grid artifacts, moderate cost.</summary>
         OpenSimplex2,
+        /// <summary>Smoother/slower variant of OpenSimplex2 with softer, more rounded features.</summary>
         OpenSimplex2S,
+        /// <summary>Voronoi/cellular noise producing cell-like patterns; shaped via CellularDistanceFunction/CellularReturnType.</summary>
         Cellular,
+        /// <summary>Classic Perlin gradient noise; slightly more grid-aligned artifacts than simplex.</summary>
         Perlin,
+        /// <summary>Interpolated value noise using cubic smoothing for smoother output than plain Value noise.</summary>
         ValueCubic,
-        Value 
+        /// <summary>Basic lattice value noise (random values at grid points, interpolated); cheapest but blockiest.</summary>
+        Value
     };
 
-    public enum RotationType3D 
+    /// <summary>
+    /// Domain rotation applied before 3D sampling, used to reduce directional/axis-aligned artifacts when sampling a 2D plane through 3D noise (e.g. a horizontal terrain slice).
+    /// </summary>
+    public enum RotationType3D
     {
-        None, 
-        ImproveXYPlanes, 
-        ImproveXZPlanes 
-    };
-    
-    public enum FractalType 
-    {
-        None, 
-        FBm, 
-        Ridged, 
-        PingPong, 
-        DomainWarpProgressive, 
-        DomainWarpIndependent 
+        /// <summary>No rotation applied.</summary>
+        None,
+        /// <summary>Improves quality when sampling primarily along the XY plane.</summary>
+        ImproveXYPlanes,
+        /// <summary>Improves quality when sampling primarily along the XZ plane (typical for horizontal terrain slices).</summary>
+        ImproveXZPlanes
     };
 
-    public enum CellularDistanceFunction 
+    /// <summary>
+    /// How successive noise octaves (or domain-warp passes) are combined together.
+    /// </summary>
+    public enum FractalType
     {
-        Euclidean, 
-        EuclideanSq, 
-        Manhattan, 
-        Hybrid 
-    };
-    
-    public enum CellularReturnType 
-    {
-        CellValue, 
-        Distance, 
-        Distance2, 
-        Distance2Add, 
-        Distance2Sub, 
-        Distance2Mul, 
-        Distance2Div 
+        /// <summary>Single octave, no fractal combination.</summary>
+        None,
+        /// <summary>Fractal Brownian Motion - octaves summed with decreasing amplitude/increasing frequency; classic "rough terrain" look.</summary>
+        FBm,
+        /// <summary>Ridged multifractal - octaves folded to create sharp ridge-like features (mountain ridges, ravines).</summary>
+        Ridged,
+        /// <summary>Ping-pong fractal - output bounces between 0 and 1, producing wavy/marbled patterns.</summary>
+        PingPong,
+        /// <summary>Applies each domain-warp octave progressively on top of the last (used only by DomainWarp calls).</summary>
+        DomainWarpProgressive,
+        /// <summary>Applies each domain-warp octave independently from the original position (used only by DomainWarp calls).</summary>
+        DomainWarpIndependent
     };
 
-    public enum DomainWarpType 
-    { 
-        OpenSimplex2, 
-        OpenSimplex2Reduced, 
-        BasicGrid 
+    /// <summary>
+    /// Distance metric used when computing cellular/Voronoi noise cell distances.
+    /// </summary>
+    public enum CellularDistanceFunction
+    {
+        /// <summary>Straight-line (true) distance.</summary>
+        Euclidean,
+        /// <summary>Squared Euclidean distance; cheaper, avoids a sqrt, slightly different cell shaping.</summary>
+        EuclideanSq,
+        /// <summary>Manhattan/taxicab distance; produces diamond-shaped cells.</summary>
+        Manhattan,
+        /// <summary>Blend of Euclidean and Manhattan distances.</summary>
+        Hybrid
+    };
+
+    /// <summary>
+    /// What value cellular noise returns for a sampled point.
+    /// </summary>
+    public enum CellularReturnType
+    {
+        /// <summary>Returns a pseudo-random value unique to the closest cell (flat-shaded Voronoi look).</summary>
+        CellValue,
+        /// <summary>Returns the distance to the closest cell point.</summary>
+        Distance,
+        /// <summary>Returns the distance to the second-closest cell point.</summary>
+        Distance2,
+        /// <summary>Returns Distance + Distance2 (thicker cell borders).</summary>
+        Distance2Add,
+        /// <summary>Returns Distance2 - Distance.</summary>
+        Distance2Sub,
+        /// <summary>Returns Distance * Distance2.</summary>
+        Distance2Mul,
+        /// <summary>Returns Distance / Distance2.</summary>
+        Distance2Div
+    };
+
+    /// <summary>
+    /// The algorithm used to displace/warp input coordinates in DomainWarp(...) calls.
+    /// </summary>
+    public enum DomainWarpType
+    {
+        /// <summary>Warp offsets derived from OpenSimplex2 noise gradients.</summary>
+        OpenSimplex2,
+        /// <summary>Cheaper/reduced-quality variant of the OpenSimplex2 warp.</summary>
+        OpenSimplex2Reduced,
+        /// <summary>Simple grid-based warp; cheapest option.</summary>
+        BasicGrid
     };
 
     private enum TransformType3D 
@@ -183,8 +185,7 @@ public class FastNoiseLite
     }
 
     /// <summary>
-    /// Sets domain rotation type for 3D Noise and 3D DomainWarp.
-    /// Can aid in reducing directional artifacts when sampling a 2D plane in 3D
+    /// Sets domain rotation type for 3D Noise and 3D DomainWarp. Can aid in reducing directional artifacts when sampling a 2D plane in 3D
     /// </summary>
     /// <remarks>
     /// Default: None
@@ -200,8 +201,7 @@ public class FastNoiseLite
     /// Sets method for combining octaves in all fractal noise types
     /// </summary>
     /// <remarks>
-    /// Default: None
-    /// Note: FractalType.DomainWarp... only affects DomainWarp(...)
+    /// Default: None Note: FractalType.DomainWarp... only affects DomainWarp(...)
     /// </remarks>
     public void SetFractalType(FractalType fractalType) { mFractalType = fractalType; }
 
@@ -241,8 +241,7 @@ public class FastNoiseLite
     /// Sets octave weighting for all none DomainWarp fratal types
     /// </summary>
     /// <remarks>
-    /// Default: 0.0
-    /// Note: Keep between 0...1 to maintain -1...1 output bounding
+    /// Default: 0.0 Note: Keep between 0...1 to maintain -1...1 output bounding
     /// </remarks>
     public void SetFractalWeightedStrength(float weightedStrength) { mWeightedStrength = weightedStrength; }
 
@@ -275,9 +274,8 @@ public class FastNoiseLite
     /// Sets the maximum distance a cellular point can move from it's grid position
     /// </summary>
     /// <remarks>
-    /// Default: 1.0
-    /// Note: Setting this higher than 1 will cause artifacts
-    /// </remarks> 
+    /// Default: 1.0 Note: Setting this higher than 1 will cause artifacts
+    /// </remarks>
     public void SetCellularJitter(float cellularJitter) { mCellularJitterModifier = cellularJitter; }
 
 
@@ -356,9 +354,7 @@ public class FastNoiseLite
     /// 2D warps the input position using current domain warp settings
     /// </summary>
     /// <example>
-    /// Example usage with GetNoise
-    /// <code>DomainWarp(ref x, ref y)
-    /// noise = GetNoise(x, y)</code>
+    /// Example usage with GetNoise <code>DomainWarp(ref x, ref y) noise = GetNoise(x, y)</code>
     /// </example>
     [MethodImpl(OPTIMISE)]
     public void DomainWarp(ref FNLfloat x, ref FNLfloat y)
@@ -381,9 +377,7 @@ public class FastNoiseLite
     /// 3D warps the input position using current domain warp settings
     /// </summary>
     /// <example>
-    /// Example usage with GetNoise
-    /// <code>DomainWarp(ref x, ref y, ref z)
-    /// noise = GetNoise(x, y, z)</code>
+    /// Example usage with GetNoise <code>DomainWarp(ref x, ref y, ref z) noise = GetNoise(x, y, z)</code>
     /// </example>
     [MethodImpl(OPTIMISE)]
     public void DomainWarp(ref FNLfloat x, ref FNLfloat y, ref FNLfloat z)

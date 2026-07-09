@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Leather-tier leggings (Legs slot); lowest tier, grants 2 armor points.</summary>
 public class ItemLeatherLegs : ItemArmor
 {
     public override ItemType Type => ItemType.LeatherLegs;

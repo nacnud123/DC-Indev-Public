@@ -11,6 +11,9 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Crafting-table (workbench) UI: a 3x3 crafting grid (larger than the 2x2 grid built into <see cref="InventoryScreen"/>) plus the shared player inventory/hotbar. Recipe matching/result computation lives in <see cref="CraftingGrid"/>, which is re-queried whenever a grid slot changes.
+/// </summary>
 public class CraftingScreen : InventoryScreenBase
 {
     private const int CRAFT_COLS = 3;

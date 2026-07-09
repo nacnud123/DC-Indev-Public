@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Leather-tier chestplate (Chest slot); lowest tier, grants 3 armor points.</summary>
 public class ItemLeatherChest : ItemArmor
 {
     public override ItemType Type => ItemType.LeatherChest;

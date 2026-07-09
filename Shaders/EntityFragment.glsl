@@ -1,6 +1,8 @@
 #version 330 core
+
 in vec2 uv;
 in vec3 norm;
+
 uniform sampler2D tex;
 uniform vec3 lightDir;
 uniform float ambientStrength;
@@ -12,7 +14,9 @@ uniform float uHitFlash;
 out vec4 frag;
 void main() {
     vec4 texColor = texture(tex, uv);
-    if (texColor.a < 0.1) discard;
+    
+    if (texColor.a < 0.1) 
+        discard;
 
     vec3 n = normalize(norm);
     float diff = max(dot(n, -lightDir), 0.0) * 0.6;

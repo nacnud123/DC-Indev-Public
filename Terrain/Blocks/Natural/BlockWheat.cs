@@ -55,7 +55,7 @@ public class BlockWheatStage4 : BlockWheatBase
     public override TextureCoords SideTextureCoords => TopTextureCoords;
     public override TextureCoords BottomTextureCoords => TopTextureCoords;
 
-    // OnRemoved handles drops directly — return null so GetDrop doesn't also spawn items
+    // OnRemoved handles drops directly - return null so GetDrop doesn't also spawn items
     public override ItemStack? GetDrop(byte metadata) => null;
 
     public override void OnRemoved(World world, int x, int y, int z)

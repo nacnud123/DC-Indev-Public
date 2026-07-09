@@ -10,6 +10,9 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Always-visible bottom-of-screen hotbar (9 slots) drawn during normal gameplay. Renders directly to ImGui's background draw list (rather than inside an ImGui window) so it stays fixed on screen without any window chrome or interaction. Reads/writes slot contents through <c>PlayerInventory</c>'s hotbar range and tracks which slot is currently selected for use as the active block/item.
+/// </summary>
 internal class Hotbar
 {
     private const int HOTBAR_SLOTS = PlayerInventory.HOTBAR_SLOTS;
@@ -30,11 +33,12 @@ internal class Hotbar
 
     private int mSelectedSlot;
     private readonly PlayerInventory mInventory;
-    private readonly BlockIconRenderer mIconRenderer;
-    private readonly Texture mItemTexture;
+    private readonly BlockIconRenderer mIconRenderer; // renders baked block icons (3D-ish preview) for block stacks
+    private readonly Texture mItemTexture; // atlas texture for non-block item icons (Resources/Items.png)
 
     public int SelectedSlotIndex => mSelectedSlot;
 
+    // Exposed so other UI (e.g. block highlight / crosshair layout) can position itself relative to the hotbar without duplicating its size/position math.
     public float GetHotbarX(float displayWidth) => (displayWidth - HOTBAR_WIDTH) / 2f;
     public float GetHotbarY(float displayHeight) => displayHeight - HOTBAR_HEIGHT - 10f;
     public float HotbarWidth => HOTBAR_WIDTH;
@@ -46,11 +50,13 @@ internal class Hotbar
         mInventory = inventory;
     }
 
+    // Hotbar slot indices (0-8) map onto a contiguous range of the shared PlayerInventory array starting at HOTBAR_START, so the hotbar and full inventory screen see the same data.
     private ItemStack? GetSlot(int i) => mInventory.GetSlot(HOTBAR_START + i);
     private void SetSlot(int i, ItemStack? s) => mInventory.SetSlot(HOTBAR_START + i, s);
 
     public void SetHotbarSlot(int slot) => mSelectedSlot = Math.Clamp(slot, 0, HOTBAR_SLOTS - 1);
 
+    /// <summary>Moves the selection by +/-1 slot with wraparound, used by mouse-wheel scrolling.</summary>
     public void ScrollSlot(int direction)
     {
         mSelectedSlot = (mSelectedSlot + direction + HOTBAR_SLOTS) % HOTBAR_SLOTS;
@@ -79,6 +85,9 @@ internal class Hotbar
 
     public ItemStack? GetSelectedStack() => GetSlot(mSelectedSlot);
 
+    /// <summary>
+    /// Draws the hotbar background, all 9 slots (icon, stack count, durability bar), the selection highlight, and the floating name label above the currently selected item. Uses the ImGui background draw list so it renders every frame regardless of which ImGui windows/screens are open, without needing its own Begin/End window.
+    /// </summary>
     public void Render()
     {
         var displaySize = ImGui.GetIO().DisplaySize;
@@ -130,6 +139,7 @@ internal class Hotbar
         }
     }
 
+    // Blocks use a pre-rendered icon texture (via BlockIconRenderer, full 0-1 UV range); items are sampled directly from the shared item atlas using their registered UV rect. V coordinates are flipped (BottomRight.Y first) to account for the atlas texture's vertical orientation vs. ImGui's top-left-origin UV space.
     private void DrawItem(ImDrawListPtr drawList, ItemStack stack, float x, float y, float size)
     {
         var min = new Vector2(x, y);
@@ -146,6 +156,7 @@ internal class Hotbar
         }
     }
 
+    // Draws text twice (offset black "shadow" copy behind a white copy) for legibility over any background color/terrain, mimicking Minecraft's text style without needing a font atlas.
     private static void DrawShadowedText(ImDrawListPtr drawList, Vector2 pos, string text)
     {
         drawList.AddText(pos + Vector2.One, ColorShadow, text);

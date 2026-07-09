@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier pickaxe; solid mid-game mining speed/attack with good durability.</summary>
 public class ItemIronPickaxe : ItemPickaxe
 {
     public override ItemType Type => ItemType.IronPickaxe;

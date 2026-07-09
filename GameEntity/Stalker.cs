@@ -1,6 +1,6 @@
 // Hostile entity that stalks the player and explodes when close. Flashes white during fuse. | DA | 3/2/26
 
-using OpenTK.Mathematics;
+
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity.AI;
 using VoxelEngine.Items;
@@ -9,6 +9,7 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.GameEntity;
 
+// Hostile mob made of a body + head + 4 legs (separate models glued together each frame in DrawModel). Walks toward the player via StalkerAi, then primes a fuse when close and explodes.
 public class Stalker : Entity
 {
     private const string BODY_MODEL = "Resources/Entities/Stalker/StalkerBody/StalkerBody.obj";
@@ -104,7 +105,7 @@ public class Stalker : Entity
 
         float dt = TickSystem.TICK_DURATION;
         Vector3 playerPos = Game.Instance.GetPlayer.Position;
-        float distToPlayer = (playerPos - Position).Length;
+        float distToPlayer = (playerPos - Position).Length();
 
         UpdateFuse(world, distToPlayer, dt);
 
@@ -118,6 +119,7 @@ public class Stalker : Entity
         UpdateAnimation();
     }
 
+    // Small state machine: idle -> fuse active (player is close) -> either explode or abort (player backs away far enough).
     private void UpdateFuse(World world, float distToPlayer, float dt)
     {
         if (!mFuseActive)
@@ -134,7 +136,7 @@ public class Stalker : Entity
             return;
         }
 
-        // Player backed away
+        // Player backed away far enough - cancel the fuse.
         if (distToPlayer > ABORT_RANGE)
         {
             mFuseActive = false;
@@ -144,8 +146,9 @@ public class Stalker : Entity
 
         mFuseTimer -= dt;
 
+        // t goes from 0 to 1 as the fuse burns down, speeding up the flash near the end.
         float t = MathF.Max(0f, 1f - mFuseTimer / FUSE_DURATION);
-        float flashInterval = MathHelper.Lerp(FLASH_INTERVAL_START, FLASH_INTERVAL_END, t);
+        float flashInterval = (FLASH_INTERVAL_START + (FLASH_INTERVAL_END - FLASH_INTERVAL_START) * t);
         mFlashTimer -= dt;
         if (mFlashTimer <= 0f)
         {
@@ -184,93 +187,24 @@ public class Stalker : Entity
 
     private void Explode(World world)
     {
-        Game.Instance.AudioManager.PlayAudio("Resources/Audio/TNTExpload.ogg", Game.Instance.AudioManager.SfxVol);
-
-        int cx = (int)MathF.Floor(Position.X);
-        int cy = (int)MathF.Floor(Position.Y);
-        int cz = (int)MathF.Floor(Position.Z);
-
-        for (int dx = -EXPLOSION_RADIUS; dx <= EXPLOSION_RADIUS; dx++)
-        {
-            for (int dy = -EXPLOSION_RADIUS; dy <= EXPLOSION_RADIUS; dy++)
-            {
-                for (int dz = -EXPLOSION_RADIUS; dz <= EXPLOSION_RADIUS; dz++)
-                {
-                    float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-
-                    if (dist > EXPLOSION_RADIUS)
-                        continue;
-
-                    int bx = cx + dx, by = cy + dy, bz = cz + dz;
-                    var block = world.GetBlock(bx, by, bz);
-
-                    if (block == BlockType.Air)
-                        continue;
-
-                    var blockDef = BlockRegistry.Get(block);
-
-                    if (!blockDef.IsBreakable)
-                        continue;
-
-                    float power = EXPLOSION_POWER * (1f - dist / EXPLOSION_RADIUS);
-
-                    if (power < blockDef.Hardness)
-                        continue;
-
-                    Game.Instance.ParticleSystem?.SpawnBlockBreakParticles(new Vector3(bx, by, bz), block);
-                    world.SetBlock(bx, by, bz, BlockType.Air);
-                }
-            }
-        }
-
-        Vector3 center = new(cx + 0.5f, cy + 0.5f, cz + 0.5f);
-        ApplyExplosionToEntity(Game.Instance.GetPlayer, center);
-
-        for (int i = 0; i < world.Entities.Count; i++)
-        {
-            var entity = world.Entities[i];
-            if (entity == this)
-                continue;
-
-            ApplyExplosionToEntity(entity, center);
-        }
+        ExplosionUtil.Trigger(world, Position, EXPLOSION_RADIUS, EXPLOSION_POWER, KNOCKBACK_STRENGTH, this);
     }
 
-    private void ApplyExplosionToEntity(Entity? entity, Vector3 center)
-    {
-        if (entity is not { IsAlive: true })
-            return;
-
-        Vector3 entityCenter = entity.Position + new Vector3(0, entity.Height * 0.5f, 0);
-        Vector3 delta = entityCenter - center;
-        float dist = delta.Length;
-
-        if (dist > EXPLOSION_RADIUS)
-            return;
-
-        float proximity = 1f - dist / EXPLOSION_RADIUS;
-        int damage = (int)(proximity * EXPLOSION_POWER * 20f);
-
-        if (damage > 0)
-            entity.TakeDamage(damage);
-
-        Vector3 knockDir = dist > 0.01f ? delta / dist : Vector3.UnitY;
-        entity.Velocity += knockDir * proximity * KNOCKBACK_STRENGTH;
-    }
-
-    protected override void DrawModel(Matrix4 view, Matrix4 projection)
+    protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {
         // Override hit flash with fuse flash when fuse is active
         if (mFuseActive)
             _shader?.SetFloat("uHitFlash", mFlashOn ? 0.85f : 0f);
 
-        Matrix4 entityBase = Matrix4.CreateScale(Scale) * Matrix4.CreateRotationY(Yaw) *
-                             Matrix4.CreateTranslation(Position);
-        Matrix4 vp = view * projection;
+        // entityBase places the whole mob in the world; each body part is then offset from that.
+        Matrix4x4 entityBase = Matrix4x4.CreateScale(Scale) * Matrix4x4.CreateRotationY(Yaw) *
+                             Matrix4x4.CreateTranslation(Position);
+        Matrix4x4 vp = view * projection;
 
-        DrawPart(mBodyModel, Matrix4.CreateTranslation(BodyOffset) * entityBase * vp);
-        DrawPart(mHeadModel, Matrix4.CreateTranslation(HeadOffset) * entityBase * vp);
+        DrawPart(mBodyModel, Matrix4x4.CreateTranslation(BodyOffset) * entityBase * vp);
+        DrawPart(mHeadModel, Matrix4x4.CreateTranslation(HeadOffset) * entityBase * vp);
 
+        // Front-left/back-right legs swing together, opposite front-right/back-left, like a real walk cycle.
         float swing1 = MathF.Sin(mWalkPhase) * MAX_LEG_SWING * mLegSwing;
         float swing2 = MathF.Sin(mWalkPhase + MathF.PI) * MAX_LEG_SWING * mLegSwing;
         DrawLeg(swing1, FrontLeftLegOffset, entityBase, vp);
@@ -279,11 +213,11 @@ public class Stalker : Entity
         DrawLeg(swing2, BackLeftLegOffset, entityBase, vp);
     }
 
-    private void DrawLeg(float swingAngle, Vector3 offset, Matrix4 entityBase, Matrix4 vp)
+    private void DrawLeg(float swingAngle, Vector3 offset, Matrix4x4 entityBase, Matrix4x4 vp)
     {
-        Matrix4 legLocal = Matrix4.CreateTranslation(-LegPivot)
-                           * Matrix4.CreateRotationZ(swingAngle)
-                           * Matrix4.CreateTranslation(LegPivot + offset);
+        Matrix4x4 legLocal = Matrix4x4.CreateTranslation(-LegPivot)
+                           * Matrix4x4.CreateRotationZ(swingAngle)
+                           * Matrix4x4.CreateTranslation(LegPivot + offset);
         DrawPart(mLegModel, legLocal * entityBase * vp);
     }
 
@@ -291,7 +225,7 @@ public class Stalker : Entity
     {
         base.TakeDamage(amount);
         var audio = Game.Instance.AudioManager;
-        float dist = (Game.Instance.GetPlayer.Position - Position).Length;
+        float dist = (Game.Instance.GetPlayer.Position - Position).Length();
         int vol = Proximity(dist, 20f, audio.SfxVol);
 
         if (vol <= 0)

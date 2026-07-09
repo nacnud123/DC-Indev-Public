@@ -1,10 +1,12 @@
-// Abstract pickaxe — subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
+// Abstract pickaxe - subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
 namespace VoxelEngine.Items;
 
+/// <summary>Abstract base for all pickaxe tiers — mines stone/ore-type blocks; subclasses supply Type, Name, ToolTier, ItemCoords.</summary>
 public abstract class ItemPickaxe : ItemTool
 {
     public override ToolType ToolType => ToolType.Pickaxe;
 
+    // Note Diamond is slower than Gold here despite being the "best" tier overall — Gold's niche is high mining speed to offset its poor durability (see ItemTool.MaxDurability).
     public override float MiningSpeed => ToolTier switch
     {
         ToolTier.Wood    => 2f,

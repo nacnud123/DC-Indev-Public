@@ -1,6 +1,6 @@
 // A block lying on the ground. Bounces, bobs, spins, and is picked up by the player. | DA | 3/2/26
-using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
+using Silk.NET.OpenGL;
+
 using VoxelEngine.Core;
 using VoxelEngine.Items;
 using VoxelEngine.Rendering;
@@ -9,6 +9,9 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.GameEntity;
 
+/// <summary>
+/// A physical item/block stack sitting in the world after being dropped (block break, death, etc.). Owns its own tiny GL mesh instead of going through ChunkMeshBuilder/EntityModel: block drops get a small cube built from the block's own face textures, everything else gets a 2-triangle billboard quad textured from the item atlas. Ticks its own arcade-style physics (gravity, drag, bounce, ground friction) and despawns either after MAX_AGE ticks or when picked up by the player.
+/// </summary>
 public class DroppedItemEntity : Entity
 {
     public override bool IsTargetable => false;
@@ -16,22 +19,22 @@ public class DroppedItemEntity : Entity
 
     private const float ITEM_GRAVITY = 8f;
     private const float TERMINAL_VEL = 20f;
-    private const float DRAG = 0.98f;
-    private const float GROUND_FRICTION = 0.7f;
-    private const float BOUNCE = 0.4f;
-    private const float PICKUP_RADIUS = 2f;
-    private const int MAX_AGE = 6000;
-    private const int PICKUP_DELAY = 10;
-    private const float SPIN_SPEED = 1.2f;
+    private const float DRAG = 0.98f;           // Per-tick velocity multiplier (air resistance), applied every tick regardless of ground contact.
+    private const float GROUND_FRICTION = 0.7f; // Additional per-tick XZ multiplier applied only while resting on the ground.
+    private const float BOUNCE = 0.4f;          // Fraction of downward velocity restored as upward velocity on landing.
+    private const float PICKUP_RADIUS = 2f;     // Blocks; player must be within this distance for auto-pickup.
+    private const int MAX_AGE = 6000;           // Ticks before the item despawns unpicked (~5 minutes at 20 ticks/sec).
+    private const int PICKUP_DELAY = 10;        // Ticks after spawning before it can be picked up (prevents instant re-pickup of just-broken blocks).
+    private const float SPIN_SPEED = 1.2f;      // Radians/sec the cube-rendered drop rotates for visual flair.
 
+    // Vertex layout: 3 floats position + 2 floats UV + 3 floats normal = 8 floats per vertex.
     private const int VERTEX_STRIDE = 8;
 
     private readonly ItemStack mStack;
     public ItemStack Stack => mStack;
     private readonly bool mIsCubeBlock;
-    // World atlas for blocks, items atlas for item drops.
     private readonly Texture mRenderAtlas;
-    private int mVao, mVbo;
+    private uint mVao, mVbo;
     private int mVertexCount;
 
     private float mSpinAngle;
@@ -55,6 +58,7 @@ public class DroppedItemEntity : Entity
 
         mBobPhase = (float)(rng.NextDouble() * MathF.PI * 2f);
 
+        // Only cube-like block render types get a 3D cube mesh; other block types (e.g. torches, crops - anything cross-shaped or non-cuboid) fall back to the flat billboard like items.
         if (stack.IsBlock)
         {
             var renderType = BlockRegistry.GetRenderType(stack.Block);
@@ -71,6 +75,7 @@ public class DroppedItemEntity : Entity
             BuildBillboardMesh();
     }
 
+    // Stairs get approximated as two stacked half-height boxes (bottom slab + back-top slab) rather than the true L-shaped stair geometry, since it's a small held/dropped-item icon and the silhouette doesn't need to be exact.
     private void BuildCubeMesh()
     {
         var block = BlockRegistry.Get(mStack.Block);
@@ -78,12 +83,8 @@ public class DroppedItemEntity : Entity
 
         if (block.RenderType == RenderingType.Stair)
         {
-            // Lower half (full width, back half)
-            AddBox(verts, block,
-                new Vector3(0, 0, 0), new Vector3(1, 0.5f, 1));
-            // Upper half (full width, front half)
-            AddBox(verts, block,
-                new Vector3(0, 0.5f, 0), new Vector3(1, 1f, 0.5f));
+            AddBox(verts, block, new Vector3(0, 0, 0), new Vector3(1, 0.5f, 1));
+            AddBox(verts, block, new Vector3(0, 0.5f, 0), new Vector3(1, 1f, 0.5f));
         }
         else
         {
@@ -93,6 +94,7 @@ public class DroppedItemEntity : Entity
         UploadMesh(verts.ToArray());
     }
 
+    // Emits 12 triangles (2 per face x 6 faces) for an axis-aligned box between min/max, using each block's own per-face texture coordinates so the dropped-item cube matches the placed block's appearance. Winding/normals are hand-picked per face for correct backface culling and lighting.
     private static void AddBox(List<float> verts, Block block, Vector3 min, Vector3 max)
     {
         var top = block.TopTextureCoords;
@@ -116,38 +118,32 @@ public class DroppedItemEntity : Entity
         // Front (+Z)
         V(verts, x0, y0, z1, fr_u0, fr_v0, 0, 0, 1); V(verts, x1, y1, z1, fr_u1, fr_v1, 0, 0, 1); V(verts, x0, y1, z1, fr_u0, fr_v1, 0, 0, 1);
         V(verts, x0, y0, z1, fr_u0, fr_v0, 0, 0, 1); V(verts, x1, y0, z1, fr_u1, fr_v0, 0, 0, 1); V(verts, x1, y1, z1, fr_u1, fr_v1, 0, 0, 1);
-
         // Back (-Z)
         V(verts, x0, y0, z0, bk_u1, bk_v0, 0, 0, -1); V(verts, x0, y1, z0, bk_u1, bk_v1, 0, 0, -1); V(verts, x1, y1, z0, bk_u0, bk_v1, 0, 0, -1);
         V(verts, x0, y0, z0, bk_u1, bk_v0, 0, 0, -1); V(verts, x1, y1, z0, bk_u0, bk_v1, 0, 0, -1); V(verts, x1, y0, z0, bk_u0, bk_v0, 0, 0, -1);
-
         // Top (+Y)
         V(verts, x0, y1, z0, t_u0, t_v0, 0, 1, 0); V(verts, x1, y1, z1, t_u1, t_v1, 0, 1, 0); V(verts, x1, y1, z0, t_u1, t_v0, 0, 1, 0);
         V(verts, x0, y1, z0, t_u0, t_v0, 0, 1, 0); V(verts, x0, y1, z1, t_u0, t_v1, 0, 1, 0); V(verts, x1, y1, z1, t_u1, t_v1, 0, 1, 0);
-
         // Bottom (-Y)
         V(verts, x0, y0, z0, b_u0, b_v1, 0, -1, 0); V(verts, x1, y0, z0, b_u1, b_v1, 0, -1, 0); V(verts, x1, y0, z1, b_u1, b_v0, 0, -1, 0);
         V(verts, x0, y0, z0, b_u0, b_v1, 0, -1, 0); V(verts, x1, y0, z1, b_u1, b_v0, 0, -1, 0); V(verts, x0, y0, z1, b_u0, b_v0, 0, -1, 0);
-
         // Right (+X)
         V(verts, x1, y0, z0, r_u1, r_v0, 1, 0, 0); V(verts, x1, y1, z0, r_u1, r_v1, 1, 0, 0); V(verts, x1, y1, z1, r_u0, r_v1, 1, 0, 0);
         V(verts, x1, y0, z0, r_u1, r_v0, 1, 0, 0); V(verts, x1, y1, z1, r_u0, r_v1, 1, 0, 0); V(verts, x1, y0, z1, r_u0, r_v0, 1, 0, 0);
-
         // Left (-X)
         V(verts, x0, y0, z1, l_u1, l_v0, -1, 0, 0); V(verts, x0, y1, z1, l_u1, l_v1, -1, 0, 0); V(verts, x0, y1, z0, l_u0, l_v1, -1, 0, 0);
         V(verts, x0, y0, z1, l_u1, l_v0, -1, 0, 0); V(verts, x0, y1, z0, l_u0, l_v1, -1, 0, 0); V(verts, x0, y0, z0, l_u0, l_v0, -1, 0, 0);
     }
 
+    // A single camera-facing quad (2 triangles) centered on X, sized 0.5x0.5, textured with the item's inventory icon. Actual facing toward the camera is applied at draw time in DrawBillboard.
     private void BuildBillboardMesh()
     {
-        // Item drops from the items texture atlas; block cross/billboard drops from the world atlas.
         var uv = mStack.IsBlock
             ? BlockRegistry.Get(mStack.Block).InventoryTextureCoords
             : ItemRegistry.GetItemCoords(mStack.Item);
         float u0 = uv.TopLeft.X, v0 = uv.TopLeft.Y;
         float u1 = uv.BottomRight.X, v1 = uv.BottomRight.Y;
 
-        // A quad centered in X, bottom at Y=0, facing +Z.
         float[] arr =
         {
             -0.25f, 0.0f, 0f,  u0, v0,  0f, 0f, 1f,
@@ -165,20 +161,21 @@ public class DroppedItemEntity : Entity
     private void UploadMesh(float[] arr)
     {
         mVertexCount = arr.Length / VERTEX_STRIDE;
-        mVao = GL.GenVertexArray();
-        mVbo = GL.GenBuffer();
-        GL.BindVertexArray(mVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, mVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, arr.Length * sizeof(float), arr, BufferUsageHint.StaticDraw);
+        var gl = GlContext.Gl;
+        mVao = gl.GenVertexArray();
+        mVbo = gl.GenBuffer();
+        gl.BindVertexArray(mVao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
+        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, arr, BufferUsageARB.StaticDraw);
 
-        int stride = VERTEX_STRIDE * sizeof(float);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(2, 3, VertexAttribPointerType.Float, false, stride, 5 * sizeof(float));
-        GL.EnableVertexAttribArray(2);
-        GL.BindVertexArray(0);
+        uint stride = (uint)(VERTEX_STRIDE * sizeof(float));
+        gl.VertexAttribPointer(0, 3, GLEnum.Float, false, stride, 0);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(1, 2, GLEnum.Float, false, stride, (nint)(3 * sizeof(float)));
+        gl.EnableVertexAttribArray(1);
+        gl.VertexAttribPointer(2, 3, GLEnum.Float, false, stride, (nint)(5 * sizeof(float)));
+        gl.EnableVertexAttribArray(2);
+        gl.BindVertexArray(0);
     }
 
     private static void V(List<float> v, float px, float py, float pz,
@@ -205,14 +202,13 @@ public class DroppedItemEntity : Entity
 
         mSpinAngle += SPIN_SPEED * dt;
 
-        // Gravity
         float vy = Velocity.Y - ITEM_GRAVITY * dt;
-        if (vy < -TERMINAL_VEL) 
+        if (vy < -TERMINAL_VEL)
             vy = -TERMINAL_VEL;
-        
+
         Velocity = new Vector3(Velocity.X, vy, Velocity.Z);
 
-        // Lava: pop upward and scatter
+        // Sample the block at the entity's vertical center; if it's lava, give the item a random upward "pop" kick so it doesn't just sit and burn silently in place.
         int bx = (int)MathF.Floor(Position.X);
         int by = (int)MathF.Floor(Position.Y + Height * 0.5f);
         int bz = (int)MathF.Floor(Position.Z);
@@ -226,17 +222,18 @@ public class DroppedItemEntity : Entity
             );
         }
 
-        // Move and resolve collisions
         Vector3 frameVel = Velocity * dt;
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), frameVel);
         Position += actual;
 
+        // If collision resolution shortened the Y movement noticeably vs. the requested Y velocity, something was hit vertically (floor or ceiling) - used instead of a direct IsOnGround check because it also detects hitting a ceiling while moving upward.
         bool hitY = MathF.Abs(actual.Y) < MathF.Abs(frameVel.Y) * 0.99f;
         if (hitY)
         {
             if (Velocity.Y < 0)
             {
                 IsOnGround = true;
+                // Small bounces (< 0.5 units/sec resulting velocity) are clamped to a full stop instead of bouncing forever with diminishing amplitude.
                 float bounce = -Velocity.Y * BOUNCE;
                 Velocity = new Vector3(Velocity.X, bounce < 0.5f ? 0f : bounce, Velocity.Z);
             }
@@ -257,19 +254,19 @@ public class DroppedItemEntity : Entity
 
         if (mPickupDelay == 0)
         {
-            float dist = (Game.Instance.GetPlayer.Position - Position).Length;
+            float dist = (Game.Instance.GetPlayer.Position - Position).Length();
             var inv = Game.Instance.PlayerInventory;
             if (dist < PICKUP_RADIUS && inv != null && inv.TryAdd(mStack))
             {
                 Game.Instance.AudioManager.PlayPickupSound();
                 IsAlive = false;
             }
-
         }
     }
 
-    protected override void DrawModel(Matrix4 view, Matrix4 projection)
+    protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {
+        // Oscillates between 0 and 0.2 units of vertical offset; mBobPhase randomizes each drop's starting phase so a pile of items doesn't bob in visible unison.
         float bob = MathF.Sin(mAge / 10.0f + mBobPhase) * 0.1f + 0.1f;
 
         if (mIsCubeBlock)
@@ -278,44 +275,46 @@ public class DroppedItemEntity : Entity
             DrawBillboard(view, projection, bob);
     }
 
-    private void DrawCube(Matrix4 view, Matrix4 projection, float bob)
+    private void DrawCube(Matrix4x4 view, Matrix4x4 projection, float bob)
     {
-        // Center the [0..1]³ cube in XZ, scale to 0.25, spin, then translate to world pos.
-        Matrix4 mvp =
-            Matrix4.CreateTranslation(-0.5f, 0f, -0.5f)
-            * Matrix4.CreateScale(0.25f)
-            * Matrix4.CreateRotationY(mSpinAngle)
-            * Matrix4.CreateTranslation(Position + new Vector3(0f, bob, 0f))
+        Matrix4x4 mvp =
+            Matrix4x4.CreateTranslation(-0.5f, 0f, -0.5f)
+            * Matrix4x4.CreateScale(0.25f)
+            * Matrix4x4.CreateRotationY(mSpinAngle)
+            * Matrix4x4.CreateTranslation(Position + new Vector3(0f, bob, 0f))
             * view
             * projection;
 
         _shader?.SetMatrix4("mvp", mvp);
         mRenderAtlas.Use(TextureUnit.Texture0);
-        GL.BindVertexArray(mVao);
-        GL.DrawArrays(PrimitiveType.Triangles, 0, mVertexCount);
+        var gl = GlContext.Gl;
+        gl.BindVertexArray(mVao);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)mVertexCount);
     }
 
-    private void DrawBillboard(Matrix4 view, Matrix4 projection, float bob)
+    private void DrawBillboard(Matrix4x4 view, Matrix4x4 projection, float bob)
     {
-        // Horizontal billboard: rotate the quad so its +Z normal faces the camera.
+        // Y-axis-only billboarding: rotate the quad to face the camera's XZ direction but never tilt it up/down, so it always reads as a flat sprite standing upright on the ground.
         float dx = Game.Instance.GetPlayer.Camera.Position.X - Position.X;
         float dz = Game.Instance.GetPlayer.Camera.Position.Z - Position.Z;
 
-        Matrix4 mvp =
-            Matrix4.CreateRotationY(MathF.Atan2(dx, dz))
-            * Matrix4.CreateTranslation(Position + new Vector3(0f, bob, 0f))
+        Matrix4x4 mvp =
+            Matrix4x4.CreateRotationY(MathF.Atan2(dx, dz))
+            * Matrix4x4.CreateTranslation(Position + new Vector3(0f, bob, 0f))
             * view
             * projection;
 
         _shader?.SetMatrix4("mvp", mvp);
         mRenderAtlas.Use(TextureUnit.Texture0);
-        GL.BindVertexArray(mVao);
-        GL.DrawArrays(PrimitiveType.Triangles, 0, mVertexCount);
+        var gl = GlContext.Gl;
+        gl.BindVertexArray(mVao);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)mVertexCount);
     }
 
     public override void Dispose()
     {
-        GL.DeleteVertexArray(mVao);
-        GL.DeleteBuffer(mVbo);
+        var gl = GlContext.Gl;
+        gl.DeleteVertexArray(mVao);
+        gl.DeleteBuffer(mVbo);
     }
 }

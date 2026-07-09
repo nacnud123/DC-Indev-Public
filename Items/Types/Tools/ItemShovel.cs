@@ -1,6 +1,7 @@
-// Abstract shovel — subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
+// Abstract shovel - subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
 namespace VoxelEngine.Items;
 
+/// <summary>Abstract base for all shovel tiers — fast at dirt/sand/gravel-type blocks, weakest attack damage; subclasses supply Type, Name, ToolTier, ItemCoords.</summary>
 public abstract class ItemShovel : ItemTool
 {
     public override ToolType ToolType => ToolType.Shovel;

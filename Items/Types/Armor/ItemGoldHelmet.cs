@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Gold-tier helmet (Head slot). Fast-degrading like all gold gear (low durability), grants 2 armor points.</summary>
 public class ItemGoldHelmet : ItemArmor
 {
     public override ItemType Type => ItemType.GoldHelmet;

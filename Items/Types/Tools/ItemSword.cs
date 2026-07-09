@@ -1,6 +1,7 @@
-// Abstract sword — subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
+// Abstract sword - subclasses provide Type, Name, ToolTier, ItemCoords | DA | 3/8/26
 namespace VoxelEngine.Items;
 
+/// <summary>Abstract base for all sword tiers — highest attack damage of any tool category, no mining-speed bonus; subclasses supply Type, Name, ToolTier, ItemCoords.</summary>
 public abstract class ItemSword : ItemTool
 {
     public override ToolType ToolType => ToolType.Sword;

@@ -1,48 +1,68 @@
 // InDev-style terrain generation. Phases: raising, eroding, soiling, growing, caves, ores, flooding, cave decoration, vegetation. Floating worlds replace soiling with a two-noise carve: the heightmap drives the top surface, and a second noise carves the concave underside, tapering to nothing at world borders. | DA | 2/20/26
 namespace VoxelEngine.Terrain;
 
+/// <summary>
+/// Drives InDev-style multi-phase world generation for a single chunk at a time. Phases run in a fixed order from <see cref="GenerateChunk"/>: raise (heightmap) -> erode (smoothing) -> soil (stone/dirt/grass layering) -> caves (CaveCarver voids) -> ores (vein scattering) -> flood (water/lava fill) -> cave decoration (mushrooms/webs/clay/gravel) -> grow (trees/flowers/grass tufts). "Raise" and "erode" build a world-wide heightmap once (see EnsureHeightMap) and every other phase operates chunk-local using that shared heightmap. Floating worlds replace the "soil" phase with a two-noise carve (heightmap for the top surface, a second noise for the concave underside) and skip caves/flooding since floating islands have no ocean or below-island interior to carve.
+/// </summary>
 public class TerrainGen
 {
+    // World Y at which oceans/lakes are filled and above which land pokes out (also biases sand/coast placement).
     private const int SEA_LEVEL = 64;
+    // Bottom N layers are always unbreakable Bedrock, regardless of world type/theme.
     private const int BEDROCK_HEIGHT = 3;
+    // World Y below which any exposed air is flooded with lava (creates lava lakes/pockets deep underground).
     private const int LAVA_LEVEL = 10;
+    // Vertical distance between stacked floating-world layers (island "shells" repeat every this many blocks).
     private const int LAYER_SPACING = 48;
+    // Extra XZ margin outside the chunk that tree placement is allowed to roll positions within, so trees near chunk edges can still be considered (their canopy may still get clipped by the neighbor-block checks below).
     private const int TREE_BORDER = 3;
+    // Minimum XZ distance enforced between two trees placed in the same chunk/pass.
     private const int TREE_MIN_SPACING = 4;
+    // Divides total world area to get the target tree count; larger divisor = sparser forests.
     private const int TREE_DENSITY_DIVISOR = 200;
 
-    // Raising: two distorted noise pairs blended by a selector
+    // Raising: two distorted noise pairs blended by a selector. Each "source" noise is domain-warped by its paired "distort" noise (the source is sampled at an X offset driven by the distort noise's output) to break up perfectly regular Perlin contours into more organic, InDev-style terrain shapes.
     private readonly FastNoiseLite mRaise1Source = CreateOctaveNoise(8);
     private readonly FastNoiseLite mRaise1Distort = CreateOctaveNoise(8);
     private readonly FastNoiseLite mRaise2Source = CreateOctaveNoise(8);
     private readonly FastNoiseLite mRaise2Distort = CreateOctaveNoise(8);
+    // Decides per-column whether to prefer the "primary" or "alternative" raise noise (creates sharp biome-like transitions between terrain styles rather than a smooth blend).
     private readonly FastNoiseLite mSelectorNoise = CreateOctaveNoise(6);
+    // Low-frequency noise used only for Island worlds to perturb the circular edge falloff boundary so coastlines aren't perfectly round.
     private readonly FastNoiseLite mIslandNoise = CreateOctaveNoise(2);
 
-    // Eroding: two distorted noise pairs
+    // Eroding: two distorted noise pairs, following the same domain-warp pattern as the raise noises above, used to selectively smooth/step terrain heights after raising.
     private readonly FastNoiseLite mErode1Source = CreateOctaveNoise(8);
     private readonly FastNoiseLite mErode1Distort = CreateOctaveNoise(8);
     private readonly FastNoiseLite mErode2Source = CreateOctaveNoise(8);
     private readonly FastNoiseLite mErode2Distort = CreateOctaveNoise(8);
 
+    // Varies dirt layer thickness under grass so the stone/dirt boundary isn't perfectly flat.
     private readonly FastNoiseLite mDirtNoise = CreateOctaveNoise(8);
+    // Drives the concave underside carve for Floating worlds (see GenerateSoilFloating).
     private readonly FastNoiseLite mCarveNoise = CreateOctaveNoise(8);
 
+    // Total world size in blocks (chunk grid size * chunk dimensions) - defines the heightmap array bounds.
     private int mWorldBlocksX;
     private int mWorldBlocksZ;
 
+    // World-wide heightmap, one entry per (worldX, worldZ) column, lazily built once per world size by EnsureHeightMap and shared by every chunk generation call.
     private int[]? mHeightMap;
     private int mHmWidth, mHmDepth;
 
+    // Floating worlds only: number of stacked island layers and each layer's absolute water-level Y (see EnsureHeightMap/GenerateChunk).
     private int mLayerCount;
     private int[]? mLayerWaterLevels;
 
-    // Floating vegetation
+    // Floating vegetation: while iterating layers in GenerateChunk, these bias GetHeight()/the vegetation floor so tree/flower/grass placement targets the current layer's surface instead of always the base layer. Reset to 0/SEA_LEVEL once all layers are processed.
     private int mSurfaceYAdjust = 0;
     private int mVegetationFloor = SEA_LEVEL;
 
     public WorldGenSettings WorldSettings;
 
+    /// <summary>
+    /// Frees the cached world-wide heightmap and floating-layer data. Called when a world is unloaded/regenerated so the next EnsureHeightMap call rebuilds from scratch instead of reusing stale data (e.g. if world size changed).
+    /// </summary>
     public void ReleaseGenerationData()
     {
         mHeightMap = null;
@@ -51,6 +71,9 @@ public class TerrainGen
         mLayerWaterLevels = null;
     }
 
+    /// <summary>
+    /// Runs every generation phase for one chunk, in order: ensures the shared heightmap exists, lays down stone/dirt/grass (soil), carves caves (skipped for Floating worlds, which have no solid interior to carve caves into), scatters ore veins, floods water/lava, decorates cave surfaces, then places vegetation. For Floating worlds, vegetation runs once per stacked island layer (adjusting <see cref="mSurfaceYAdjust"/>/<see cref="mVegetationFloor"/> so GetHeight and floor checks target each layer's own surface) instead of once for the whole column.
+    /// </summary>
     public void GenerateChunk(World world, int chunkX, int chunkZ, int seed)
     {
         mWorldBlocksX = world.SizeInChunks * Chunk.WIDTH;
@@ -62,20 +85,26 @@ public class TerrainGen
         int originX = chunkX * Chunk.WIDTH;
         int originZ = chunkZ * Chunk.DEPTH;
 
+        // Phase: soil - lays down stone/dirt/grass columns from the heightmap (or the floating carve variant).
         GenerateSoil(world, originX, originZ);
+        // Phase: grow (coastline pass) - converts shoreline grass/dirt into sand/gravel near sea level, plus scattered inland gravel patches.
         GenerateGrowing(world, originX, originZ, seed);
 
         if (WorldSettings.Type != WorldTye.Floating)
         {
+            // Phase: caves - delegates to CaveCarver, scoped to this chunk's world-space block bounds.
             var caveCarver = new CaveCarver(originX, originZ, originX + Chunk.WIDTH - 1, originZ + Chunk.DEPTH - 1);
             caveCarver.GenerateCaves(world, chunkX, chunkZ, seed);
         }
 
+        // Phase: ores - scatters ore veins (coal/iron/gold/diamond) through stone.
         GenerateOres(world, chunkX, chunkZ, seed);
+        // Phase: flood - fills exposed air at/below sea level with the theme's ocean fluid, then fills deep air below LAVA_LEVEL with lava.
         FloodWater(world, originX, originZ);
         FloodLava(world, originX, originZ);
 
         if (WorldSettings.Type != WorldTye.Floating)
+            // Phase: cave decoration - sprinkles mushrooms/webs/clay/gravel onto cave surfaces exposed by the caves phase.
             DecorateCaves(world, originX, originZ, seed);
 
         if (WorldSettings.Type == WorldTye.Floating)
@@ -94,12 +123,16 @@ public class TerrainGen
         }
         else
         {
+            // Phase: grow (vegetation) - trees, flowers, grass tufts, for non-Floating worlds.
             GenerateTrees(world, originX, originZ, seed);
             GenerateFlowers(world, originX, originZ, seed);
             GenerateGrassTufts(world, originX, originZ, seed);
         }
     }
 
+    /// <summary>
+    /// Phase: raise + erode. Lazily builds (or rebuilds, if world size changed) the world-wide heightmap shared by every chunk. This is where "raise" (base terrain shape via blended, domain-warped Perlin noise, with world-type-specific edge falloff) and "erode" (noise-driven step smoothing) actually happen; every other generation phase just reads the resulting heightmap via <see cref="GetHeight"/>. For Floating worlds, also computes the stacked island layer water levels and biases the heightmap so GetHeight()+SEA_LEVEL lines up with the topmost layer's absolute surface Y.
+    /// </summary>
     private void EnsureHeightMap(World world, int seed)
     {
         if (mHeightMap != null && mHmWidth == mWorldBlocksX && mHmDepth == mWorldBlocksZ)
@@ -117,19 +150,25 @@ public class TerrainGen
         {
             for (int x = 0; x < mHmWidth; x++)
             {
+                // Sample coordinates scaled up slightly (1.3x) to make the base noise features finer relative to the world grid.
                 float fx = x * 1.3f;
                 float fz = z * 1.3f;
 
+                // Domain warp: offset the X sample of the "source" noise by the "distort" noise's output (scaled by 10) so straight Perlin contours become wavy/organic.
                 double warp1 = mRaise1Distort.GetNoise(fx, fz) * 10.0;
+                // "primary" terrain candidate: rescaled/re-centered so its useful range sits roughly around 0 (lower, rolling terrain).
                 double primary = mRaise1Source.GetNoise(fx + (float)warp1, fz) * 8.0 / 6.0 - 4.0;
 
                 double warp2 = mRaise2Distort.GetNoise(fx, fz) * 10.0;
+                // "alternative" terrain candidate: rescaled and shifted +10 higher than primary, producing taller landmass where selected (mountains/highlands).
                 double alternative = mRaise2Source.GetNoise(fx + (float)warp2, fz) * 8.0 / 5.0 + 10.0 - 4.0;
 
+                // Selector noise decides, per-column, whether to fall back to "primary" instead of "alternative" - selector > 0 forces flatter terrain, creating sharp boundaries between highland and lowland regions rather than a smooth gradient.
                 double selector = mSelectorNoise.GetNoise((float)x, (float)z) * 6.0 / 8.0;
                 if (selector > 0.0)
                     alternative = primary;
 
+                // Take the taller of the two candidates (so highlands "poke through" lowlands) and halve to compress the final height range.
                 double height = Math.Max(primary, alternative) / 2.0;
 
                 if (WorldSettings.Type == WorldTye.Inland || WorldSettings.Type == WorldTye.Floating)
@@ -138,18 +177,24 @@ public class TerrainGen
                 }
                 else // Island: squared edge-distance falloff
                 {
+                    // edgeX/edgeZ: 0 at world center, 1 at world edge (Chebyshev-style normalized distance per axis).
                     double edgeX = Math.Abs((double)x / (mHmWidth - 1.0) - 0.5) * 2.0;
                     double edgeZ = Math.Abs((double)z / (mHmDepth - 1.0) - 0.5) * 2.0;
+                    // Euclidean edge distance, scaled down slightly (0.8) so the falloff doesn't fully engage until near the true border.
                     double dist = Math.Sqrt(edgeX * edgeX + edgeZ * edgeZ) * 0.8;
 
+                    // Perturb the falloff radius with low-frequency noise so the coastline isn't a perfect circle/square.
                     double islandMod = mIslandNoise.GetNoise(x * 0.05f, z * 0.05f) / 4.0 + 1.0;
                     dist = Math.Min(dist, islandMod);
                     dist = Math.Max(dist, Math.Max(edgeX, edgeZ));
                     dist = Math.Clamp(dist, 0.0, 1.0);
+                    // Square the falloff so it stays near 0 (no falloff) through most of the interior and only ramps up sharply near the border.
                     dist *= dist;
 
+                    // Blend original height toward a sunken (-10 + 5 = -5 net) value as dist -> 1, sinking terrain into the sea near world edges.
                     height = height * (1.0 - dist) - dist * 10.0 + 5.0;
                     if (height < 0.0)
+                        // Push already-underwater terrain even deeper (quadratic falloff) for a smoother seabed slope instead of a hard cliff.
                         height -= height * height * 0.2;
 
                     mHeightMap[x + z * mHmWidth] = (int)height;
@@ -157,7 +202,7 @@ public class TerrainGen
             }
         }
 
-        // Eroding: noise-driven step smoothing — ((h - mask) / 2 * 2) + mask
+        // Eroding: noise-driven step smoothing - ((h - mask) / 2 * 2) + mask. Only applied where a separate "erosionAmount" noise exceeds a threshold, so erosion is patchy rather than uniform across the whole map (mimics InDev's terracing/erosion look).
         for (int z = 0; z < mHmDepth; z++)
         {
             for (int x = 0; x < mHmWidth; x++)
@@ -169,11 +214,13 @@ public class TerrainGen
                 double erosionAmount = mErode1Source.GetNoise(fx + (float)(warp1 * 10.0), fz) / 8.0;
 
                 double warp2 = mErode2Distort.GetNoise(fx, fz);
+                // mask is 0 or 1 depending on noise sign - used below to bias the integer-division rounding, giving each eroded region a consistent (not alternating) parity/terrace offset.
                 int mask = mErode2Source.GetNoise(fx + (float)(warp2 * 10.0), fz) > 0.0 ? 1 : 0;
 
                 if (erosionAmount > 2.0)
                 {
                     int h = mHeightMap[x + z * mHmWidth];
+                    // Integer division by 2 then back to *2 snaps height to an even number (offset by mask), collapsing fine height variation into 2-block "steps"/terraces - this is the actual erosion/smoothing effect.
                     h = ((h - mask) / 2 * 2) + mask;
                     mHeightMap[x + z * mHmWidth] = h;
                 }
@@ -183,17 +230,20 @@ public class TerrainGen
         // Floating: compute per-layer water levels, then bias the heightmap so GetHeight()+SEA_LEVEL gives the topmost layer's absolute surface Y.
         if (WorldSettings.Type == WorldTye.Floating)
         {
+            // Layers are spaced LAYER_SPACING blocks apart starting 32 below the world ceiling, stacked downward until they'd go below Y=64.
             mLayerCount = (Chunk.HEIGHT - 64) / LAYER_SPACING + 1;
             mLayerWaterLevels = new int[mLayerCount];
             for (int l = 0; l < mLayerCount; l++)
                 mLayerWaterLevels[l] = Chunk.HEIGHT - 32 - l * LAYER_SPACING;
 
+            // Shift every heightmap sample so that height 0 (typical sea level) actually corresponds to the topmost layer's water level, keeping the raw noise-driven shape but relocating it in world Y.
             int adjust = mLayerWaterLevels[0] - SEA_LEVEL;
             for (int i = 0; i < mHmWidth * mHmDepth; i++)
                 mHeightMap[i] += adjust;
         }
     }
 
+    // Looks up the (possibly layer-adjusted, via mSurfaceYAdjust) heightmap value for a world column. Out-of-bounds columns return a low fallback (SEA_LEVEL - 10) so edge sampling (e.g. from CaveCarver-adjacent logic or tree canopy checks near chunk borders) doesn't index outside the heightmap array.
     private int GetHeight(int worldX, int worldZ)
     {
         if (worldX < 0 || worldX >= mHmWidth || worldZ < 0 || worldZ >= mHmDepth)
@@ -202,6 +252,9 @@ public class TerrainGen
         return mHeightMap![worldX + worldZ * mHmWidth] + mSurfaceYAdjust;
     }
 
+    /// <summary>
+    /// Phase: soil. Fills each column of the chunk with Bedrock (bottom layers) / Stone / Dirt / Grass (or Dirt for the Hell theme, which has no grass) up to the heightmap surface, with a noise-varied dirt layer thickness. Delegates to <see cref="GenerateSoilFloating"/> for Floating worlds, which use a different (carved, layered) surface shape.
+    /// </summary>
     private void GenerateSoil(World world, int originX, int originZ)
     {
         if (WorldSettings.Type == WorldTye.Floating)
@@ -217,8 +270,10 @@ public class TerrainGen
                 int worldX = originX + x;
                 int worldZ = originZ + z;
 
+                // Heightmap stores an offset from SEA_LEVEL, so add SEA_LEVEL to get the absolute world-Y surface.
                 int surfaceHeight = GetHeight(worldX, worldZ) + SEA_LEVEL;
 
+                // Noise output is roughly [-1,1]; /24 + 4 keeps dirt depth centered around ~4 blocks with only mild variation, clamped to at least 1.
                 float dirtVar = mDirtNoise.GetNoise(worldX * 0.5f, worldZ * 0.5f);
                 int dirtDepth = (int)(dirtVar / 24.0 + 4.0);
                 if (dirtDepth < 1) dirtDepth = 1;
@@ -246,7 +301,9 @@ public class TerrainGen
         }
     }
 
-    // Heightmap drives the top surface; _carveNoise determines the bottom via the Indev var76 formula. Cubic edge falloff (var27) tapers the island to nothing at world borders.
+    /// <summary>
+    /// Floating-world variant of the soil phase. Heightmap drives the top surface; mCarveNoise determines the bottom via the InDev var76 formula. Cubic edge falloff (var27) tapers the island to nothing at world borders (so floating islands don't extend into the sky at the world edge). Runs once per stacked layer (see mLayerWaterLevels), each layer generating its own independent island slab bounded above by its water level and below by the carved floor.
+    /// </summary>
     private void GenerateSoilFloating(World world, int originX, int originZ)
     {
         // Undo the vegetation bias applied in EnsureHeightMap to recover the raw heightmap value.
@@ -276,6 +333,7 @@ public class TerrainGen
                 double var27 = Math.Pow(Math.Max(Math.Abs(normX), Math.Abs(normZ)), 3.0);
 
                 double carveRaw = mCarveNoise.GetNoise(worldX * 2.3f, worldZ * 2.3f) / 24.0;
+                // Signed sqrt: sqrt(|x|) preserves the original sign but compresses large magnitudes, producing a carve depth that varies more gently than raw noise (avoids jagged undersides), then scaled up by 100 to reach block-scale depths.
                 double sqrtCarve = Math.Sqrt(Math.Abs(carveRaw)) * Math.Sign(carveRaw) * 100.0;
 
                 for (int layer = 0; layer < mLayerCount; layer++)
@@ -284,7 +342,7 @@ public class TerrainGen
                     int surfaceY = Math.Min(rawH + waterLevel, Chunk.HEIGHT - 1);
                     int stoneTop = surfaceY - dirtDepth;
 
-                    // islandFloorY: island bottom. Lerps from carve noise at center to world height at borders. Positive sqrtCarve means the noise bottom is above waterLevel — fully carve to prevent slivers.
+                    // islandFloorY: island bottom. Lerps from carve noise at center to world height at borders. Positive sqrtCarve means the noise bottom is above waterLevel - fully carve to prevent slivers.
                     double carveBase = sqrtCarve + waterLevel;
                     int islandFloorY = (int)(carveBase * (1.0 - var27) + var27 * Chunk.HEIGHT);
 
@@ -312,6 +370,9 @@ public class TerrainGen
         }
     }
 
+    /// <summary>
+    /// Phase: grow (coastline pass, despite the "growing" name this does not place vegetation - see GenerateTrees/GenerateFlowers/GenerateGrassTufts for that). Converts grass/dirt near sea level into a coastal block (sand or gravel, per WorldSettings.CoastIsGrass), and adds scattered inland gravel patches on higher terrain. Skipped for Flat and Floating worlds, which have no sea-level coastline to dress.
+    /// </summary>
     private void GenerateGrowing(World world, int originX, int originZ, int seed)
     {
         if (WorldSettings.Type == WorldTye.Flat || WorldSettings.Type == WorldTye.Floating)
@@ -455,7 +516,7 @@ public class TerrainGen
                 int worldX = originX + x;
                 int worldZ = originZ + z;
 
-                // Skip land columns — any air below sea level there is a cave, not open ocean.
+                // Skip land columns - any air below sea level there is a cave, not open ocean.
                 if (GetHeight(worldX, worldZ) + SEA_LEVEL > SEA_LEVEL)
                     continue;
 

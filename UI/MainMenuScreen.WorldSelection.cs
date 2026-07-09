@@ -7,6 +7,9 @@ namespace VoxelEngine.UI;
 
 public partial class MainMenuScreen
 {
+    /// <summary>
+    /// Renders the saved-worlds list with Play/Delete/New World/Back actions. Lazily refreshes the world list from disk the first time this screen is shown (<see cref="mWorldsLoaded"/> guard) rather than every frame. Only called while <c>mCurrentState == MainMenuState.WorldSelection</c>.
+    /// </summary>
     private void RenderWorldSelectionScreen(ImGuiWindowFlags flags)
     {
         if (!mWorldsLoaded)
@@ -90,7 +93,7 @@ public partial class MainMenuScreen
         float totalW = BUTTON_WIDTH * 4 + BUTTON_SPACING * 3;
         float bx = cx - totalW * 0.5f;
 
-        // Play
+        // Play - loads the currently selected saved world. World type/theme (0, 0) are unused for an existing world (only relevant during generation of a brand new one), so they're passed as placeholders; the actual terrain is read back from the save data instead.
         PushDisableableBtn(hasSel, false);
         ImGui.SetCursorPos(new Vector2(bx, btnY));
         if (ImGui.Button("Play", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)) && hasSel)
@@ -137,6 +140,7 @@ public partial class MainMenuScreen
         }
         PopBtn();
 
+        // ImGui popups must be opened via OpenPopup() before BeginPopupModal() will show them; mShowDeleteConfirm is a one-frame trigger flag set by the Delete button or Del key, consumed here and reset immediately so it only fires the popup once.
         if (mShowDeleteConfirm && hasSel)
         {
             ImGui.OpenPopup("Delete World?");
@@ -148,6 +152,7 @@ public partial class MainMenuScreen
         ImGui.End();
     }
 
+    // Modal confirmation dialog for world deletion; must be called every frame (even when not open) since ImGui's popup ID needs BeginPopupModal to be reached for OpenPopup to work.
     private void RenderDeletePopup(float cx, float winH)
     {
         bool hasSel = mSelectedWorld >= 0 && mSelectedWorld < mAvailableWorlds.Count;

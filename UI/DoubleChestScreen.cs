@@ -10,6 +10,9 @@ using VoxelEngine.Rendering;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Double-chest UI: same layout/interaction pattern as <see cref="ChestScreen"/> but with a 6x9 (54-slot) grid backed by <see cref="DoubleChestData"/>, for two adjacent chest blocks that were merged into one combined inventory.
+/// </summary>
 public class DoubleChestScreen : InventoryScreenBase
 {
     private const int CHEST_ROWS = 6;

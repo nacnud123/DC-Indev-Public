@@ -1,4 +1,4 @@
-using OpenTK.Mathematics;
+
 using VoxelEngine.Core;
 using VoxelEngine.Items;
 using VoxelEngine.Rendering;
@@ -79,8 +79,7 @@ public class BlockFire : Block
         // PHASE 3: spread (only at ages 10 and 15)
         if (age % 5 == 0 && age > 5)
         {
-            // Mechanism A: directly ignite or consume the 6 face-adjacent blocks.
-            // Y-1 has a much higher chance (100) so fire drops aggressively downward.
+            // Mechanism A: directly ignite or consume the 6 face-adjacent blocks. Y-1 has a much higher chance (100) so fire drops aggressively downward.
             TryIgniteNeighbor(world, x - 1, y,     z,     300, random);
             TryIgniteNeighbor(world, x + 1, y,     z,     300, random);
             TryIgniteNeighbor(world, x,     y - 1, z,     100, random);
@@ -88,9 +87,7 @@ public class BlockFire : Block
             TryIgniteNeighbor(world, x,     y,     z - 1, 300, random);
             TryIgniteNeighbor(world, x,     y,     z + 1, 300, random);
 
-            // Mechanism B: long-range scan — any air block within a 3×3×6 volume
-            // (3 wide, 6 tall extending above) can spontaneously ignite if a flammable
-            // block neighbors it.  Height penalty makes upward leap increasingly rare.
+            // Mechanism B: long-range scan — any air block within a 3×3×6 volume (3 wide, 6 tall extending above) can spontaneously ignite if a flammable block neighbors it.  Height penalty makes upward leap increasingly rare.
             for (int nx = x - 1; nx <= x + 1; nx++)
             for (int ny = y - 1; ny <= y + 4; ny++)
             for (int nz = z - 1; nz <= z + 1; nz++)
@@ -108,8 +105,7 @@ public class BlockFire : Block
             }
         }
 
-        // Reschedule for the next tick.  ScheduleBlockTick is a no-op if the fire
-        // block was replaced during spread (e.g. by water), keeping the queue clean.
+        // Reschedule for the next tick.  ScheduleBlockTick is a no-op if the fire block was replaced during spread (e.g. by water), keeping the queue clean.
         world.ScheduleBlockTick(x, y, z);
     }
 
@@ -120,10 +116,7 @@ public class BlockFire : Block
         Game.Instance?.ParticleSystem?.SpawnSmokeParticle(new Vector3(x, y, z));
     }
 
-    // --- Static flammability tables (Indev values) ---
-    //
-    // GetEncouragement  how strongly a block fuels nearby fire (higher = fire lasts longer)
-    // GetCatchability   how easily a block ignites (higher = catches fire faster)
+    // --- Static flammability tables (Indev values) --- GetEncouragement  how strongly a block fuels nearby fire (higher = fire lasts longer) GetCatchability   how easily a block ignites (higher = catches fire faster)
 
     public static int GetEncouragement(BlockType type) => type switch
     {
@@ -197,8 +190,7 @@ public class BlockFire : Block
         return max;
     }
 
-    // Attempt to ignite or consume the block at (x,y,z).
-    // chance is the roll denominator — lower = more likely (Y-1 uses 100, sides use 300).
+    // Attempt to ignite or consume the block at (x,y,z). chance is the roll denominator — lower = more likely (Y-1 uses 100, sides use 300).
     private static void TryIgniteNeighbor(World world, int x, int y, int z, int chance, Random random)
     {
         var blockType = world.GetBlock(x, y, z);

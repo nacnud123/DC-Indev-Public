@@ -1,13 +1,17 @@
 using ImGuiNET;
 using System;
 using System.Numerics;
-using OpenTK.Windowing.GraphicsLibraryFramework;
+using Silk.NET.Input;
+using SilkKey = Silk.NET.Input.Key;
 using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 
 public partial class MainMenuScreen
 {
+    /// <summary>
+    /// Renders the key rebinding grid (two columns, driven by <see cref="BindingDefs"/>) and handles entering/exiting "waiting for key press" mode via <see cref="PollRebindKey"/>. Changes are written live to <c>Keybindings</c> and persisted to disk when the player clicks Back. Only called while <c>mCurrentState == MainMenuState.Keybindings</c>.
+    /// </summary>
     private void RenderKeybindingsScreen(ImGuiWindowFlags flags)
     {
         ImGui.Begin("KeybindingsMenu", flags);
@@ -20,6 +24,7 @@ public partial class MainMenuScreen
 
         const float ROW_H = 40f;
         const int COLS = 2;
+        // Bindings fill column 0 top-to-bottom, then column 1 (see the `i = col * numRows + row` indexing below) - so the grid reads like two independently-filled lists side by side.
         int numRows = (BindingDefs.Length + COLS - 1) / COLS;
         float panelW = 760f;
         float colW = (panelW - 2f) / COLS;
@@ -29,9 +34,11 @@ public partial class MainMenuScreen
 
         DrawPanel(panelX, panelY, panelW, panelH);
 
+        // If a rebind is in progress, check every frame for a key press before drawing the rows below, so this frame's row already reflects "[Press any key]" / the new key.
         if (mRebindingIndex >= 0)
             PollRebindKey();
 
+        // Manually laid out via raw draw-list text/rects rather than ImGui's table API, so the whole two-column list can share one child window and one Selectable per binding row.
         ImGui.SetCursorPos(new Vector2(panelX + 1, panelY + PANEL_PAD));
         ImGui.BeginChild("BindingList", new Vector2(panelW - 2, numRows * ROW_H), ImGuiChildFlags.None);
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 0));
@@ -52,6 +59,7 @@ public partial class MainMenuScreen
                 float itemX = col * colW;
                 float itemY = row * ROW_H;
 
+                // Alternating row shading (zebra stripes) for readability; the row currently being rebound always gets a highlighted background regardless of parity.
                 if (isRebinding || row % 2 == 0)
                 {
                     var bgPos = new Vector2(childOrigin.X + itemX, childOrigin.Y + itemY);
@@ -61,6 +69,7 @@ public partial class MainMenuScreen
                     childDrawList.AddRectFilled(bgPos, new Vector2(bgPos.X + colW, bgPos.Y + ROW_H), bgColor);
                 }
 
+                // Invisible-labeled Selectable spanning the row gives click/hover handling; the actual label/key text is drawn manually below via the draw list. Clicking the row currently being rebound cancels it; clicking any other row starts rebinding it (only one row can be "armed" at a time).
                 ImGui.SetCursorPos(new Vector2(itemX, itemY));
                 if (ImGui.Selectable($"##bind{i}", isRebinding, ImGuiSelectableFlags.None, new Vector2(colW, ROW_H)))
                 {
@@ -85,6 +94,7 @@ public partial class MainMenuScreen
         ImGui.PopStyleVar();
         ImGui.EndChild();
 
+        // Back - cancels any pending rebind, persists all bindings to disk, and returns to Options.
         float backY = panelY + panelH + 20f;
         PushGreenBtn();
         ImGui.SetCursorPos(new Vector2(cx - BUTTON_WIDTH * 0.5f, backY));
@@ -100,19 +110,22 @@ public partial class MainMenuScreen
         ImGui.End();
     }
 
+    /// <summary>
+    /// Scans every Silk.NET key for a fresh press while a rebind is armed (<see cref="mRebindingIndex"/> &gt;= 0). Escape cancels without changing anything; any other key becomes the new binding for the armed action. If that key was already bound to a different action, the two bindings are swapped (the other action inherits the key the armed action used to have) so no two actions can ever end up sharing the same key.
+    /// </summary>
     private void PollRebindKey()
     {
-        var keyboard = Game.Instance.KeyboardState;
-        foreach (Keys k in Enum.GetValues<Keys>())
+        foreach (SilkKey k in Enum.GetValues<SilkKey>())
         {
-            if (k == Keys.Unknown || !keyboard.IsKeyPressed(k))
+            if (k == SilkKey.Unknown || !Game.Instance.IsKeyPressed(k))
                 continue;
 
-            if (k != Keys.Escape)
+            if (k != SilkKey.Escape)
             {
                 var target = BindingDefs[mRebindingIndex].Binding;
-                Keys oldKey = Keybindings.Get(target);
+                SilkKey oldKey = Keybindings.Get(target);
 
+                // If another action already uses the newly-pressed key, give it the key the target action is vacating instead of leaving a duplicate binding.
                 for (int j = 0; j < BindingDefs.Length; j++)
                 {
                     if (j != mRebindingIndex && Keybindings.Get(BindingDefs[j].Binding) == k)
@@ -125,6 +138,7 @@ public partial class MainMenuScreen
                 Keybindings.Set(target, k);
             }
 
+            // Whether accepted or cancelled (Escape), exit rebind mode after the first key seen.
             mRebindingIndex = -1;
             break;
         }

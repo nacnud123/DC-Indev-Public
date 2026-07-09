@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier chestplate (Chest slot); grants 6 armor points.</summary>
 public class ItemIronChest : ItemArmor
 {
     public override ItemType Type => ItemType.IronChest;

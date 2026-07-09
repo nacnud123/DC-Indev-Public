@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier boots (Feet slot); highest durability tier, grants 3 armor points.</summary>
 public class ItemDiamondBoots : ItemArmor
 {
     public override ItemType Type => ItemType.DiamondBoots;

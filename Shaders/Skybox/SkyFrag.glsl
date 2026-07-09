@@ -2,7 +2,7 @@
 
 out vec4 FragColor;
 
-uniform vec3 skyColor;   // pre-modulated sky color (computed in RenderSky)
+uniform vec3 skyColor;
 
 void main()
 {

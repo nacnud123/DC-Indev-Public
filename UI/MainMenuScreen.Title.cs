@@ -1,12 +1,15 @@
 using ImGuiNET;
 using System.Numerics;
-using OpenTK.Windowing.GraphicsLibraryFramework;
+using Silk.NET.Input;
 using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 
 public partial class MainMenuScreen
 {
+    /// <summary>
+    /// Renders the title/landing sub-screen: game title, splash text, Start/Options/Quit buttons, and a reference list of current keybindings in the bottom-left corner. This is the default/first sub-screen shown when the menu opens (<see cref="MainMenuState.Title"/>).
+    /// </summary>
     private void RenderTitleScreen(ImGuiWindowFlags windowFlags)
     {
         ImGui.Begin("TitleScreenMainMenu", windowFlags);
@@ -18,7 +21,7 @@ public partial class MainMenuScreen
         // Version (top-left)
         ImGui.SetCursorPos(new Vector2(12, 8));
         ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("Version 1.1R\nBy: Duncan Armstrong");
+        ImGui.Text("Version 1.5R\nBy: Duncan Armstrong");
         ImGui.PopStyleColor();
 
         // Title
@@ -74,7 +77,7 @@ public partial class MainMenuScreen
 
         PopBtn();
 
-        // Controls (bottom-left)
+        // Controls (bottom-left) - reads live keybindings via KeyName() so this list stays accurate even after the player rebinds keys on the Keybindings screen.
         ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
         string[] controls =
         {
@@ -94,6 +97,7 @@ public partial class MainMenuScreen
             $"{KeyName(Keybindings.RenderDistUp)}/{KeyName(Keybindings.RenderDistDown)}  -  Render distance",
             $"{KeyName(Keybindings.Screenshot)}  -  Take screenshot",
         };
+        // Stack the control lines upward from the bottom edge, sized to fit however many entries `controls` has (so adding/removing a line doesn't need a manual offset fix).
         float lineH = ImGui.GetTextLineHeightWithSpacing();
         float totalH = controls.Length * lineH;
         float startY = windowSize.Y - totalH - 14f;

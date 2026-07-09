@@ -11,24 +11,31 @@
  *
  */
 
-using OpenTK.Mathematics;
+
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;
 
+/// <summary>
+/// Pure vertex-emission helpers used while building a chunk's mesh. Each method appends raw floats (see the 11-float vertex layout documented at the top of this file) for one block's worth of geometry — a single face, a full box, a foliage cross, fire, or a torch — directly into the shared vertex buffer passed in. Face culling (deciding *whether* a face should be emitted, based on neighboring block opacity) happens in the caller (<c>Chunk</c>/mesh-rebuild code) before these methods are invoked; everything here assumes the face is already known to be visible and just worries about producing correct geometry, UVs, normals and per-vertex light/shade values. No methods here allocate on the heap in the hot per-face paths (the scalar <see cref="AddVertex(List{float},float,float,float,float,float,float,float,float,float,float,float)"/> overload exists specifically to avoid constructing Vector2/Vector3 per vertex).
+/// </summary>
 internal static class ChunkMeshBuilder
 {
-    private const float TORCH_SIZE = 2f / 16f;
-    private const float TORCH_HEIGHT = 10f / 16f;
-    private const float TORCH_OFFSET = 7f / 16f;
+    // Torch model dimensions, all in block-fraction units (divided by 16, i.e. Minecraft's classic 16x16x16 pixel-grid convention for sub-block models).
+    private const float TORCH_SIZE = 2f / 16f;    // torch pole cross-section width/depth
+    private const float TORCH_HEIGHT = 10f / 16f; // torch pole height
+    private const float TORCH_OFFSET = 7f / 16f;  // centers the pole within the block on X/Z
+    // Wall-mounted torch tilt: sin/cos of a fixed ~22.5 degree lean angle used to rotate the torch model when attached to a wall (vs standing upright on the floor).
     private const float TILT_SIN = 0.3827f;
     private const float TILT_COS = 0.9239f;
-    private const float WALL_SHIFT = 0.375f;
-    private const float WALL_RAISE = 3f / 16f;
-    private const float BASE_Y = 3.5f / 16f;
+    private const float WALL_SHIFT = 0.375f;      // horizontal offset pushing the torch out from the wall face
+    private const float WALL_RAISE = 3f / 16f;    // vertical offset raising a wall torch off the mounting block's bottom
+    private const float BASE_Y = 3.5f / 16f;      // pivot height used when rotating a wall torch into place
 
-    // Normal block building, 6 faces. Check's neighboring blocks for face culling.
+    /// <summary>
+    /// Emits one face (2 triangles) of a standard cube block, looking up the correct atlas texture coordinates for the given face/block via <see cref="BlockRegistry"/>, then delegating to the explicit-texture overload below. <paramref name="topY"/> optionally overrides the face's top Y coordinate (used for partial-height blocks like slabs/liquids) instead of the full y+1. Face culling against neighbors must already have been decided by the caller.
+    /// </summary>
     internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, BlockType block,
         int skyLight, int blockLight, float topY = -1f)
     {
@@ -59,7 +66,9 @@ internal static class ChunkMeshBuilder
         AddFace(verts, x, y, z, face, texCoords, skyLight, blockLight, topY);
     }
 
-    // Emit a face with explicit texture coords - no heap allocations, vertices written directly
+    /// <summary>
+    /// Emits one face (2 triangles / 6 vertices) of a standard cube using explicit atlas texture coordinates (skips the BlockRegistry lookup so callers with pre-resolved coords, or hot loops, avoid the extra indirection — no heap allocations, vertices written directly into <paramref name="verts"/>). <paramref name="faceShade"/> is a fixed baked-lighting factor per face direction (Top brightest at 1.0, Bottom darkest at 0.5, front/back 0.8, left/right 0.7) — a cheap directional-light approximation independent of the dynamic sky/block light values. Sky/block light bytes (0..Chunk.MAX_LIGHT) are normalized to [0,1] here for the shader.
+    /// </summary>
     internal static void AddFace(List<float> verts, float x, float y, float z, Chunk.Face face, TextureCoords texCoords,
         int skyLight, int blockLight, float topY = -1f)
     {
@@ -88,6 +97,7 @@ internal static class ChunkMeshBuilder
             v1 = v0 + (v1 - v0) * heightRatio;
         }
 
+        // Each case below emits exactly 6 vertices (2 triangles sharing an edge) forming one 1x1 quad on the appropriate cube face, with a fixed outward-facing normal and counter-clockwise winding (as seen from outside the cube, matching the normal direction) so backface culling in the renderer keeps only the outward side visible.
         float nx, ny, nz;
         switch (face)
         {
@@ -160,7 +170,9 @@ internal static class ChunkMeshBuilder
         }
     }
 
-    // Minecraft-style fire rendering.
+    /// <summary>
+    /// Builds Minecraft-style fire geometry as a cluster of double-sided quads. When the fire has a solid block base (<paramref name="hasSolidBase"/> true, e.g. fire sitting on a normal block), it draws the classic 8-quad "campfire" pattern of diagonal panels leaning slightly inward from the block's edges. When fire has no solid base (e.g. it's clinging to the side of a flammable block after spreading, sitting on grass/etc. that burned away), it instead draws leaning wall-panels only on the sides that are adjacent to a flammable neighbor (<paramref name="flammableNegX"/> etc.), plus an X-shaped cap quad pair on top when the block above is flammable — mirroring how vanilla fire clings to whatever fuel is actually present.
+    /// </summary>
     internal static void AddFire(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
         int blockLight,
         bool hasSolidBase, bool flammableNegX, bool flammablePosX, bool flammableNegZ, bool flammablePosZ,
@@ -221,7 +233,7 @@ internal static class ChunkMeshBuilder
                     u0, v0, u1, v1);
             }
 
-            // Above neighbor — X-cap
+            // Above neighbor - X-cap
             if (flammableAbove)
             {
                 AddFireXCap(verts, x, z, y, sl, bl, shade, u0, v0, u1, v1);
@@ -244,8 +256,7 @@ internal static class ChunkMeshBuilder
                 new Vector3(x + 0.8f, y + fireHeight, z + 1),
                 u0, v0, u1, v1);
 
-            // Z-axis pair
-            // Quad leans forward: top at z+0.2, bottom at z+0.7
+            // Z-axis pair Quad leans forward: top at z+0.2, bottom at z+0.7
             AddFireQuadDoubleSided(verts, sl, bl, shade,
                 new Vector3(x, y, z + 0.7f),
                 new Vector3(x + 1, y, z + 0.7f),
@@ -260,8 +271,7 @@ internal static class ChunkMeshBuilder
                 new Vector3(x + 1, y + fireHeight, z + 0.8f),
                 u0, v0, u1, v1);
 
-            // Wide panels near block edges, slight lean inward
-            // X-axis outer pair
+            // Wide panels near block edges, slight lean inward X-axis outer pair
             AddFireQuadDoubleSided(verts, sl, bl, shade,
                 new Vector3(x, y, z),
                 new Vector3(x, y, z + 1),
@@ -291,7 +301,9 @@ internal static class ChunkMeshBuilder
         }
     }
 
-    // Emits two triangles (front + back) for a fire parallelogram panel.
+    /// <summary>
+    /// Emits a fire panel as two triangle pairs — one winding for the front face, one with reversed winding for the back face — so the flat quad is visible from both sides (fire has no back-face culling benefit since it's a thin plane, unlike a solid cube face).
+    /// </summary>
     private static void AddFireQuadDoubleSided(List<float> verts, float sl, float bl2, float shade,
         Vector3 bottomLeft, Vector3 bottomRight, Vector3 topRight, Vector3 topLeft,
         float u0, float v0, float u1, float v1)
@@ -315,7 +327,7 @@ internal static class ChunkMeshBuilder
         AddVertex(verts, bottomRight, sl, bl2, shade, n, new Vector2(u1, v0));
     }
 
-    // Two double-sided diagonal quads forming an X, used as a top-cap when fire has no base.
+    /// <summary>Two double-sided diagonal quads forming an X, used as a top-cap when fire has no solid base beneath it but a flammable block above.</summary>
     private static void AddFireXCap(List<float> verts, float x, float z, float y, float sl, float bl, float shade,
         float u0, float v0, float u1, float v1)
     {
@@ -339,7 +351,9 @@ internal static class ChunkMeshBuilder
             u0, v0, u1, v1);
     }
 
-    // Two diagonal quads forming an X shape. No face culling. Zero heap allocations.
+    /// <summary>
+    /// Builds foliage-style geometry (grass, flowers, saplings, etc.) as two intersecting diagonal quads forming an X when viewed from above, each rendered double-sided (front+back triangle sets) so the sprite is visible from any horizontal angle. Unlike cube faces, cross blocks are never culled against neighbors — they always render fully regardless of what's adjacent. No heap allocations (uses the scalar AddVertex overload throughout).
+    /// </summary>
     internal static void AddCross(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
         int blockLight)
     {
@@ -389,7 +403,9 @@ internal static class ChunkMeshBuilder
         AddVertex(verts, x, y, z1, sl, bl, fs, nx, ny, nz, u1, v0);
     }
 
-    // Custom block building made for torches, also does mesh building for wall mounted torches
+    /// <summary>
+    /// Builds a torch as a thin vertical box (pole) sized/offset by the TORCH_* constants so it sits centered and short on top of its block. When <paramref name="facing"/> is -1 the torch stands upright on the floor as-is; when facing is 0-3 (one of the 4 cardinal wall directions) every corner is rotated via <see cref="RotateWallTorch"/> to tilt the pole outward from a wall mount, matching vanilla wall-torch placement. The 6 box faces are emitted individually with their own per-face shade constant (same top/bottom/side shading scheme as full cube faces).
+    /// </summary>
     internal static void AddTorch(List<float> verts, float x, float y, float z, BlockType block, int skyLight,
         int blockLight, int facing = -1)
     {
@@ -404,12 +420,14 @@ internal static class ChunkMeshBuilder
         var bot = BlockRegistry.GetBottomTexture(block);
         var side = BlockRegistry.GetSideTexture(block);
 
+        // The 8 corners of the torch's thin bounding box, in a fixed index order so the quad emission calls below (corners[i]) can pick out the 4 corners of each face by index.
         Vector3[] corners =
         [
             new(x0, y0, z0), new(x0, y0, z1), new(x1, y0, z0), new(x1, y0, z1),
             new(x0, y1, z0), new(x0, y1, z1), new(x1, y1, z0), new(x1, y1, z1)
         ];
 
+        // The top face is drawn slightly recessed below the pole's true top (y1) to mimic the torch's flame/tip visually sitting inside the pole rather than flush with its top edge.
         float yTop = y1 - 0.062f;
         Vector3[] topFace =
         [
@@ -448,6 +466,9 @@ internal static class ChunkMeshBuilder
             blockLightNorm, 0.7f);
     }
 
+    /// <summary>
+    /// Rotates a torch-model point about a pivot to tilt it outward from a wall for the given cardinal <paramref name="facing"/> (0-3). Translates the point into pivot-local space, applies a fixed-angle 2D rotation (using the precomputed TILT_SIN/TILT_COS) in the plane perpendicular to the wall, then re-adds the pivot and a constant <see cref="WALL_SHIFT"/> push away from the wall face so the tilted pole doesn't clip into the mounting block. Facings outside 0-3 return the point unchanged (defensive default).
+    /// </summary>
     private static Vector3 RotateWallTorch(Vector3 point, float pivotX, float pivotY, float pivotZ, int facing)
     {
         float lx = point.X - pivotX;

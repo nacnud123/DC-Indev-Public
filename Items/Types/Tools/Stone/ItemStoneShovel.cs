@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Stone-tier shovel; a step up from wood in mining speed/attack and durability, still cheap to craft.</summary>
 public class ItemStoneShovel : ItemShovel
 {
     public override ItemType Type => ItemType.StoneShovel;

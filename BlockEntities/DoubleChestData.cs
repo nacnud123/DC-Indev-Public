@@ -1,4 +1,4 @@
-using OpenTK.Mathematics;
+
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
@@ -7,11 +7,15 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.BlockEntities;
 
+/// <summary>
+/// Block entity backing a double chest (two adjacent chest blocks merged into one 54-slot inventory). Registered under a single position in <see cref="BlockEntityManager"/> even though it visually spans two blocks; the pairing/anchor logic lives outside this class. Insert/drop behavior mirrors <see cref="ChestData"/> but with double the slot count.
+/// </summary>
 public class DoubleChestData : IBlockEntity
 {
     public const int CHEST_SLOTS = 54;
 
     public Vector3i Position { get; set; }
+    // Nullable per-slot storage; null means the slot is empty.
     private readonly ItemStack?[] mSlots = new ItemStack?[CHEST_SLOTS];
 
     public DoubleChestData(Vector3i position)
@@ -19,14 +23,20 @@ public class DoubleChestData : IBlockEntity
         Position = position;
     }
 
+    /// <summary>Gets the item stack (or null if empty) in the given slot index.</summary>
     public ItemStack? GetSlot(int index) => mSlots[index];
 
+    /// <summary>Directly overwrites a slot's contents, used by UI drag/drop and save loading.</summary>
     public void SetSlot(int index, ItemStack? stack) => mSlots[index] = stack;
 
+    /// <summary>
+    /// Attempts to insert as much of <paramref name="stack"/> as will fit: first tops off any existing slots holding the same item type up to their max stack size, then fills empty slots with the remainder. Returns true if at least one item was placed (not necessarily all of it).
+    /// </summary>
     public bool TryAdd(ItemStack stack)
     {
         int remaining = stack.Count;
 
+        // Pass 1: merge into existing partial stacks of the same item/block type.
         for (int i = 0; i < CHEST_SLOTS && remaining > 0; i++)
         {
             if (mSlots[i] == null)
@@ -47,6 +57,7 @@ public class DoubleChestData : IBlockEntity
             remaining -= transfer;
         }
 
+        // Pass 2: place any leftover into empty slots.
         for (int i = 0; i < CHEST_SLOTS && remaining > 0; i++)
         {
             if (mSlots[i] != null)
@@ -60,6 +71,7 @@ public class DoubleChestData : IBlockEntity
         return remaining < stack.Count;
     }
 
+    /// <summary>Spawns every non-empty slot as a dropped item entity centered on the chest position.</summary>
     public void DropContents(World world)
     {
         var center = new Vector3(Position.X + 0.5f, Position.Y + 0.5f, Position.Z + 0.5f);
@@ -70,6 +82,7 @@ public class DoubleChestData : IBlockEntity
         }
     }
 
+    /// <summary>Looks up the max stack size for a stack's underlying block or item type from the appropriate registry.</summary>
     private int GetMaxStackSize(ItemStack stack)
     {
         if (stack.IsBlock)

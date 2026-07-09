@@ -21,7 +21,7 @@ public class BlockFarmland : Block
     public override TextureCoords BottomTextureCoords => UvHelper.FromTileCoords(1, 1);
     public override TextureCoords SideTextureCoords => UvHelper.FromTileCoords(1, 1);
 
-    // Metadata > 0 means hydrated — use the wet top texture (+1 x in the tile sheet).
+    // Metadata > 0 means hydrated - use the wet top texture (+1 x in the tile sheet).
     public override TextureCoords GetTopTexture(byte metadata) =>
         metadata > 0 ? UvHelper.FromTileCoords(9, 1) : TopTextureCoords;
 

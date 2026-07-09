@@ -1,14 +1,18 @@
 // Entity save/load logic extracted from Game.cs | DA | 2026
 using System.Collections.Generic;
-using OpenTK.Mathematics;
+
 using VoxelEngine.GameEntity;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 
 namespace VoxelEngine.Saving;
 
+/// <summary>
+/// Converts live `Entity` instances to/from `SavedEntity` DTOs (the flat, XML-serializable shape stored in world_info.xml). Each entity type needs an explicit case here on both Save and Load - there's no reflection/polymorphic serialization, so adding a new persistable mob type means adding a branch in both methods.
+/// </summary>
 internal static class WorldEntitySerializer
 {
+    // NOTE: Spider is not handled here (no case in this switch, nor in Load below), so spiders are silently dropped on world save/reload. If that's unintentional, add a Spider case mirroring Zombie/Skeleton/Stalker in both Save and Load.
     internal static List<SavedEntity> Save(IEnumerable<Entity> entities)
     {
         var list = new List<SavedEntity>();
@@ -56,6 +60,7 @@ internal static class WorldEntitySerializer
         return list;
     }
 
+    // Reconstructs entities from their saved DTOs and re-adds them to the world. Unknown/unhandled Type strings (or a DroppedItem with a null Stack) resolve to `null` and are silently skipped.
     internal static void Load(List<SavedEntity> saved, World world, Texture worldTexture)
     {
         foreach (var se in saved)
@@ -80,6 +85,7 @@ internal static class WorldEntitySerializer
         }
     }
 
+    // Common fields shared by every simple mob (position/yaw/health); type-specific extras like Sheep.IsSheared are set by the caller after this returns.
     private static SavedEntity MakeSavedMob(string type, Entity e) => new()
     {
         Type = type,

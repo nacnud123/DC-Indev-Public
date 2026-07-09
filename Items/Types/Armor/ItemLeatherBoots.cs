@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Leather-tier boots (Feet slot); lowest tier, grants 1 armor point.</summary>
 public class ItemLeatherBoots : ItemArmor
 {
     public override ItemType Type => ItemType.LeatherBoots;

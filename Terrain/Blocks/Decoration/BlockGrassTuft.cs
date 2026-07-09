@@ -39,7 +39,7 @@ public class BlockGrassTuft : Block
                 float sy = y + (float)rng.NextDouble() * 0.3f + 0.1f;
                 float sz = z + (float)rng.NextDouble() * 0.7f + 0.15f;
                 world.AddEntity(new GameEntity.DroppedItemEntity(
-                    new OpenTK.Mathematics.Vector3(sx, sy, sz), ItemStack.FromItem(ItemType.Seeds), Game.Instance.WorldTexture));
+                    new Vector3(sx, sy, sz), ItemStack.FromItem(ItemType.Seeds), Game.Instance.WorldTexture));
             }
         }
     }

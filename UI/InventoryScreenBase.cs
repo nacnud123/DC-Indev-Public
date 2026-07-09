@@ -11,6 +11,9 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Shared base for every ImGui screen that renders inventory-style slot grids (player inventory, chests, furnace, crafting). Provides slot layout constants, slot/item/cursor drawing, click handling (left = pick-up/place/merge, right = split stack), and slot hit-testing for the player's main grid + hotbar. Screens derive from this to reuse the same visuals/interactions rather than reimplementing drag-and-drop slot logic per screen.
+/// </summary>
 public abstract class InventoryScreenBase
 {
     protected const float SLOT_SIZE = 44f * UIHelper.UI_SCALE;
@@ -146,6 +149,7 @@ public abstract class InventoryScreenBase
         }
     }
 
+    // Left-click on a slot: pick up the whole stack onto the cursor, place the cursor down, merge like stacks (up to max stack size), or swap stacks if they differ.
     protected void HandleInvSlotLeft(PlayerInventory inv, int slotIndex)
     {
         var slot = inv.GetSlot(slotIndex);
@@ -171,6 +175,7 @@ public abstract class InventoryScreenBase
 
         if (slot.Value == cursor)
         {
+            // Same item type: top up the slot from the cursor stack, capped at max stack size.
             int space = GetMaxStackSize(cursor) - slot.Value.Count;
             if (space > 0)
             {
@@ -183,10 +188,12 @@ public abstract class InventoryScreenBase
             }
         }
 
+        // Different item (or same item but full): swap cursor and slot contents.
         inv.SetSlot(slotIndex, cursor);
         mCursorStack = slot;
     }
 
+    // Right-click on a slot: pick up half the stack, place a single item, or add a single item onto a matching cursor stack.
     protected void HandleInvSlotRight(PlayerInventory inv, int slotIndex)
     {
         var slot = inv.GetSlot(slotIndex);
@@ -195,6 +202,7 @@ public abstract class InventoryScreenBase
             if (!slot.HasValue)
                 return;
 
+            // Round up so odd counts favor the cursor half (matches vanilla split behavior).
             int half = (slot.Value.Count + 1) / 2;
             mCursorStack = slot.Value.WithCount(half);
             int remaining = slot.Value.Count - half;

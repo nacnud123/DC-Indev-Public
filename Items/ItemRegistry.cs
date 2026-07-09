@@ -4,10 +4,14 @@ using VoxelEngine.Rendering;
 
 namespace VoxelEngine.Items;
 
+/// <summary>
+/// Static singleton registry mapping each <see cref="ItemType"/> to its single shared <see cref="Item"/> instance (mirrors BlockRegistry for blocks). All item definitions are instantiated once in the static constructor and looked up by type thereafter — items are stateless definitions, with per-slot state (count, durability) tracked separately in <see cref="ItemStack"/>.
+/// </summary>
 public static class ItemRegistry
 {
     private static readonly Dictionary<ItemType, Item> Items = new();
 
+    // Registers every concrete Item subclass, grouped by category for readability.
     static ItemRegistry()
     {
         // Tools — Wood
@@ -52,12 +56,14 @@ public static class ItemRegistry
         Register(new ItemDiamondHelmet(), new ItemDiamondChest(), new ItemDiamondLegs(), new ItemDiamondBoots());
     }
 
+    /// <summary>Adds one or more item instances to the registry, keyed by their own Type property.</summary>
     private static void Register(params Item[] items)
     {
         foreach (var item in items)
             Items[item.Type] = item;
     }
 
+    /// <summary>Looks up the shared Item instance for a given type; throws if the type was never registered.</summary>
     public static Item Get(ItemType type)
     {
         if (Items.TryGetValue(type, out var item))
@@ -66,6 +72,7 @@ public static class ItemRegistry
         throw new ArgumentException($"Unknown item type: {type}");
     }
 
+    /// <summary>Enumerates every registered (type, item) pair, e.g. for populating creative-mode UIs.</summary>
     public static IEnumerable<(ItemType, Item)> GetAll() => Items.Select(kv => (kv.Key, kv.Value));
 
     public static string GetName(ItemType type) => Get(type).Name;

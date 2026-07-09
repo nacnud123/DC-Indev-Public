@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier axe; solid mid-game mining speed/attack with good durability.</summary>
 public class ItemIronAxe : ItemAxe
 {
     public override ItemType Type => ItemType.IronAxe;

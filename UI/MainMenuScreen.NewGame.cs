@@ -7,6 +7,9 @@ namespace VoxelEngine.UI;
 
 public partial class MainMenuScreen
 {
+    /// <summary>
+    /// Renders the "Create New World" form (name, type, size, theme, creative toggle) and handles Create/Cancel. On Create, persists a new world via <c>Serialization.CreateWorld</c> and raises <see cref="OnStartGame"/> to hand off to Game.cs. Only called while <c>mCurrentState == MainMenuState.NewGame</c>.
+    /// </summary>
     private void RenderNewGameScreen(ImGuiWindowFlags flags)
     {
         ImGui.Begin("NewGameMenu", flags);
@@ -22,6 +25,7 @@ public partial class MainMenuScreen
         const float rowGap = 10f;
         const float bigGap = 50f;
 
+        // Panel height is derived from the sum of every row's height plus its gap, rather than a fixed constant, so the form auto-fits its rows whenever a row's height changes above.
         float formW = 440f;
         float formH = PANEL_PAD
                       + labelH + inputH + rowGap    // Name
@@ -80,6 +84,7 @@ public partial class MainMenuScreen
         {
             ClickSound();
             mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
+            // World size must be even (chunk grid dimension); if the edit produced an odd value, nudge it by 1 in the direction the value was changing, then re-clamp in case that nudge pushed it back out of range at either bound.
             if ((mWorldSize & 1) != 0)
             {
                 mWorldSize += mWorldSize > previous ? 1 : -1;
@@ -115,7 +120,7 @@ public partial class MainMenuScreen
         ImGui.PopStyleColor(5);
         y += BUTTON_HEIGHT + bigGap;
 
-        // Create
+        // Create - falls back to a default name if the player left the field blank, writes the new world to disk immediately (seed: null = random), then signals Game.cs to load it.
         PushGreenBtn();
         ImGui.SetCursorPos(new Vector2(fieldX, y));
         if (ImGui.Button("Create", new Vector2(fieldW, BUTTON_HEIGHT)))

@@ -43,8 +43,7 @@ public abstract class BlockWheatBase : Block
 
     public override ItemStack? GetDrop(byte metadata)
     {
-        // Drop is handled via OnRemoved / RandomTick for multi-drop.
-        // For tool breaking, return seeds as fallback.
+        // Drop is handled via OnRemoved / RandomTick for multi-drop. For tool breaking, return seeds as fallback.
         return ItemStack.FromItem(ItemType.Seeds);
     }
 
@@ -55,6 +54,6 @@ public abstract class BlockWheatBase : Block
         float sy = y + (float)rng.NextDouble() * 0.3f + 0.1f;
         float sz = z + (float)rng.NextDouble() * 0.7f + 0.15f;
         world.AddEntity(new GameEntity.DroppedItemEntity(
-            new OpenTK.Mathematics.Vector3(sx, sy, sz), stack, Game.Instance.WorldTexture));
+            new Vector3(sx, sy, sz), stack, Game.Instance.WorldTexture));
     }
 }

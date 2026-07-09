@@ -1,6 +1,6 @@
 #version 330 core
 
-in vec3 fragColor; // r=skyLight, g=blockLight, b=faceShade
+in vec3 fragColor;
 in vec3 fragNormal;
 in vec2 texCoord;
 in float fragDist;
@@ -12,7 +12,7 @@ uniform vec3 lightColor;
 uniform float ambientStrength;
 uniform float sunlightLevel;
 uniform sampler2D blockTexture;
-uniform int fluidType; // 0=none, 1=water, 2=lava
+uniform int fluidType;
 
 
 

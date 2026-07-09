@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier shovel; best attack damage and by far the highest durability of any tier.</summary>
 public class ItemDiamondShovel : ItemShovel
 {
     public override ItemType Type => ItemType.DiamondShovel;

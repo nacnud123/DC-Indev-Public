@@ -1,5 +1,4 @@
-// The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26
-// Updated with more complex sound playing functions, also added the ability to play background music.
+// The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26 Updated with more complex sound playing functions, also added the ability to play background music.
 
 using SFML.Audio;
 using System;
@@ -9,12 +8,18 @@ using VoxelEngine.Terrain;
 
 namespace VoxelEngine.Audio
 {
+    /// <summary>
+    /// Thin wrapper around SFML.Audio for playing sound effects and looping background music. Caches each `.ogg` as a `SoundBuffer` keyed by file path (buffers are the decoded PCM data, shared and reused across every `Sound` instance that plays that file) and tracks all currently-playing `Sound` instances so they can be volume-adjusted, stopped, or garbage collected once they finish. All playback methods no-op once `Dispose` has run.
+    /// </summary>
     public class AudioManager : IDisposable
     {
+        // Decoded audio data, one entry per unique file path ever played (never evicted).
         private Dictionary<string, SoundBuffer> mSoundBuffers;
+        // Live SFML.Sound instances currently playing; pruned lazily by CleanupFinishedSounds.
         private List<Sound> mActiveSounds;
         private bool mDisposed = false;
 
+        // 0-100 style volume sliders; SFML's own scale is also 0-100, so these are used directly as `Sound.Volume` without conversion.
         public int SfxVol { get; set; }
         public int MusicVol { get; set; }
 
@@ -27,6 +32,7 @@ namespace VoxelEngine.Audio
             Console.WriteLine("SFML Audio initialized");
         }
 
+        /// <summary>Starts looping background music if it isn't already playing. Safe to call repeatedly - no-ops if music is already active.</summary>
         public void PlayBackgroundMusic()
         {
             if (mDisposed || mBackgroundMusic != null)
@@ -58,6 +64,9 @@ namespace VoxelEngine.Audio
                 mBackgroundMusic.Volume = MusicVol;
         }
 
+        /// <summary>
+        /// One-shot (or looping) sound playback entry point most other Play* helpers funnel through. Lazily loads and caches the SoundBuffer for `filePath` on first use. When `forcePitch` is not given, one-shot sounds get a small random pitch wobble (0.9-1.1x) so repeated sounds (footsteps, block breaks) don't sound identically robotic on every play.
+        /// </summary>
         public void PlayAudio(string filePath, int vol, bool loop = false, float forcePitch = -1f)
         {
             if (mDisposed)
@@ -194,8 +203,9 @@ namespace VoxelEngine.Audio
         // Gets a random contact sound, between the 1 and count
         private string RandomContactSound(string folder, string prefix, int count)
         {
+            // Files are named e.g. Grass1.ogg..Grass{count}.ogg, so Next(1, count+1) picks one at random.
             int index = Game.Instance.GameRandom.Next(1, count + 1);
-            
+
             return $"Resources/Audio/Walking/{folder}/{prefix}{index}.ogg";
         }
 
@@ -223,9 +233,10 @@ namespace VoxelEngine.Audio
             PlayAudio("Resources/Audio/PlayerHurt.ogg", SfxVol, false);
         }
 
+        /// <summary>Removes and disposes any tracked Sound whose playback has finished, so mActiveSounds doesn't grow unbounded. Iterates backwards since entries are removed in place.</summary>
         public void CleanupFinishedSounds()
         {
-            if (mDisposed) 
+            if (mDisposed)
                 return;
 
             for (int i = mActiveSounds.Count - 1; i >= 0; i--)
@@ -277,6 +288,7 @@ namespace VoxelEngine.Audio
                     }
                 }
 
+                // Give SFML's audio thread a moment to actually stop each sound before disposing - disposing an SFML Sound while it's still playing can throw/crash on some platforms.
                 System.Threading.Thread.Sleep(50);
 
                 // Dispose all sounds

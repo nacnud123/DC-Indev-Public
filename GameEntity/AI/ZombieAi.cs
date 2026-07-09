@@ -1,14 +1,17 @@
-// Zombie AI chases player and deals melee damage when in range. | DA | 3/2/26
-// Attack range 2.5 blocks, 20-tick cooldown (1 second), 3 damage per hit.
+// Zombie AI chases player and deals melee damage when in range. | DA | 3/2/26 Attack range 2.5 blocks, 20-tick cooldown (1 second), 3 damage per hit.
 
-using OpenTK.Mathematics;
+
 using VoxelEngine.Core;
 using VoxelEngine.Terrain;
 
 namespace VoxelEngine.GameEntity.AI;
 
+/// <summary>
+/// Hostile AI for the Zombie mob. Simplest hostile AI in the game: pure melee, no special-case behaviour beyond the inherited chase/wander state machine from HostileEntityAi - just deals damage and knockback on a cooldown while in attack range.
+/// </summary>
 public class ZombieAi : HostileEntityAi
 {
+    // Ticks between attacks (20 ticks = ~1s at 20 TPS).
     private const int ATTACK_COOLDOWN = 20;
     private const int ATTACK_DAMAGE = 3;
 
@@ -20,6 +23,7 @@ public class ZombieAi : HostileEntityAi
     {
     }
 
+    // Called every tick the zombie is within AttackRange with LOS (see HostileEntityAi.Tick).
     protected override void OnAttackEntity(World world, float dist)
     {
         if (mAttackCooldown > 0)
@@ -33,7 +37,7 @@ public class ZombieAi : HostileEntityAi
 
         // Knock player away from the zombie with a slight upward kick
         Vector3 delta = player.Position - ParentEntity.Position;
-        Vector3 knockDir = delta.LengthSquared > 0.01f ? delta.Normalized() : Vector3.UnitZ;
+        Vector3 knockDir = delta.LengthSquared() > 0.01f ? Vector3.Normalize(delta) : Vector3.UnitZ;
         player.Velocity += new Vector3(knockDir.X, 0.6f, knockDir.Z) * 12f;
 
         mAttackCooldown = ATTACK_COOLDOWN;

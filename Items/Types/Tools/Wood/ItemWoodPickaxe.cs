@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Wood-tier pickaxe; lowest mining speed/attack, cheapest to craft, least durable of the "real" tiers.</summary>
 public class ItemWoodPickaxe : ItemPickaxe
 {
     public override ItemType Type => ItemType.WoodPickaxe;

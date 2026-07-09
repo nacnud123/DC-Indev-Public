@@ -3,39 +3,21 @@
 
 //This is free and unencumbered software released into the public domain.
 
-//Anyone is free to copy, modify, publish, use, compile, sell, or
-//distribute this software, either in source code form or as a compiled
-//binary, for any purpose, commercial or non-commercial, and by any
-//means.
+// Anyone is free to copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
 
-//In jurisdictions that recognize copyright laws, the author or authors
-//of this software dedicate any and all copyright interest in the
-//software to the public domain. We make this dedication for the benefit
-//of the public at large and to the detriment of our heirs and
-//successors. We intend this dedication to be an overt act of
-//relinquishment in perpetuity of all present and future rights to this
-//software under copyright law.
+// In jurisdictions that recognize copyright laws, the author or authors of this software dedicate any and all copyright interest in the software to the public domain. We make this dedication for the benefit of the public at large and to the detriment of our heirs and successors. We intend this dedication to be an overt act of relinquishment in perpetuity of all present and future rights to this software under copyright law.
 
-//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-//EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-//MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-//IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-//OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-//ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-//OTHER DEALINGS IN THE SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 //For more information, please refer to <http://unlicense.org/>
 
 
-//using System;
-//using UnityEngine;
+// using System; using UnityEngine;
 
 namespace VoxelEngine.Terrain
 {
     /// <summary>
-    /// Implementation of the Perlin simplex noise, an improved Perlin noise algorithm.
-    /// Based loosely on SimplexNoise1234 by Stefan Gustavson <http://staffwww.itn.liu.se/~stegu/aqsis/aqsis-newnoise/>
-    /// 
+    /// Implementation of the Perlin simplex noise, an improved Perlin noise algorithm. Based loosely on SimplexNoise1234 by Stefan Gustavson <http://staffwww.itn.liu.se/~stegu/aqsis/aqsis-newnoise/> This is a standalone single-octave simplex noise utility, distinct from FastNoiseLite.cs (the fractal/octave noise library TerrainGen uses via CreateOctaveNoise). This class is not currently wired into TerrainGen's generation pipeline; it exists as a lower-level noise primitive that other systems can call directly for one-off 1D/2D/3D noise samples.
     /// </summary>
     public class Noise
     {
@@ -60,8 +42,7 @@ namespace VoxelEngine.Terrain
             float t1 = 1.0f - x1 * x1;
             t1 *= t1;
             n1 = t1 * t1 * grad(perm[i1 & 0xff], x1);
-            // The maximum value of this noise is 8*(3/4)^4 = 2.53125
-            // A factor of 0.395 scales to fit exactly within [-1,1]
+            // The maximum value of this noise is 8*(3/4)^4 = 2.53125 A factor of 0.395 scales to fit exactly within [-1,1]
             return 0.395f * (n0 + n1);
         }
 
@@ -91,15 +72,12 @@ namespace VoxelEngine.Terrain
             float x0 = x - X0; // The x,y distances from the cell origin
             float y0 = y - Y0;
 
-            // For the 2D case, the simplex shape is an equilateral triangle.
-            // Determine which simplex we are in.
+            // For the 2D case, the simplex shape is an equilateral triangle. Determine which simplex we are in.
             int i1, j1; // Offsets for second (middle) corner of simplex in (i,j) coords
             if (x0 > y0) { i1 = 1; j1 = 0; } // lower triangle, XY order: (0,0)->(1,0)->(1,1)
             else { i1 = 0; j1 = 1; }      // upper triangle, YX order: (0,0)->(0,1)->(1,1)
 
-            // A step of (1,0) in (i,j) means a step of (1-c,-c) in (x,y), and
-            // a step of (0,1) in (i,j) means a step of (-c,1-c) in (x,y), where
-            // c = (3-sqrt(3))/6
+            // A step of (1,0) in (i,j) means a step of (1-c,-c) in (x,y), and a step of (0,1) in (i,j) means a step of (-c,1-c) in (x,y), where c = (3-sqrt(3))/6
 
             float x1 = x0 - i1 + G2; // Offsets for middle corner in (x,y) unskewed coords
             float y1 = y0 - j1 + G2;
@@ -135,12 +113,18 @@ namespace VoxelEngine.Terrain
                 n2 = t2 * t2 * grad(perm[ii + 1 + perm[jj + 1]], x2, y2);
             }
 
-            // Add contributions from each corner to get the final noise value.
-            // The result is scaled to return values in the interval [-1,1].
+            // Add contributions from each corner to get the final noise value. The result is scaled to return values in the interval [-1,1].
             return 40.0f * (n0 + n1 + n2); // TODO: The scale factor is preliminary!
         }
 
 
+        /// <summary>
+        /// 3D simplex noise. Used in TerrainGen/CaveCarver-style code for volumetric sampling (e.g. cave/carve density fields) where noise must vary smoothly through a 3D block volume, not just across an XZ heightmap.
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="z"></param>
+        /// <returns>Noise value approximately in [-1, 1].</returns>
         public static float Generate(float x, float y, float z)
         {
 
@@ -167,8 +151,7 @@ namespace VoxelEngine.Terrain
             float y0 = y - Y0;
             float z0 = z - Z0;
 
-            // For the 3D case, the simplex shape is a slightly irregular tetrahedron.
-            // Determine which simplex we are in.
+            // For the 3D case, the simplex shape is a slightly irregular tetrahedron. Determine which simplex we are in.
             int i1, j1, k1; // Offsets for second corner of simplex in (i,j,k) coords
             int i2, j2, k2; // Offsets for third corner of simplex in (i,j,k) coords
 
@@ -187,10 +170,7 @@ namespace VoxelEngine.Terrain
                 else { i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } // Y X Z order
             }
 
-            // A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
-            // a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
-            // a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
-            // c = 1/6.
+            // A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z), a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where c = 1/6.
 
             float x1 = x0 - i1 + G3; // Offsets for second corner in (x,y,z) coords
             float y1 = y0 - j1 + G3;
@@ -240,11 +220,11 @@ namespace VoxelEngine.Terrain
                 n3 = t3 * t3 * grad(perm[ii + 1 + perm[jj + 1 + perm[kk + 1]]], x3, y3, z3);
             }
 
-            // Add contributions from each corner to get the final noise value.
-            // The result is scaled to stay just inside [-1,1]
+            // Add contributions from each corner to get the final noise value. The result is scaled to stay just inside [-1,1]
             return 32.0f * (n0 + n1 + n2 + n3); // TODO: The scale factor is preliminary!
         }
 
+        // Precomputed permutation table (Ken Perlin's original values, duplicated to 512 entries so indices can overflow past 255 without an extra modulo). Used to hash lattice coordinates into a pseudo-random gradient index in the grad() overloads below.
         public static byte[] perm = new byte[512] { 151,160,137,91,90,15,
               131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
               190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
@@ -273,17 +253,20 @@ namespace VoxelEngine.Terrain
               138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
             };
 
+        // Floor that rounds toward negative infinity (unlike a plain (int) cast, which truncates toward zero) - needed so negative coordinates land in the correct simplex cell.
         private static int FastFloor(float x)
         {
             return (x > 0) ? ((int)x) : (((int)x) - 1);
         }
 
+        // Positive modulo (C#'s % can return negative results for negative x); used to wrap lattice indices into the perm[] table for the 3D noise variant.
         private static int Mod(int x, int m)
         {
             int a = x % m;
             return a < 0 ? a + m : a;
         }
 
+        // Pseudo-random gradient dot-product for 1D noise: picks one of 16 gradient magnitudes/signs from the hash and scales the distance x by it.
         private static float grad(int hash, float x)
         {
             int h = hash & 15;
@@ -292,6 +275,7 @@ namespace VoxelEngine.Terrain
             return (grad * x);           // Multiply the gradient with the distance
         }
 
+        // Pseudo-random gradient dot-product for 2D noise: hash selects one of 8 gradient directions, dotted with (x,y).
         private static float grad(int hash, float x, float y)
         {
             int h = hash & 7;      // Convert low 3 bits of hash code
@@ -300,6 +284,7 @@ namespace VoxelEngine.Terrain
             return ((h & 1) != 0 ? -u : u) + ((h & 2) != 0 ? -2.0f * v : 2.0f * v);
         }
 
+        // Pseudo-random gradient dot-product for 3D noise: hash selects one of 12 gradient directions (with a fix for repeated cases at h=12..15), dotted with (x,y,z).
         private static float grad(int hash, float x, float y, float z)
         {
             int h = hash & 15;     // Convert low 4 bits of hash code into 12 simple
@@ -308,6 +293,7 @@ namespace VoxelEngine.Terrain
             return ((h & 1) != 0 ? -u : u) + ((h & 2) != 0 ? -v : v);
         }
 
+        // Pseudo-random gradient dot-product for 4D noise (unused by the 2D/3D Generate overloads above, kept for completeness): hash selects one of 32 gradient directions, dotted with (x,y,z,t).
         private static float grad(int hash, float x, float y, float z, float t)
         {
             int h = hash & 31;      // Convert low 5 bits of hash code into 32 simple

@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Stone-tier axe; a step up from wood in mining speed/attack and durability, still cheap to craft.</summary>
 public class ItemStoneAxe : ItemAxe
 {
     public override ItemType Type => ItemType.StoneAxe;

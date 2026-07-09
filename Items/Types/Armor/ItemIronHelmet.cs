@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Iron-tier helmet (Head slot); grants 2 armor points.</summary>
 public class ItemIronHelmet : ItemArmor
 {
     public override ItemType Type => ItemType.IronHelmet;

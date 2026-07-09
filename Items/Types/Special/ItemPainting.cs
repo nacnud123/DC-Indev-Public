@@ -1,4 +1,4 @@
-using OpenTK.Mathematics;
+
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Rendering;
@@ -7,6 +7,9 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>
+/// Places a painting entity on a wall. Unlike normal block placement, the painting's specific artwork (size) is chosen randomly from whichever registered PaintingDef variants actually fit the target wall surface, mirroring Minecraft's placement behavior.
+/// </summary>
 public class ItemPainting : Item
 {
     public override ItemType Type => ItemType.Painting;
@@ -14,6 +17,9 @@ public class ItemPainting : Item
     public override TextureCoords ItemCoords => UvHelper.FromTileCoords(5, 3);
     public override int MaxStackSize => 64;
 
+    /// <summary>
+    /// Derives a cardinal facing from the direction placePos was offset from blockPos, then tries every registered painting size against that wall, keeping only ones that fit (IsValidSurface), and finally places a random one of the valid candidates.
+    /// </summary>
     public override bool OnUse(World world, Vector3i blockPos, Vector3i? placePos)
     {
         if (!placePos.HasValue)

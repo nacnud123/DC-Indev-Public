@@ -12,6 +12,9 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// The survival-mode inventory screen (opened with the Inventory keybind): armor column on the left, the shared 9x3 main grid + hotbar in the middle, and a 2x2 crafting grid with a result slot on the right. Crafting output is recomputed by <see cref="CraftingGrid"/> whenever its input slots change.
+/// </summary>
 public class InventoryScreen : InventoryScreenBase
 {
     // Craft area
@@ -46,6 +49,7 @@ public class InventoryScreen : InventoryScreenBase
     {
     }
 
+    // Dump any items left in the crafting grid and cursor back into the player's inventory so closing the screen never destroys items.
     public void OnClose()
     {
         var inv = Game.Instance.PlayerInventory;
@@ -67,6 +71,7 @@ public class InventoryScreen : InventoryScreenBase
         var drawList = ImGui.GetBackgroundDrawList();
         var displaySize = io.DisplaySize;
 
+        // All positions below are derived from PANEL_W/PANEL_H so the whole layout stays centered and self-consistent if slot size or panel size changes.
         float panelX = (displaySize.X - PANEL_W) / 2f;
         float panelY = (displaySize.Y - PANEL_H) / 2f;
         float armorX = panelX + PADDING;
@@ -209,6 +214,7 @@ public class InventoryScreen : InventoryScreenBase
         return (int)(relY / SLOT_SIZE) * CRAFT_COLS + (int)(relX / SLOT_SIZE);
     }
 
+    // Equip logic: an item may only be placed in an armor slot if it's flagged as armor for that specific slot (e.g. a helmet can't go in the boots slot). Only 1 armor piece is ever equipped at once, so extras beyond count 1 spill back into the main inventory.
     private void HandleArmorLeftClick(PlayerInventory inv, ArmorSlot slot)
     {
         var existing = inv.GetArmorSlot(slot);
@@ -340,6 +346,7 @@ public class InventoryScreen : InventoryScreenBase
         }
     }
 
+    // Taking the crafted result: stack onto the cursor if it matches, otherwise (cursor empty or holding something else) either place it on the cursor or push it straight into the main inventory.
     private void HandleResultClick()
     {
         var result = mCraftGrid.TakeResult();

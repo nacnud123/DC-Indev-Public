@@ -1,11 +1,12 @@
 // Renders the player's first-person arm and held item. Handles block, thick-sprite item, and bare-arm display with swing, equip-dip, and walk-bob animations. | DA | 2/21/26
 
 using System.IO;
-using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
+using Silk.NET.OpenGL;
+
 using StbImageSharp;
 using VoxelEngine.Items;
 using VoxelEngine.Rendering;
+using Shader = VoxelEngine.Rendering.Shader;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
 using VoxelEngine.Utils;
@@ -51,8 +52,8 @@ public class PlayerArm
     private readonly Texture mWorldTexture;
     private readonly Texture mItemTexture;
     private readonly Shader mShader;
-    private readonly int mVao, mVbo;
-    
+    private readonly uint mVao, mVbo;
+
     private readonly byte[,] mItemAtlasAlpha;
     private readonly int mItemAtlasTilePixels;
     private readonly byte[,] mWorldAtlasAlpha;
@@ -89,8 +90,8 @@ public class PlayerArm
     private float mDecoTransX = 0.805f;
     private float mDecoTransY = -0.468f;
     private float mDecoTransZ = -0.85f;
-    
-    
+
+
     private readonly record struct FrameAnim(
         float BobX,
         float BobY,
@@ -108,17 +109,18 @@ public class PlayerArm
         mItemTexture = itemTexture;
         mShader = new Shader(File.ReadAllText(VERT_SHADER), File.ReadAllText(FRAG_SHADER));
 
-        mVao = GL.GenVertexArray();
-        mVbo = GL.GenBuffer();
-        GL.BindVertexArray(mVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, mVbo);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(2, 1, VertexAttribPointerType.Float, false, 6 * sizeof(float), 5 * sizeof(float));
-        GL.EnableVertexAttribArray(2);
-        GL.BindVertexArray(0);
+        var gl = GlContext.Gl;
+        mVao = gl.GenVertexArray();
+        mVbo = gl.GenBuffer();
+        gl.BindVertexArray(mVao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
+        gl.VertexAttribPointer(0, 3, GLEnum.Float, false, (uint)(6 * sizeof(float)), 0);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(1, 2, GLEnum.Float, false, (uint)(6 * sizeof(float)), (nint)(3 * sizeof(float)));
+        gl.EnableVertexAttribArray(1);
+        gl.VertexAttribPointer(2, 1, GLEnum.Float, false, (uint)(6 * sizeof(float)), (nint)(5 * sizeof(float)));
+        gl.EnableVertexAttribArray(2);
+        gl.BindVertexArray(0);
 
         StbImage.stbi_set_flip_vertically_on_load(0);
 
@@ -189,12 +191,12 @@ public class PlayerArm
             if (t < 0.25f)
             {
                 float u = t / 0.25f;
-                swingY = 0.08f * MathF.Sin(u * MathHelper.PiOver2);
+                swingY = 0.08f * MathF.Sin(u * MathF.PI * 0.5f);
             }
             else if (t < 0.55f)
             {
                 float u = (t - 0.25f) / 0.30f;
-                swingY = MathHelper.Lerp(0.08f, -0.06f, u);
+                swingY = (0.08f + (-0.06f - 0.08f) * u);
                 swingZ = -0.2f * MathF.Sin(u * MathF.PI);
             }
             else
@@ -211,10 +213,10 @@ public class PlayerArm
 
     public void Render(Camera camera, ItemStack? heldStack)
     {
-        Matrix4 proj =
-            Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(ARM_FOV), camera.AspectRatio, 0.05f, 10f);
+        Matrix4x4 proj =
+            Matrix4x4.CreatePerspectiveFieldOfView(float.DegreesToRadians(ARM_FOV), camera.AspectRatio, 0.05f, 10f);
 
-        GL.Clear(ClearBufferMask.DepthBufferBit);
+        GlContext.Gl.Clear(ClearBufferMask.DepthBufferBit);
 
         int bx = (int)MathF.Floor(camera.Position.X);
         int by = (int)MathF.Floor(camera.Position.Y);
@@ -246,7 +248,7 @@ public class PlayerArm
         }
     }
 
-    private void RenderArm(Matrix4 proj, FrameAnim a, float skyLight, float blockLight)
+    private void RenderArm(Matrix4x4 proj, FrameAnim a, float skyLight, float blockLight)
     {
         Entity._shader?.Use();
         Entity._shader?.SetVector3("lightDir", Entity.LightDir);
@@ -256,21 +258,21 @@ public class PlayerArm
         Entity._shader?.SetFloat("blockLight", blockLight);
         Entity._shader?.SetFloat("uHitFlash", 0f);
 
-        Matrix4 transform =
-            Matrix4.CreateScale(ARM_SCALE)
-            * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(180f))
-            * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(-60f))
-            * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(10f))
-            * Matrix4.CreateTranslation(0.4f + a.BobX, -0.45f + a.SwingY - a.BobY, -0.3f + a.SwingZ)
-            * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(a.BobTilt));
+        Matrix4x4 transform =
+            Matrix4x4.CreateScale(ARM_SCALE)
+            * Matrix4x4.CreateRotationY(float.DegreesToRadians(180f))
+            * Matrix4x4.CreateRotationX(float.DegreesToRadians(-60f))
+            * Matrix4x4.CreateRotationY(float.DegreesToRadians(10f))
+            * Matrix4x4.CreateTranslation(0.4f + a.BobX, -0.45f + a.SwingY - a.BobY, -0.3f + a.SwingZ)
+            * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
 
         Entity._shader?.SetMatrix4("mvp", transform * proj);
         mArmModel.Texture.Use(TextureUnit.Texture0);
-        GL.BindVertexArray(mArmModel.Vao);
-        GL.DrawArrays(PrimitiveType.Triangles, 0, mArmModel.VertexCount);
+        GlContext.Gl.BindVertexArray(mArmModel.Vao);
+        GlContext.Gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)mArmModel.VertexCount);
     }
 
-    private void RenderHeldBlock(BlockType blockType, Matrix4 proj, FrameAnim a,
+    private void RenderHeldBlock(BlockType blockType, Matrix4x4 proj, FrameAnim a,
         float skyLight, float blockLight)
     {
         var key = ItemStack.FromBlock(blockType);
@@ -286,52 +288,52 @@ public class PlayerArm
             return;
 
         var renderType = BlockRegistry.Get(blockType).RenderType;
-        Matrix4 transform;
+        Matrix4x4 transform;
 
         if (renderType == RenderingType.Stair)
         {
             transform =
-                Matrix4.CreateTranslation(-0.5f, -0.5f, -0.5f)
-                * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(180f))
-                * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(135f))
-                * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(-30f))
-                * Matrix4.CreateScale(BLOCK_SCALE)
-                * Matrix4.CreateTranslation(0.52f + a.BobX, -0.38f + a.SwingY - a.BobY, -0.75f + a.SwingZ)
-                * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(a.BobTilt));
+                Matrix4x4.CreateTranslation(-0.5f, -0.5f, -0.5f)
+                * Matrix4x4.CreateRotationX(float.DegreesToRadians(180f))
+                * Matrix4x4.CreateRotationY(float.DegreesToRadians(135f))
+                * Matrix4x4.CreateRotationX(float.DegreesToRadians(-30f))
+                * Matrix4x4.CreateScale(BLOCK_SCALE)
+                * Matrix4x4.CreateTranslation(0.52f + a.BobX, -0.38f + a.SwingY - a.BobY, -0.75f + a.SwingZ)
+                * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
         }
         else if (renderType == RenderingType.Cross || renderType == RenderingType.Torch)
         {
             transform =
-                Matrix4.CreateTranslation(-0.5f, -0.5f, 0f)
-                * Matrix4.CreateScale(ITEM_SCALE)
-                * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(mDecoRotZ))
-                * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(mDecoRotX))
-                * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(mDecoRotY))
-                * Matrix4.CreateTranslation(mDecoTransX + a.BobX, mDecoTransY + a.SwingY - a.BobY,
+                Matrix4x4.CreateTranslation(-0.5f, -0.5f, 0f)
+                * Matrix4x4.CreateScale(ITEM_SCALE)
+                * Matrix4x4.CreateRotationZ(float.DegreesToRadians(mDecoRotZ))
+                * Matrix4x4.CreateRotationX(float.DegreesToRadians(mDecoRotX))
+                * Matrix4x4.CreateRotationY(float.DegreesToRadians(mDecoRotY))
+                * Matrix4x4.CreateTranslation(mDecoTransX + a.BobX, mDecoTransY + a.SwingY - a.BobY,
                     mDecoTransZ + a.SwingZ)
-                * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(a.BobTilt));
+                * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
         }
         else
         {
             transform =
-                Matrix4.CreateTranslation(-0.5f, -0.5f, -0.5f)
-                * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(mBlockRotZ))
-                * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(mBlockRotY))
-                * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(mBlockRotX))
-                * Matrix4.CreateScale(BLOCK_SCALE)
-                * Matrix4.CreateTranslation(mBlockTransX + a.BobX, mBlockTransY + a.SwingY - a.BobY,
+                Matrix4x4.CreateTranslation(-0.5f, -0.5f, -0.5f)
+                * Matrix4x4.CreateRotationZ(float.DegreesToRadians(mBlockRotZ))
+                * Matrix4x4.CreateRotationY(float.DegreesToRadians(mBlockRotY))
+                * Matrix4x4.CreateRotationX(float.DegreesToRadians(mBlockRotX))
+                * Matrix4x4.CreateScale(BLOCK_SCALE)
+                * Matrix4x4.CreateTranslation(mBlockTransX + a.BobX, mBlockTransY + a.SwingY - a.BobY,
                     mBlockTransZ + a.SwingZ)
-                * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(a.BobTilt));
+                * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
         }
 
         SetItemShader(transform * proj, Math.Max(skyLight, blockLight));
-        GL.Disable(EnableCap.CullFace);
+        GlContext.Gl.Disable(EnableCap.CullFace);
         mWorldTexture.Use(TextureUnit.Texture0);
         UploadAndDraw(mesh);
-        GL.Enable(EnableCap.CullFace);
+        GlContext.Gl.Enable(EnableCap.CullFace);
     }
 
-    private void RenderHeldItem(ItemStack stack, Matrix4 proj, FrameAnim a,
+    private void RenderHeldItem(ItemStack stack, Matrix4x4 proj, FrameAnim a,
         float skyLight, float blockLight)
     {
         if (mCachedStack != stack)
@@ -355,23 +357,23 @@ public class PlayerArm
         float ty = isBow ? mDecoTransY : isTool ? mItemTransY : mDecoTransY;
         float tz = isBow ? mDecoTransZ : isTool ? mItemTransZ : mDecoTransZ;
 
-        Matrix4 transform =
-            Matrix4.CreateTranslation(-0.5f, -0.5f, 0f)
-            * Matrix4.CreateScale(ITEM_SCALE)
-            * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(rz))
-            * Matrix4.CreateRotationX(MathHelper.DegreesToRadians(rx))
-            * Matrix4.CreateRotationY(MathHelper.DegreesToRadians(ry))
-            * Matrix4.CreateTranslation(tx + a.BobX, ty + a.SwingY - a.BobY, tz + a.SwingZ)
-            * Matrix4.CreateRotationZ(MathHelper.DegreesToRadians(a.BobTilt));
+        Matrix4x4 transform =
+            Matrix4x4.CreateTranslation(-0.5f, -0.5f, 0f)
+            * Matrix4x4.CreateScale(ITEM_SCALE)
+            * Matrix4x4.CreateRotationZ(float.DegreesToRadians(rz))
+            * Matrix4x4.CreateRotationX(float.DegreesToRadians(rx))
+            * Matrix4x4.CreateRotationY(float.DegreesToRadians(ry))
+            * Matrix4x4.CreateTranslation(tx + a.BobX, ty + a.SwingY - a.BobY, tz + a.SwingZ)
+            * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
 
         SetItemShader(transform * proj, Math.Max(skyLight, blockLight));
-        GL.Disable(EnableCap.CullFace);
+        GlContext.Gl.Disable(EnableCap.CullFace);
         mItemTexture.Use(TextureUnit.Texture0);
         UploadAndDraw(mesh);
-        GL.Enable(EnableCap.CullFace);
+        GlContext.Gl.Enable(EnableCap.CullFace);
     }
 
-    private void SetItemShader(Matrix4 mvp, float lightLevel)
+    private void SetItemShader(Matrix4x4 mvp, float lightLevel)
     {
         mShader.Use();
         mShader.SetInt("tex", 0);
@@ -381,11 +383,12 @@ public class PlayerArm
 
     private void UploadAndDraw(float[] mesh)
     {
-        GL.BindVertexArray(mVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, mVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, mesh.Length * sizeof(float), mesh, BufferUsageHint.DynamicDraw);
-        GL.DrawArrays(PrimitiveType.Triangles, 0, mesh.Length / 6);
-        GL.BindVertexArray(0);
+        var gl = GlContext.Gl;
+        gl.BindVertexArray(mVao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
+        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, mesh, BufferUsageARB.DynamicDraw);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)(mesh.Length / 6));
+        gl.BindVertexArray(0);
     }
 
     // Mesh building
@@ -467,22 +470,18 @@ public class PlayerArm
 
                 AddThickQuad(verts, new Vector3(x0, y0, z1), new Vector3(x1, y0, z1), new Vector3(x1, y1, z1),
                     new Vector3(x0, y1, z1), uMid, vMid, SHADE_FRONT);
-
                 AddThickQuad(verts, new Vector3(x1, y0, z0), new Vector3(x0, y0, z0), new Vector3(x0, y1, z0),
                     new Vector3(x1, y1, z0), uMid, vMid, SHADE_BACK);
 
                 if (!hasLeft)
                     AddThickQuad(verts, new Vector3(x0, y0, z0), new Vector3(x0, y0, z1), new Vector3(x0, y1, z1),
                         new Vector3(x0, y1, z0), uMid, vMid, SHADE_LEFT);
-
                 if (!hasRight)
                     AddThickQuad(verts, new Vector3(x1, y0, z1), new Vector3(x1, y0, z0), new Vector3(x1, y1, z0),
                         new Vector3(x1, y1, z1), uMid, vMid, SHADE_RIGHT);
-
                 if (!hasBottom)
                     AddThickQuad(verts, new Vector3(x0, y0, z1), new Vector3(x1, y0, z1), new Vector3(x1, y0, z0),
                         new Vector3(x0, y0, z0), uMid, vMid, SHADE_BOTTOM);
-
                 if (!hasTop)
                     AddThickQuad(verts, new Vector3(x0, y1, z0), new Vector3(x1, y1, z0), new Vector3(x1, y1, z1),
                         new Vector3(x0, y1, z1), uMid, vMid, SHADE_TOP);
@@ -544,7 +543,7 @@ public class PlayerArm
     {
         float u0 = tex.TopLeft.X, v0t = tex.TopLeft.Y;
         float u1 = tex.BottomRight.X, v1t = tex.BottomRight.Y;
-        
+
         AddVertex(verts, v0, u0, v0t, shade);
         AddVertex(verts, v1, u0, v1t, shade);
         AddVertex(verts, v2, u1, v1t, shade);

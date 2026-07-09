@@ -1,5 +1,4 @@
-// Face-building methods extracted from Chunk.cs into a partial class. These methods decide
-// which faces to emit for each block type, then delegate vertex emission to ChunkMeshBuilder.
+// Face-building methods extracted from Chunk.cs into a partial class. These methods decide which faces to emit for each block type, then delegate vertex emission to ChunkMeshBuilder.
 using System.Collections.Generic;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain.Blocks;
@@ -9,6 +8,7 @@ namespace VoxelEngine.Terrain;
 
 public partial class Chunk
 {
+    // Standard full-cube block: for each of the 6 directions, only emit that face if the neighboring block is transparent (i.e. the face would actually be visible) - this is the core of greedy face culling that keeps chunk meshes from including hidden interior faces.
     private void BuildBlockFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)
     {
         foreach (var (face, dx, dy, dz) in FaceDirections)
@@ -20,6 +20,7 @@ public partial class Chunk
         }
     }
 
+    // Farmland's top texture varies by tilled/hydrated state stored in metadata (dry vs wet soil), unlike other faces which use the block's fixed textures.
     private void BuildFarmlandFaces(List<float> verts, int x, int y, int z, float wx, float wz)
     {
         byte meta = (byte)GetMetadata(x, y, z);
@@ -42,6 +43,7 @@ public partial class Chunk
         }
     }
 
+    // Blocks whose front texture rotates with placement direction (furnaces, pumpkins, etc.): top/bottom textures are fixed, but the 4 horizontal faces are resolved per-face based on the stored facing metadata via GetFacingTexture.
     private void BuildFacingBlockFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)
     {
         int facing = GetMetadata(x, y, z);
@@ -67,8 +69,7 @@ public partial class Chunk
         }
     }
 
-    // Metadata encoding: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X).
-    // The block faces the player, so its front is opposite to the camera's look direction.
+    // Metadata encoding: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X). The block faces the player, so its front is opposite to the camera's look direction.
     private TextureCoords GetFacingTexture(Face geometricFace, int facing, TextureCoords frontTex, TextureCoords backTex, TextureCoords sideTex)
     {
         (Face frontFace, Face backFace) = facing switch
@@ -85,6 +86,7 @@ public partial class Chunk
         return sideTex;
     }
 
+    // Double chests span 2 adjacent blocks but must render as one seamless chest texture; the "canonical" half (see IsDoubleChestCanonical) picks one half of a split front/back texture and the other half picks the complementary half, so the two blocks visually align.
     private void BuildDoubleChestFaces(List<float> verts, int x, int y, int z, float wx, float wz)
     {
         int facing = GetMetadata(x, y, z);
@@ -113,6 +115,7 @@ public partial class Chunk
         }
     }
 
+    // Deterministically designates one half of each double-chest pair as "canonical" (the one using the first texture half) by picking the half with the higher +X/+Z neighbor coordinate, so both blocks agree on which is which without needing extra stored state.
     private bool IsDoubleChestCanonical(int x, int y, int z)
     {
         (int dx, int dz)[] neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1)];
@@ -124,6 +127,7 @@ public partial class Chunk
         return true;
     }
 
+    // Slabs occupy only the bottom half of the block cell (0 to 0.5 in Y); the top face is drawn at half-height and other faces are half-height quads, still culled against neighbors.
     private void BuildSlabFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)
     {
         float slabTop = y + 0.5f;
@@ -144,6 +148,7 @@ public partial class Chunk
         }
     }
 
+    // Stairs are built from 2 boxes: a full-footprint bottom slab plus a half-footprint top "back step" whose position depends on facing, giving the classic L-shaped stair silhouette.
     private void BuildStairFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block, int facing)
     {
         int skyLight = GetSkyLightAt(x, y, z);
@@ -152,8 +157,7 @@ public partial class Chunk
         // Box 1: bottom slab (full X/Z, bottom half)
         ChunkMeshBuilder.AddStairBox(verts, wx, y, wz, wx + 1, y + 0.5f, wz + 1, block, skyLight, blockLight);
 
-        // Box 2: back step (half extent on one axis based on facing, top half)
-        // Facing: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X)
+        // Box 2: back step (half extent on one axis based on facing, top half) Facing: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X)
         switch (facing)
         {
             case 0:
@@ -171,6 +175,7 @@ public partial class Chunk
         }
     }
 
+    // Water/lava surfaces sit slightly below the full block height (WATER_SURFACE_HEIGHT) unless there's another fluid block directly above, in which case the top is flush (y+1) so stacked fluid columns don't show a gap between blocks.
     private void BuildWaterFaces(List<float> verts, int x, int y, int z, float wx, float wz, BlockType block)
     {
         bool waterAbove = GetBlockAt(x, y + 1, z) == BlockType.Water;

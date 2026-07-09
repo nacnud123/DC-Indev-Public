@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Gold-tier sword; highest mining speed of any tier but very low durability (fragile), moderate attack.</summary>
 public class ItemGoldSword : ItemSword
 {
     public override ItemType Type => ItemType.GoldSword;

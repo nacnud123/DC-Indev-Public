@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier helmet (Head slot); highest durability tier, grants 3 armor points.</summary>
 public class ItemDiamondHelmet : ItemArmor
 {
     public override ItemType Type => ItemType.DiamondHelmet;

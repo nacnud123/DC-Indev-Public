@@ -13,6 +13,9 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Creative-mode item picker: a tabbed grid of every block/item flagged as selectable, clicking one puts it directly in the player's hand/hotbar (no crafting or inventory slots involved - creative mode has unlimited items). Uses ImGui image buttons rather than the custom slot-drawing used by <see cref="InventoryScreenBase"/>.
+/// </summary>
 public class CreativeInventoryScreen
 {
     private const int BUTTONS_PER_ROW = 9;
@@ -73,7 +76,7 @@ public class CreativeInventoryScreen
         ImGui.End();
     }
 
-    // Renders a centered grid of image buttons, calling renderButton(index) for each slot.
+    // Renders a centered grid of image buttons, calling renderButton(index) for each slot. Row width is computed per-row (not just per-grid) so the last, possibly-partial row is still centered on its own rather than left-aligned under a full grid.
     private void RenderButtonGrid(int count, Action<int> renderButton)
     {
         ImGui.Dummy(new Vector2(0, KContentPadding.Y));
@@ -136,6 +139,7 @@ public class CreativeInventoryScreen
     private void RenderItemButton(int index, ItemType type, Item item)
     {
         var uv = item.ItemCoords;
+        // Flip V: atlas coords are top-left origin but ImGui image UVs expect bottom-left-origin sampling here, so swap TopLeft.Y/BottomRight.Y.
         var uv0 = new Vector2(uv.TopLeft.X, uv.BottomRight.Y);
         var uv1 = new Vector2(uv.BottomRight.X, uv.TopLeft.Y);
 

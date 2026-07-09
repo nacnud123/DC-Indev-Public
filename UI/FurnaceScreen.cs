@@ -11,15 +11,16 @@ using VoxelEngine.Terrain;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Furnace block-entity UI: input + fuel slots feeding a smelt recipe (via <see cref="SmeltRegistry"/>) into an output slot, with a flame meter (fuel burn time remaining) and a progress arrow (smelt progress), plus the shared player inventory/hotbar. Actual smelting/burning ticks happen in <see cref="FurnaceData"/> elsewhere; this class only reads that state to draw it and handles slot clicks.
+/// </summary>
 public class FurnaceScreen : InventoryScreenBase
 {
     private const float ARROW_W = 32f * UIHelper.UI_SCALE;
     private const float FLAME_H = 14f * UIHelper.UI_SCALE;
     private const float INNER_GAP = 8f * UIHelper.UI_SCALE;
 
-    // Furnace area: [Input] gap [Arrow] gap [Output]
-    //               [Flame]
-    //               [Fuel ]
+    // Furnace area: [Input] gap [Arrow] gap [Output] [Flame] [Fuel ]
     private const float FURNACE_AREA_W = SLOT_SIZE + INNER_GAP + ARROW_W + INNER_GAP + SLOT_SIZE;
     private const float INV_W = COLS * SLOT_SIZE;
     private const float PANEL_W = INV_W + PADDING * 2;
@@ -151,6 +152,7 @@ public class FurnaceScreen : InventoryScreenBase
         DrawCount(drawList, stack.Count, sx, sy);
     }
 
+    // Vertical meter, fills bottom-up as fuel burns down (CurrentFuelMax is the burn time of whatever fuel item is currently lit, not a constant).
     private void DrawFlame(ImDrawListPtr drawList, float sx, float flameBotY)
     {
         float flameFrac = mFurnace.CurrentFuelMax > 0
@@ -172,6 +174,7 @@ public class FurnaceScreen : InventoryScreenBase
         drawList.AddText(new Vector2(sx + SLOT_SIZE / 2f - 4f, flameBotY - FLAME_H - 1f), ColorWhite, "^");
     }
 
+    // Horizontal meter, fills left-to-right as SmeltProgress advances toward the matched recipe's total tick count. Re-looks-up the recipe each frame since the input slot can change.
     private void DrawArrow(ImDrawListPtr drawList, float arrowX, float arrowY)
     {
         var recipe = SmeltRegistry.FindMatch(mFurnace.InputSlot);

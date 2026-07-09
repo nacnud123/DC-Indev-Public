@@ -7,10 +7,15 @@ using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 
+/// <summary>
+/// Fullscreen "You Died!" overlay shown when the player's health hits zero (<c>GameState.Died</c>). Offers a single "Main Menu" button to bail out of the run; <c>Game.cs</c> subscribes to <see cref="OnReturnToMainMenu"/> to drive the actual state transition and any respawn/save cleanup.
+/// </summary>
 public class DeathScreen
 {
+    /// <summary>Raised when the player clicks "Main Menu"; Game.cs handles the actual state change.</summary>
     public event Action OnReturnToMainMenu;
 
+    /// <summary>Draws the fullscreen death overlay and handles the Main Menu button click. Called once per frame while dead.</summary>
     public void Render()
     {
         var io = ImGui.GetIO();
@@ -36,7 +41,7 @@ public class DeathScreen
         var centerX = windowSize.X * 0.5f;
         var centerY = windowSize.Y * 0.5f;
 
-        // Title
+        // Title (positioned above screen center; button block below fills the rest of the layout)
         var titleText = "You Died!";
         ImGui.PushFont(ImGuiController.fontLarge);
 
@@ -48,7 +53,7 @@ public class DeathScreen
 
         ImGui.PopFont();
 
-        // Main Menu button
+        // Main Menu button - plays a click SFX and fires the event; Game.cs does the actual state transition (e.g. tearing down the world, showing MainMenuScreen).
         var buttonWidth = 180f;
         var buttonHeight = 44f;
         ImGui.SetCursorPos(new Vector2(centerX - buttonWidth * 0.5f, centerY + 20f));

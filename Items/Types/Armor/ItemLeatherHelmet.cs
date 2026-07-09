@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Leather-tier helmet (Head slot); lowest tier, grants 1 armor point.</summary>
 public class ItemLeatherHelmet : ItemArmor
 {
     public override ItemType Type => ItemType.LeatherHelmet;

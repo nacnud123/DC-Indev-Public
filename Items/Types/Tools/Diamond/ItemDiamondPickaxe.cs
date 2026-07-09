@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Diamond-tier pickaxe; best attack damage and by far the highest durability of any tier.</summary>
 public class ItemDiamondPickaxe : ItemPickaxe
 {
     public override ItemType Type => ItemType.DiamondPickaxe;

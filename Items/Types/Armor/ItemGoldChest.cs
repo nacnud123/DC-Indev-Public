@@ -3,6 +3,7 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Items;
 
+/// <summary>Gold-tier chestplate (Chest slot). Fast-degrading like all gold gear (low durability), grants 5 armor points.</summary>
 public class ItemGoldChest : ItemArmor
 {
     public override ItemType Type => ItemType.GoldChest;
