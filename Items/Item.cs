@@ -6,7 +6,11 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Abstract base for every non-block item definition in the game (tools, armor, food, resources, etc.). One concrete subclass exists per <see cref="ItemType"/> and a single instance of each is held by <see cref="ItemRegistry"/> (mirrors the Block/BlockRegistry pattern). Subclasses override the virtual properties below to opt into tool, armor, or food behavior instead of implementing separate interfaces.
+/// Abstract base for every non-block item definition in the game (tools, armor, food,
+/// resources, etc.). One concrete subclass exists per <see cref="ItemType"/> and a single
+/// instance of each is held by <see cref="ItemRegistry"/> (mirrors the Block/BlockRegistry
+/// pattern). Subclasses override the virtual properties below to opt into tool, armor, or
+/// food behavior instead of implementing separate interfaces.
 /// </summary>
 public abstract class Item
 {
@@ -62,7 +66,9 @@ public abstract class Item
     public bool IsArmor => ArmorSlot.HasValue;
 
     /// <summary>
-    /// Right-click/use-item hook. blockPos is the block being targeted, placePos is the adjacent empty position (if any) where a new block/entity would be placed. Returns true if the item handled the interaction (consuming the click); default is a no-op.
+    /// Right-click/use-item hook. blockPos is the block being targeted, placePos is the
+    /// adjacent empty position (if any) where a new block/entity would be placed. Returns
+    /// true if the item handled the interaction (consuming the click); default is a no-op.
     /// </summary>
     public virtual bool OnUse(World world, Vector3i blockPos, Vector3i? placePos) => false;
 }

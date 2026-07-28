@@ -2,7 +2,9 @@
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Abstract base for every edible item. Marks the item as food (enabling the "eat" interaction) and gives it a large default stack size like other consumables. Subclasses only need to override Type/Name/ItemCoords/FoodRestore.
+/// Abstract base for every edible item. Marks the item as food (enabling the "eat" interaction)
+/// and gives it a large default stack size like other consumables. Subclasses only need to
+/// override Type/Name/ItemCoords/FoodRestore.
 /// </summary>
 public abstract class ItemFood : Item
 {

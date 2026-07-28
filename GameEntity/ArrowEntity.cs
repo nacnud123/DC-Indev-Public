@@ -10,7 +10,12 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Projectile fired by a bow. Flies with a simple velocity-integration + drag + gravity model (note: this uses its own hand-rolled per-tick integration rather than <see cref="Physics"/>, since arrows need raycast-based hit detection against entities/blocks rather than AABB sweep collision), embeds in the first block or entity it hits, then can be picked back up by the player after a short delay. All positional constants here (SPEED, GRAVITY, DRAG_*) are tuned per-tick values, not per-second - they're applied once per game tick in <see cref="TickFlying"/>.
+/// Projectile fired by a bow. Flies with a simple velocity-integration + drag + gravity model
+/// (note: this uses its own hand-rolled per-tick integration rather than <see cref="Physics"/>,
+/// since arrows need raycast-based hit detection against entities/blocks rather than AABB sweep
+/// collision), embeds in the first block or entity it hits, then can be picked back up by the
+/// player after a short delay. All positional constants here (SPEED, GRAVITY, DRAG_*) are tuned
+/// per-tick values, not per-second - they're applied once per game tick in <see cref="TickFlying"/>.
 /// </summary>
 public class ArrowEntity : Entity
 {
@@ -46,7 +51,9 @@ public class ArrowEntity : Entity
     private int mArrowShake; // countdown for the stuck-in-wood wobble animation; also blocks pickup while > 0
     private Vector3 mFacing; // normalized flight direction, used to orient the rendered arrow model
 
-    // Player-fired constructor: derives origin and direction from the shooter's camera (for the player) or body yaw (for non-player owners), and nudges the spawn point forward so the arrow doesn't start inside the shooter's own hitbox.
+    // Player-fired constructor: derives origin and direction from the shooter's camera (for the
+    // player) or body yaw (for non-player owners), and nudges the spawn point forward so the
+    // arrow doesn't start inside the shooter's own hitbox.
     public ArrowEntity(Entity owner)
     {
         mOwner = owner;
@@ -86,7 +93,8 @@ public class ArrowEntity : Entity
         SetHeading(direction.X, direction.Y, direction.Z, spread);
     }
 
-    // Builds the shared arrow mesh (shaft cross-quads + fletching) once on first use; all arrow instances share this single VAO/VBO and texture rather than each allocating their own.
+    // Builds the shared arrow mesh (shaft cross-quads + fletching) once on first use; all arrow
+    // instances share this single VAO/VBO and texture rather than each allocating their own.
     private static void EnsureMesh()
     {
         if (sMeshReady)
@@ -94,7 +102,8 @@ public class ArrowEntity : Entity
 
         sTexture = Texture.LoadFromFile(TEXTURE_PATH);
 
-        // Texture atlas UVs for the shaft strip (SU/SV) and the fletching/cross-section (CU/CV), measured in a 32x32 tile region of arrows.png.
+        // Texture atlas UVs for the shaft strip (SU/SV) and the fletching/cross-section (CU/CV),
+        // measured in a 32x32 tile region of arrows.png.
         const float SU0 = 0f, SU1 = 16f / 32f;
         const float SV0 = 1f, SV1 = 1f - 5f / 32f;
         var v = new List<float>();
@@ -102,7 +111,9 @@ public class ArrowEntity : Entity
         // Small offset so the two crossed shaft quads don't Z-fight (share exactly the same plane).
         const float O = 0.01f;
 
-        // The arrow shaft is built from two quads crossed at right angles (like a classic billboard "X" cross), each double-sided (front+back pair) so it reads correctly from any viewing angle without needing to disable backface culling for the whole mesh.
+        // The arrow shaft is built from two quads crossed at right angles (like a classic
+        // billboard "X" cross), each double-sided (front+back pair) so it reads correctly from any
+        // viewing angle without needing to disable backface culling for the whole mesh.
         Quad(v, -8, -2, -O, SU0, SV0, 8, -2, -O, SU1, SV0, 8, 2, -O, SU1, SV1, -8, 2, -O, SU0, SV1, 0, 0, 1);
         Quad(v, -8, 2, O, SU0, SV0, 8, 2, O, SU1, SV0, 8, -2, O, SU1, SV1, -8, -2, O, SU0, SV1, 0, 0, -1);
 
@@ -169,7 +180,8 @@ public class ArrowEntity : Entity
         sMeshReady = false;
     }
 
-    // Normalizes the given direction, jitters it randomly by `spread` (simulating bow inaccuracy), then scales it by SPEED to set the initial launch velocity.
+    // Normalizes the given direction, jitters it randomly by `spread` (simulating bow inaccuracy),
+    // then scales it by SPEED to set the initial launch velocity.
     private void SetHeading(float vx, float vy, float vz, float spread = SPREAD)
     {
         float len = MathF.Sqrt(vx * vx + vy * vy + vz * vz);
@@ -184,14 +196,16 @@ public class ArrowEntity : Entity
         UpdateOrientation();
     }
 
-    // Keeps mFacing (used for rendering the arrow's rotation) in sync with the current velocity direction; called after velocity changes each tick while flying.
+    // Keeps mFacing (used for rendering the arrow's rotation) in sync with the current velocity
+    // direction; called after velocity changes each tick while flying.
     private void UpdateOrientation()
     {
         if (Velocity.LengthSquared() > 0f)
             mFacing = Vector3.Normalize(Velocity);
     }
 
-    // Note: overrides the base Entity.Tick physics/gravity pipeline entirely - arrows use their own raycast-based flight simulation (TickFlying) instead of Physics.MoveWithCollision.
+    // Note: overrides the base Entity.Tick physics/gravity pipeline entirely - arrows use their
+    // own raycast-based flight simulation (TickFlying) instead of Physics.MoveWithCollision.
     public override void Tick(World world)
     {
         if (mArrowShake > 0)
@@ -203,7 +217,10 @@ public class ArrowEntity : Entity
             TickFlying(world);
     }
 
-    // Handles an arrow that's already embedded in a block: as long as that block hasn't changed (mined, replaced, etc.) the arrow just sits there counting toward despawn and offering pickup. If the block it was stuck in disappeared, the arrow falls back into flight with a small random velocity "shake loose" kick.
+    // Handles an arrow that's already embedded in a block: as long as that block hasn't changed
+    // (mined, replaced, etc.) the arrow just sits there counting toward despawn and offering
+    // pickup. If the block it was stuck in disappeared, the arrow falls back into flight with a
+    // small random velocity "shake loose" kick.
     private void TickStuck(World world)
     {
         if (world.GetBlock(mStuckBlock.X, mStuckBlock.Y, mStuckBlock.Z) == mStuckBlockType)
@@ -226,7 +243,10 @@ public class ArrowEntity : Entity
         mTicksInAir = 0;
     }
 
-    // Handles an arrow still in flight this tick: raycasts against solid blocks and against every targetable entity (plus the player, checked specially) over this tick's travel distance, picks whichever hit is closer, and either damages the entity, embeds in the block, or (if nothing was hit) advances position and applies drag/gravity for the next tick.
+    // Handles an arrow still in flight this tick: raycasts against solid blocks and against every
+    // targetable entity (plus the player, checked specially) over this tick's travel distance,
+    // picks whichever hit is closer, and either damages the entity, embeds in the block, or (if
+    // nothing was hit) advances position and applies drag/gravity for the next tick.
     private void TickFlying(World world)
     {
         mTicksInAir++;
@@ -239,7 +259,9 @@ public class ArrowEntity : Entity
         Entity? hitEntity = null;
         float hitEntityDist = float.MaxValue;
 
-        // Player is checked separately from world.Entities since the player isn't stored in that list. The owner-grace check prevents the arrow hitting whoever fired it in the first few ticks (e.g. shooting from very close range or slightly behind themselves).
+        // Player is checked separately from world.Entities since the player isn't stored in that
+        // list. The owner-grace check prevents the arrow hitting whoever fired it in the first
+        // few ticks (e.g. shooting from very close range or slightly behind themselves).
         var player = Game.Instance.GetPlayer;
         if (player != mOwner || mTicksInAir >= OWNER_GRACE)
         {
@@ -266,14 +288,16 @@ public class ArrowEntity : Entity
             }
         }
 
-        // An entity hit only "wins" over a block hit if it's actually closer along the ray - otherwise the arrow should stick in the block in front of the entity instead.
+        // An entity hit only "wins" over a block hit if it's actually closer along the ray -
+        // otherwise the arrow should stick in the block in front of the entity instead.
         bool entityCloser = hitEntity != null
                             && (blockHit.Type != RaycastHitType.Block || hitEntityDist < blockHit.Distance);
 
         if (entityCloser)
         {
             hitEntity!.TakeDamage(ARROW_DAMAGE);
-            // Knockback direction follows the arrow's travel direction, with an upward bias (abs(dir.Y) + 0.6) so arrows always pop the target up a bit rather than just pushing flat.
+            // Knockback direction follows the arrow's travel direction, with an upward bias
+            // (abs(dir.Y) + 0.6) so arrows always pop the target up a bit rather than just pushing flat.
             Vector3 knockback = new Vector3(dir.X, MathF.Abs(dir.Y) + 0.6f, dir.Z) * 12f;
             hitEntity.Velocity += knockback;
             IsAlive = false;
@@ -294,7 +318,9 @@ public class ArrowEntity : Entity
             return;
         }
 
-        // Nothing hit this tick - advance the full velocity and integrate drag/gravity for the next tick. Drag is checked against the block at the arrow's new position so it slows faster once submerged in water.
+        // Nothing hit this tick - advance the full velocity and integrate drag/gravity for the
+        // next tick. Drag is checked against the block at the arrow's new position so it slows
+        // faster once submerged in water.
         Position += Velocity;
 
         float drag = world.GetBlock(
@@ -308,7 +334,9 @@ public class ArrowEntity : Entity
         UpdateOrientation();
     }
 
-    // Auto-picks-up the arrow into the player's inventory if they're close enough, the shake animation has finished, and there's inventory space. Silently does nothing otherwise (the arrow just stays on the ground/wall until conditions are met or it despawns).
+    // Auto-picks-up the arrow into the player's inventory if they're close enough, the shake
+    // animation has finished, and there's inventory space. Silently does nothing otherwise (the
+    // arrow just stays on the ground/wall until conditions are met or it despawns).
     private void TryPickup()
     {
         if (mArrowShake > 0) return;
@@ -329,20 +357,24 @@ public class ArrowEntity : Entity
         if (!sMeshReady || sTexture == null)
             return;
 
-        // Build an orthonormal basis (fwd/up/right) that orients the arrow mesh to point along mFacing. If facing is nearly straight up/down, Vector3.UnitY would be parallel to fwd and Cross() would degenerate, so UnitZ is used as the temporary up reference instead.
+        // Build an orthonormal basis (fwd/up/right) that orients the arrow mesh to point along
+        // mFacing. If facing is nearly straight up/down, Vector3.UnitY would be parallel to fwd
+        // and Cross() would degenerate, so UnitZ is used as the temporary up reference instead.
         Vector3 fwd = mFacing.LengthSquared() > 0f ? mFacing : Vector3.UnitX;
         Vector3 up = MathF.Abs(Vector3.Dot(fwd, Vector3.UnitY)) > 0.99f ? Vector3.UnitZ : Vector3.UnitY;
         Vector3 right = Vector3.Normalize(Vector3.Cross(fwd, up));
         up = Vector3.Normalize(Vector3.Cross(right, fwd));
 
-        // Rotation matrix built directly from the basis vectors as rows (equivalent to a change-of-basis / look-rotation matrix).
+        // Rotation matrix built directly from the basis vectors as rows (equivalent to a
+        // change-of-basis / look-rotation matrix).
         var rot = new Matrix4x4(
             fwd.X,   fwd.Y,   fwd.Z,   0,
             up.X,    up.Y,    up.Z,    0,
             right.X, right.Y, right.Z, 0,
             0,       0,       0,       1);
 
-        // Decaying wobble angle for the "just stuck in the block" shake animation - amplitude and frequency both derived from the same countdown so it winds down naturally as it expires.
+        // Decaying wobble angle for the "just stuck in the block" shake animation - amplitude and
+        // frequency both derived from the same countdown so it winds down naturally as it expires.
         float shakeDeg = mArrowShake > 0 ? -MathF.Sin(mArrowShake * 3f) * mArrowShake : 0f;
         const float SCALE = 0.05625f; // shrinks the mesh (built in ~16-unit "pixel" space) down to block-scale
 
@@ -357,7 +389,8 @@ public class ArrowEntity : Entity
         _shader?.SetMatrix4("mvp", mvp);
         sTexture.Use(TextureUnit.Texture0);
         var gl = GlContext.Gl;
-        // Backface culling is disabled because the shaft's crossed-quad geometry needs both faces of each quad visible from any angle (see EnsureMesh) - re-enabled immediately after.
+        // Backface culling is disabled because the shaft's crossed-quad geometry needs both faces
+        // of each quad visible from any angle (see EnsureMesh) - re-enabled immediately after.
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(sVao);
         gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)sVertexCount);

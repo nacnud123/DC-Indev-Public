@@ -1,4 +1,5 @@
-// Main chunk file. Holds stuff related to chunk, like the blocks inside of it. Has some rendering functions, has functions to get and set lighting at positions, and has functions to rebuild the chunk's mesh | DA | 2/14/26 Added in new Metadata which allows block to remember what direction they were facing. Important for stairs and torches. | DA | 2/21/26
+// Main chunk file. Holds stuff related to chunk, like the blocks inside of it. Has some rendering functions, has functions to get and set lighting at positions, and has functions to rebuild the chunk's mesh | DA | 2/14/26
+// Added in new Metadata which allows block to remember what direction they were facing. Important for stairs and torches. | DA | 2/21/26
 using System.Runtime.InteropServices;
 using Silk.NET.OpenGL;
 
@@ -8,10 +9,17 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;
 
-// A 16x128x16 piece of the world. Blocks are stored as a flat byte array (mBlocks) instead of a 3D array for speed/memory reasons - GetIndex() below converts (x,y,z) into the matching flat index. Light and metadata only need 4 bits (0-15) per block, so two of them are packed into each byte (a "nibble" each) to use half the memory - see GetSkyLight/SetSkyLightDirect for how that packing/unpacking works.
+// A 16x128x16 piece of the world. Blocks are stored as a flat byte array (mBlocks) instead of a
+// 3D array for speed/memory reasons - GetIndex() below converts (x,y,z) into the matching flat
+// index. Light and metadata only need 4 bits (0-15) per block, so two of them are packed into
+// each byte (a "nibble" each) to use half the memory - see GetSkyLight/SetSkyLightDirect for how
+// that packing/unpacking works.
 public partial class Chunk
 {
-    // Chunk dimensions. WIDTH/DEPTH are the horizontal footprint (16x16, matching the classic Minecraft chunk size and chosen as a power of two so world<->chunk coordinate conversion can use fast shift/mask instead of division - see World.GetBlock). HEIGHT is the full world vertical extent - there's only one "chunk" per column, it just happens to be 128 tall.
+    // Chunk dimensions. WIDTH/DEPTH are the horizontal footprint (16x16, matching the classic
+    // Minecraft chunk size and chosen as a power of two so world<->chunk coordinate conversion
+    // can use fast shift/mask instead of division - see World.GetBlock). HEIGHT is the full world
+    // vertical extent - there's only one "chunk" per column, it just happens to be 128 tall.
     public const int WIDTH = 16;
     public const int HEIGHT = 128;
     public const int DEPTH = 16;
@@ -21,10 +29,13 @@ public partial class Chunk
     private const int VERTEX_STRIDE = 11;
     // Total block count in the chunk; used to size the flat per-block arrays.
     private const int VOLUME = WIDTH * HEIGHT * DEPTH;
-    // Water (and lava) don't fill the full block height when nothing is stacked on top - the visible top surface sits at 14/16 of a block, giving a slight "meniscus" look rather than a perfectly flat 1-block-tall slab.
+    // Water (and lava) don't fill the full block height when nothing is stacked on top - the
+    // visible top surface sits at 14/16 of a block, giving a slight "meniscus" look rather than a
+    // perfectly flat 1-block-tall slab.
     private const float WATER_SURFACE_HEIGHT = 14f / 16f;
 
-    // The 6 axis-aligned directions a cube face can point. Used both for mesh building (which faces to emit) and for texture-orientation logic (e.g. facing blocks like furnaces/chests).
+    // The 6 axis-aligned directions a cube face can point. Used both for mesh building (which
+    // faces to emit) and for texture-orientation logic (e.g. facing blocks like furnaces/chests).
     internal enum Face
     {
         Front,
@@ -35,7 +46,8 @@ public partial class Chunk
         Left
     }
 
-    // Pairs each Face with its (dx,dy,dz) offset to the neighboring block in that direction - walked over by every face-building method to test each of the 6 neighbors for transparency.
+    // Pairs each Face with its (dx,dy,dz) offset to the neighboring block in that direction -
+    // walked over by every face-building method to test each of the 6 neighbors for transparency.
     private static readonly (Face face, int dx, int dy, int dz)[] FaceDirections =
     [
         (Face.Front, 0, 0, 1),
@@ -46,42 +58,54 @@ public partial class Chunk
         (Face.Left, -1, 0, 0)
     ];
 
-    // Position of this chunk in the World's chunk grid (not world block coordinates - multiply by WIDTH/DEPTH to get the chunk's origin in world space, as done throughout Chunk.MeshBuilding.cs).
+    // Position of this chunk in the World's chunk grid (not world block coordinates - multiply
+    // by WIDTH/DEPTH to get the chunk's origin in world space, as done throughout Chunk.MeshBuilding.cs).
     public int ChunkX { get; }
     public int ChunkZ { get; }
 
-    // Flat VOLUME-length array of BlockType bytes, one full byte per block (see GetIndex for the (x,y,z) -> flat index mapping).
+    // Flat VOLUME-length array of BlockType bytes, one full byte per block (see GetIndex for the
+    // (x,y,z) -> flat index mapping).
     private readonly byte[] mBlocks;
-    // Sky/block light and metadata are each 4 bits (0-15) per block, so they're packed two per byte (VOLUME/2 bytes) - see GetSkyLight/SetSkyLightDirect for the nibble packing scheme.
+    // Sky/block light and metadata are each 4 bits (0-15) per block, so they're packed two per
+    // byte (VOLUME/2 bytes) - see GetSkyLight/SetSkyLightDirect for the nibble packing scheme.
     private readonly byte[] mSkyLightLevels;
     private readonly byte[] mBlockLightLevels;
     private readonly byte[] mMetadata;
 
     private readonly World mWorld;
 
-    // GL handles for the opaque mesh (VAO/VBO) and the separate transparent mesh (water/glass), rendered in a second pass so transparency blends correctly against already-drawn opaque geometry.
+    // GL handles for the opaque mesh (VAO/VBO) and the separate transparent mesh (water/glass),
+    // rendered in a second pass so transparency blends correctly against already-drawn opaque geometry.
     private uint mVao, mVbo;
     private int mVertexCount;
     private uint mTransVao, mTransVbo;
     private int mTransVertexCount;
-    // Set whenever a block/metadata change means the mesh no longer matches the block data; cleared by RebuildMeshIfDirty once the mesh has been regenerated.
+    // Set whenever a block/metadata change means the mesh no longer matches the block data;
+    // cleared by RebuildMeshIfDirty once the mesh has been regenerated.
     private bool mIsDirty = true;
     private bool mChunkModified = false;
-    // Tracks whether GenVertexArray/GenBuffer have been called yet, so UploadToGpu only allocates the GL objects once and reuses them on subsequent rebuilds.
+    // Tracks whether GenVertexArray/GenBuffer have been called yet, so UploadToGpu only allocates
+    // the GL objects once and reuses them on subsequent rebuilds.
     private bool mIsGpuInitialized;
     private bool mIsTransGpuInitialized;
 
-    // Whether this chunk is currently within render distance (set by World.RenderChunks each frame). Chunks that aren't loaded are skipped for both rendering and scheduled ticks.
+    // Whether this chunk is currently within render distance (set by World.RenderChunks each
+    // frame). Chunks that aren't loaded are skipped for both rendering and scheduled ticks.
     public bool IsLoaded { get; set; }
-    // Whether this chunk has changed since it was loaded/generated and therefore needs to be written back to disk on save (see World.SetChunkAsModified / Saving/Serialization).
+    // Whether this chunk has changed since it was loaded/generated and therefore needs to be
+    // written back to disk on save (see World.SetChunkAsModified / Saving/Serialization).
     public bool HasChunkBeenModified { get => mChunkModified; set => mChunkModified = value; }
 
-    // Reused scratch buffers for mesh building, cached across rebuilds to reduce GC pressure; set back to null after upload since the vertex data lives on the GPU once uploaded (see the end of RebuildMeshIfDirty).
+    // Reused scratch buffers for mesh building, cached across rebuilds to reduce GC pressure; set
+    // back to null after upload since the vertex data lives on the GPU once uploaded (see the end
+    // of RebuildMeshIfDirty).
     private List<float>? mVertexBuffer;
     private List<float>? mTransVertexBuffer;
 
     /// <summary>
-    /// Allocates a new, empty (all-Air) chunk at the given chunk-grid coordinates. Block/light/ metadata arrays start zeroed; the chunk is not marked loaded until the caller either loads save data into it or runs terrain generation over it (see World's constructor).
+    /// Allocates a new, empty (all-Air) chunk at the given chunk-grid coordinates. Block/light/
+    /// metadata arrays start zeroed; the chunk is not marked loaded until the caller either loads
+    /// save data into it or runs terrain generation over it (see World's constructor).
     /// </summary>
     public Chunk(int chunkX, int chunkZ, World world)
     {
@@ -96,10 +120,18 @@ public partial class Chunk
         IsLoaded = false;
     }
 
-    // Turns a 3D block position inside this chunk into a single index into the flat mBlocks array. Layout is X-fastest, then Z, then Y (i.e. one XZ "layer" of WIDTH*DEPTH blocks per Y level): index = x + z*WIDTH + y*WIDTH*DEPTH. This means all of a single Y-layer is contiguous in memory, which matches how mesh building iterates (x outer, y middle, z inner - see RebuildMeshIfDirty) reasonably well, though it's really just a fixed convention used consistently by every accessor in this file (GetBlock, GetSkyLight, GetMetadata, etc.).
+    // Turns a 3D block position inside this chunk into a single index into the flat mBlocks array.
+    // Layout is X-fastest, then Z, then Y (i.e. one XZ "layer" of WIDTH*DEPTH blocks per Y level):
+    // index = x + z*WIDTH + y*WIDTH*DEPTH. This means all of a single Y-layer is contiguous in
+    // memory, which matches how mesh building iterates (x outer, y middle, z inner - see
+    // RebuildMeshIfDirty) reasonably well, though it's really just a fixed convention used
+    // consistently by every accessor in this file (GetBlock, GetSkyLight, GetMetadata, etc.).
     private static int GetIndex(int x, int y, int z) => x + z * WIDTH + y * WIDTH * DEPTH;
 
-    // Reads the block at LOCAL (chunk-relative, 0..WIDTH-1 / 0..HEIGHT-1 / 0..DEPTH-1) coordinates. Out-of-range coordinates (e.g. a mesh-building neighbor check that crosses into a different chunk) return Air rather than throwing - callers that need cross-chunk lookups use GetBlockAt in Chunk.MeshBuilding.cs, which forwards to World for out-of-range positions.
+    // Reads the block at LOCAL (chunk-relative, 0..WIDTH-1 / 0..HEIGHT-1 / 0..DEPTH-1) coordinates.
+    // Out-of-range coordinates (e.g. a mesh-building neighbor check that crosses into a different
+    // chunk) return Air rather than throwing - callers that need cross-chunk lookups use
+    // GetBlockAt in Chunk.MeshBuilding.cs, which forwards to World for out-of-range positions.
     public BlockType GetBlock(int x, int y, int z)
     {
         if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || z < 0 || z >= DEPTH)
@@ -108,7 +140,8 @@ public partial class Chunk
         return (BlockType)mBlocks[GetIndex(x, y, z)];
     }
 
-    // Light values only need 4 bits (0-15), so two blocks' light values share one byte: even indices use the low nibble (& 0x0F), odd indices use the high nibble (>> 4).
+    // Light values only need 4 bits (0-15), so two blocks' light values share one byte: even
+    // indices use the low nibble (& 0x0F), odd indices use the high nibble (>> 4).
     public int GetSkyLight(int x, int y, int z)
     {
         if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || z < 0 || z >= DEPTH)
@@ -159,7 +192,10 @@ public partial class Chunk
             mBlockLightLevels[byteIndex] = (byte)((mBlockLightLevels[byteIndex] & 0x0F) | ((level & 0x0F) << 4));
     }
 
-    // Reads the 4-bit metadata nibble for a block - encodes things like facing direction for stairs/torches/furnaces (see BlockTorch and Chunk.MeshBuilding.cs's GetFacingTexture for the specific meaning of each value; by convention 0 = default facing). Packed two per byte the same way as sky/block light (see GetSkyLight above for the nibble layout explanation).
+    // Reads the 4-bit metadata nibble for a block - encodes things like facing direction for
+    // stairs/torches/furnaces (see BlockTorch and Chunk.MeshBuilding.cs's GetFacingTexture for
+    // the specific meaning of each value; by convention 0 = default facing). Packed two per byte
+    // the same way as sky/block light (see GetSkyLight above for the nibble layout explanation).
     public int GetMetadata(int x, int y, int z)
     {
         if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || z < 0 || z >= DEPTH)
@@ -171,7 +207,8 @@ public partial class Chunk
         return (index & 1) == 0 ? mMetadata[byteIndex] & 0x0F : (mMetadata[byteIndex] >> 4) & 0x0F;
     }
 
-    // Writes the metadata nibble (masked to 4 bits) and marks the chunk dirty so the mesh is rebuilt with the new orientation/appearance.
+    // Writes the metadata nibble (masked to 4 bits) and marks the chunk dirty so the mesh is
+    // rebuilt with the new orientation/appearance.
     public void SetMetadata(int x, int y, int z, byte value)
     {
         if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || z < 0 || z >= DEPTH)
@@ -187,7 +224,11 @@ public partial class Chunk
         MarkDirty();
     }
 
-    // Changes the block type at a local position. Also clears that block's metadata nibble back to 0 (default facing) since metadata from the old block type is meaningless for a different block type - e.g. a stair's facing shouldn't carry over if it's replaced by dirt. Note: unlike World.SetBlock, this has no lighting/hook side effects - see World.SetBlock and World.SetBlockDirect for the two different levels of "set a block" in this codebase.
+    // Changes the block type at a local position. Also clears that block's metadata nibble back
+    // to 0 (default facing) since metadata from the old block type is meaningless for a
+    // different block type - e.g. a stair's facing shouldn't carry over if it's replaced by dirt.
+    // Note: unlike World.SetBlock, this has no lighting/hook side effects - see World.SetBlock
+    // and World.SetBlockDirect for the two different levels of "set a block" in this codebase.
     public void SetBlock(int x, int y, int z, BlockType type)
     {
         if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || z < 0 || z >= DEPTH)
@@ -206,7 +247,8 @@ public partial class Chunk
         MarkDirty();
     }
 
-    // Flags this chunk so its mesh gets rebuilt soon (World.Update only rebuilds a few dirty chunks per frame - see MAX_CHUNK_REBUILDS_PER_FRAME in World.cs).
+    // Flags this chunk so its mesh gets rebuilt soon (World.Update only rebuilds a few dirty
+    // chunks per frame - see MAX_CHUNK_REBUILDS_PER_FRAME in World.cs).
     public void MarkDirty()
     {
         if (!mIsDirty)

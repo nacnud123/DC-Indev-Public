@@ -7,7 +7,12 @@ using VoxelEngine.Utils;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// A single GPU-uploaded mesh + texture pair used to render an entity (or one material-grouped part of a multi-material entity model). Wraps a VAO/VBO holding interleaved position/uv/normal vertex data (see <see cref="ObjLoader.FLOATS_PER_VERTEX"/> for the stride). Models are loaded from Wavefront .obj files (optionally with a .mtl material file for multi-part/multi-texture models) and cached by path so repeated loads of the same model+texture combo reuse the GPU resources instead of re-uploading.
+/// A single GPU-uploaded mesh + texture pair used to render an entity (or one material-grouped
+/// part of a multi-material entity model). Wraps a VAO/VBO holding interleaved
+/// position/uv/normal vertex data (see <see cref="ObjLoader.FLOATS_PER_VERTEX"/> for the stride).
+/// Models are loaded from Wavefront .obj files (optionally with a .mtl material file for
+/// multi-part/multi-texture models) and cached by path so repeated loads of the same model+texture
+/// combo reuse the GPU resources instead of re-uploading.
 /// </summary>
 public class EntityModel : IDisposable
 {
@@ -29,7 +34,8 @@ public class EntityModel : IDisposable
         Texture = texture;
     }
 
-    // Loads (or returns the cached instance of) a single-texture .obj model. Used for simple mob models that only need one texture for the whole mesh.
+    // Loads (or returns the cached instance of) a single-texture .obj model. Used for simple mob
+    // models that only need one texture for the whole mesh.
     public static EntityModel Load(string modelPath, string texturePath)
     {
         string key = $"{modelPath}|{texturePath}";
@@ -45,7 +51,10 @@ public class EntityModel : IDisposable
         return model;
     }
 
-    // Loads (or returns the cached array for) a multi-material .obj model: the mesh is split into one EntityModel per material group (each with its own texture, resolved via the .mtl file), so the caller draws the whole model as a sequence of parts. Groups with no vertices, or whose material has no resolvable texture, are skipped.
+    // Loads (or returns the cached array for) a multi-material .obj model: the mesh is split into
+    // one EntityModel per material group (each with its own texture, resolved via the .mtl file),
+    // so the caller draws the whole model as a sequence of parts. Groups with no vertices, or
+    // whose material has no resolvable texture, are skipped.
     public static EntityModel[] LoadWithMtl(string modelPath, string mtlPath)
     {
         string key = $"{modelPath}|{mtlPath}";
@@ -75,7 +84,8 @@ public class EntityModel : IDisposable
         return parts;
     }
 
-    // Creates the VAO/VBO and uploads interleaved vertex data (pos/uv/normal), wiring up the same three vertex attributes (location 0/1/2) used across the engine's other mesh builders.
+    // Creates the VAO/VBO and uploads interleaved vertex data (pos/uv/normal), wiring up the same
+    // three vertex attributes (location 0/1/2) used across the engine's other mesh builders.
     private static EntityModel Upload(float[] vertices, int vertexCount, Texture texture)
     {
         var gl = GlContext.Gl;
@@ -97,7 +107,8 @@ public class EntityModel : IDisposable
         return new EntityModel(vao, vbo, vertexCount, texture);
     }
 
-    // Frees every cached GPU resource (both single-texture and multi-material caches). Called on shutdown/context teardown to avoid leaking GL objects.
+    // Frees every cached GPU resource (both single-texture and multi-material caches). Called on
+    // shutdown/context teardown to avoid leaking GL objects.
     public static void DisposeAll()
     {
         foreach (var model in Cache.Values)

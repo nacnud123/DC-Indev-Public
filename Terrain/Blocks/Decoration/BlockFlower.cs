@@ -3,6 +3,10 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>
+/// Decorative yellow flower block. Non-solid cross-sprite that requires grass or dirt
+/// beneath it; carries no tick logic, purely decorative/harvestable.
+/// </summary>
 public class BlockFlower : Block
 {
     public override BlockType Type => BlockType.YellowFlower;
@@ -18,6 +22,7 @@ public class BlockFlower : Block
     public override bool NeedsSupportBelow => true;
     public override List<BlockType> BlocksThatCanSupport => new List<BlockType>() { BlockType.Grass, BlockType.Dirt};
 
+    // Single shared tile - cross-sprite rendering draws only one texture per block.
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(4, 1);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;
     public override TextureCoords SideTextureCoords => TopTextureCoords;

@@ -4,6 +4,11 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>
+/// Decorative cosmetic variant of Cobblestone (typically found in dungeon/structure generation).
+/// Behaviorally identical to Cobblestone aside from its own texture; uses the default
+/// Block.GetDrop, so it drops itself when mined.
+/// </summary>
 public class BlockMossyCobblestone: Block
 {
     public override BlockType Type => BlockType.MossyCobblestone;

@@ -8,7 +8,9 @@ using VoxelEngine.Utils;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Ranged weapon item. Extends Item directly (not ItemTool) since it doesn't fit the tier-based durability table — it has its own fixed MaxDurability instead. Firing consumes one Arrow from the inventory and spawns a physical ArrowEntity in the world.
+/// Ranged weapon item. Extends Item directly (not ItemTool) since it doesn't fit the
+/// tier-based durability table — it has its own fixed MaxDurability instead. Firing consumes
+/// one Arrow from the inventory and spawns a physical ArrowEntity in the world.
 /// </summary>
 public class ItemBow : Item
 {
@@ -19,7 +21,8 @@ public class ItemBow : Item
     public override int MaxDurability => 384;
     public override int MaxStackSize => 1;
 
-    // Bows are used by aiming/clicking rather than targeting a block, so the normal block-under-cursor raycast used for OnUse's blockPos/placePos should be skipped.
+    // Bows are used by aiming/clicking rather than targeting a block, so the normal
+    // block-under-cursor raycast used for OnUse's blockPos/placePos should be skipped.
     public override bool SkipBlockRaycast => true;
 
     /// <summary>Fires an arrow: requires at least one Arrow in inventory, consumes it, spawns an ArrowEntity, and plays the release sound.</summary>

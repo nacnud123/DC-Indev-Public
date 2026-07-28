@@ -12,11 +12,16 @@ namespace VoxelEngine.UI;
 public class HudScreen
 {
     private const int   ICON_COUNT = 10;
-    private const float ICON_DRAW  = 18f * UIHelper.UI_SCALE;
-    private const float ICON_STEP  = ICON_DRAW - 1f * UIHelper.UI_SCALE; // slight overlap like Minecraft
-    private const float ROW_GAP    = 2f  * UIHelper.UI_SCALE;
+    // Properties (not cached static readonly fields) so these track UIHelper.UI_SCALE live
+    // if the player changes UI scaling in the options menu mid-session.
+    private static float ICON_DRAW  => 18f * UIHelper.UI_SCALE;
+    private static float ICON_STEP  => ICON_DRAW - 1f * UIHelper.UI_SCALE; // slight overlap like Minecraft
+    private static float ROW_GAP    => 2f  * UIHelper.UI_SCALE;
 
-    // Icons.png tile positions (tileX, tileY) Row 0: health — empty(0,0), full(1,0), half(2,0) Row 1: armor  — empty(0,1), full(1,1), half(2,1) Row 2: air    — full bubble(0,2), popped bubble(1,2)
+    // Icons.png tile positions (tileX, tileY)
+    // Row 0: health — empty(0,0), full(1,0), half(2,0)
+    // Row 1: armor  — empty(0,1), full(1,1), half(2,1)
+    // Row 2: air    — full bubble(0,2), popped bubble(1,2)
     private static readonly TextureCoords UvHealthEmpty  = UvHelper.FromTileCoords(0, 0);
     private static readonly TextureCoords UvHealthFull   = UvHelper.FromTileCoords(1, 0);
     private static readonly TextureCoords UvHealthHalf   = UvHelper.FromTileCoords(2, 0);

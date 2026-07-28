@@ -9,7 +9,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Passive mob: a sheep. Wanders via <see cref="PassiveEntityAi"/> and procedurally animates its body/head/legs like <see cref="Pig"/>. Has a wool coat drawn as a separate overlay mesh; the first hit "shears" it (drops white wool, no damage/death) and swaps to the woolless body model, subsequent hits deal real damage and can kill it (dropping more wool if not already sheared).
+/// Passive mob: a sheep. Wanders via <see cref="PassiveEntityAi"/> and procedurally animates
+/// its body/head/legs like <see cref="Pig"/>. Has a wool coat drawn as a separate overlay mesh;
+/// the first hit "shears" it (drops white wool, no damage/death) and swaps to the woolless body
+/// model, subsequent hits deal real damage and can kill it (dropping more wool if not already sheared).
 /// </summary>
 public class Sheep : Entity
 {
@@ -31,7 +34,8 @@ public class Sheep : Entity
     private static readonly Vector3 BackRightLegOffset = new(-0.125f, 0, -0.0625f);
     private static readonly Vector3 BackLeftLegOffset = new(-0.125f, 0, 0.0625f);
 
-    // Pivot points (relative to each part's own origin) that rotations are applied around, so the head/legs swing from their joint rather than their mesh center.
+    // Pivot points (relative to each part's own origin) that rotations are applied around,
+    // so the head/legs swing from their joint rather than their mesh center.
     private static readonly Vector3 HeadPivot = new(-0.0625f, 0.0625f, 0f);
     private static readonly Vector3 LegPivot = new(0.03125f, 0.1875f, 0.03125f);
 
@@ -54,7 +58,8 @@ public class Sheep : Entity
     private float mHeadPitch;   // current smoothed head pitch offset (radians)
     private float mIdleSoundTimer; // seconds until next random idle bleat; re-randomized each time it fires
 
-    // Fixed stats for sheep: collision box dims, render scale, and movement speed are constants (setters are no-ops because the base Entity exposes these as settable, but Sheep does not allow per-instance variation).
+    // Fixed stats for sheep: collision box dims, render scale, and movement speed are constants (setters are
+    // no-ops because the base Entity exposes these as settable, but Sheep does not allow per-instance variation).
     public override float Width
     {
         get => 0.9f;
@@ -116,7 +121,11 @@ public class Sheep : Entity
     }
 
     /// <summary>
-    /// Overrides the base damage/death handling to implement shearing: the very first hit a sheep takes (while unsheared) consumes no health at all and instead drops 1-3 white wool blocks and flips <see cref="IsSheared"/> - this doubles as "punch to shear" since there's no shears item gating it here. Every subsequent hit is a normal damage hit that can kill the sheep, and if it dies without ever having been sheared it drops one more batch of wool on death.
+    /// Overrides the base damage/death handling to implement shearing: the very first hit a sheep
+    /// takes (while unsheared) consumes no health at all and instead drops 1-3 white wool blocks and
+    /// flips <see cref="IsSheared"/> - this doubles as "punch to shear" since there's no shears item
+    /// gating it here. Every subsequent hit is a normal damage hit that can kill the sheep, and if it
+    /// dies without ever having been sheared it drops one more batch of wool on death.
     /// </summary>
     public override void TakeDamage(int amount)
     {
@@ -135,7 +144,9 @@ public class Sheep : Entity
 
         Game.Instance.AudioManager.PlayAudio("Resources/Audio/Entities/Sheep/SheepDie.ogg", Proximity((Game.Instance.GetPlayer.Position - this.Position).Length(), 20f, Game.Instance.AudioManager.SfxVol), false);
 
-        // Only drop wool on death if it was never sheared while alive (sheared sheep already gave up their wool). NOTE: because of the early-return above, this method only ever reaches here when IsSheared is already true, so in practice this branch is currently unreachable - kept as a defensive check.
+        // Only drop wool on death if it was never sheared while alive (sheared sheep already gave up their wool).
+        // NOTE: because of the early-return above, this method only ever reaches here when IsSheared is already
+        // true, so in practice this branch is currently unreachable - kept as a defensive check.
         if (!IsAlive && !IsSheared)
         {
             int count = Game.Instance.GameRandom.Next(1, 4);
@@ -146,7 +157,8 @@ public class Sheep : Entity
         }
     }
 
-    // Play the walking animation if the sheep is moving. Basically swings the legs back and forth. Also, if the player gets close enough the sheep will look at the player. This is purely cosmetic per-tick animation state - it does not affect physics or AI decisions.
+    // Play the walking animation if the sheep is moving. Basically swings the legs back and forth. Also, if the player gets close enough the sheep will look at the player.
+    // This is purely cosmetic per-tick animation state - it does not affect physics or AI decisions.
     private void UpdateAnimation()
     {
         float dt = TickSystem.TICK_DURATION;
@@ -175,7 +187,8 @@ public class Sheep : Entity
 
             if (distSq < HEAD_LOOK_RANGE * HEAD_LOOK_RANGE && distSq > 0.01f)
             {
-                // Yaw needed to face the player, converted into the sheep's local space (subtract entity Yaw) and offset by PI/2 because Atan2(X,Z) and the sheep's forward axis are 90 degrees apart.
+                // Yaw needed to face the player, converted into the sheep's local space (subtract entity Yaw)
+                // and offset by PI/2 because Atan2(X,Z) and the sheep's forward axis are 90 degrees apart.
                 float relativeYaw = MathF.Atan2(toPlayer.X, toPlayer.Z) - MathF.PI / 2f - Yaw;
 
                 // Normalize into [-PI, PI] so the shortest turn direction is used.
@@ -205,7 +218,9 @@ public class Sheep : Entity
     }
 
     /// <summary>
-    /// Renders the sheep: draws either the wool overlay body (scaled 1.1x to sit visibly over the base body mesh) or the plain body depending on <see cref="IsSheared"/>, then the head with yaw/pitch applied at the neck pivot, then four legs swung in diagonal pairs like a real quadruped gait.
+    /// Renders the sheep: draws either the wool overlay body (scaled 1.1x to sit visibly over the base
+    /// body mesh) or the plain body depending on <see cref="IsSheared"/>, then the head with yaw/pitch
+    /// applied at the neck pivot, then four legs swung in diagonal pairs like a real quadruped gait.
     /// </summary>
     protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {
@@ -222,12 +237,14 @@ public class Sheep : Entity
             DrawPart(mBodyWoolModel, woolTransform * entityBase * vp);
         }
 
-        // Rotate the head about its pivot (translate to origin, rotate, translate back + offset) rather than the model's own origin, so it swivels naturally from the neck joint.
+        // Rotate the head about its pivot (translate to origin, rotate, translate back + offset) rather
+        // than the model's own origin, so it swivels naturally from the neck joint.
         Matrix4x4 headLocal = Matrix4x4.CreateTranslation(-HeadPivot) * Matrix4x4.CreateRotationZ(mHeadPitch) * Matrix4x4.CreateRotationY(mHeadYaw) * Matrix4x4.CreateTranslation(HeadPivot + HeadOffset);
 
         DrawPart(mHeadModel, headLocal * entityBase * vp);
 
-        // Diagonal gait: front-left+back-right swing together (swing1), front-right+back-left swing in antiphase (swing2, offset by PI), mimicking a real quadruped's walk cycle.
+        // Diagonal gait: front-left+back-right swing together (swing1), front-right+back-left
+        // swing in antiphase (swing2, offset by PI), mimicking a real quadruped's walk cycle.
         float swing1 = MathF.Sin(mWalkPhase) * MAX_LEG_SWING * mLegSwing;
         float swing2 = MathF.Sin(mWalkPhase + MathF.PI) * MAX_LEG_SWING * mLegSwing;
 

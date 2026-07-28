@@ -8,7 +8,10 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.Rendering;
 
 /// <summary>
-/// Renders a soft gradient disc ("blob shadow") on the ground beneath each live entity. This is a cheap fake-shadow technique (no shadow mapping): a flat, alpha-blended disc mesh is scaled/positioned per entity and faded based on camera distance and height above the ground. Runs in the render order between world geometry and entities.
+/// Renders a soft gradient disc ("blob shadow") on the ground beneath each live entity.
+/// This is a cheap fake-shadow technique (no shadow mapping): a flat, alpha-blended disc
+/// mesh is scaled/positioned per entity and faded based on camera distance and height above
+/// the ground. Runs in the render order between world geometry and entities.
 /// </summary>
 public class BlobShadowRenderer : IDisposable
 {
@@ -16,9 +19,11 @@ public class BlobShadowRenderer : IDisposable
     private const int   DISC_SEGMENTS = 16;
     // Distance (world units) beyond which shadows are fully faded out, to avoid drawing/rendering-cost for far entities.
     private const float FADE_DISTANCE = 64f;
-    // Maximum distance below an entity that the renderer will search for ground, and the height above ground at which the shadow is fully faded (e.g. entity jumping/flying away from the surface).
+    // Maximum distance below an entity that the renderer will search for ground, and the height above
+    // ground at which the shadow is fully faded (e.g. entity jumping/flying away from the surface).
     private const float MAX_DROP = 6f;
-    // Small vertical offset added above the ground surface to prevent the shadow quad from z-fighting with the terrain mesh it's drawn on top of.
+    // Small vertical offset added above the ground surface to prevent the shadow quad from
+    // z-fighting with the terrain mesh it's drawn on top of.
     private const float Y_BIAS = 0.004f;
 
     private readonly Shader mShader;
@@ -35,12 +40,19 @@ public class BlobShadowRenderer : IDisposable
     }
 
     /// <summary>
-    /// Draws a blob shadow for every live entity with a non-zero <see cref="Entity.ShadowSize"/>. For each entity: skips if beyond fade distance, raycasts straight down to find the ground block, computes an alpha that fades with distance and height-above-ground, then draws the disc scaled/translated to the entity's footprint. Caller is expected to have depth writes and blending in their normal render-order state; this method manages GL state itself and restores it (blend/cull/depth-mask) before returning.
+    /// Draws a blob shadow for every live entity with a non-zero <see cref="Entity.ShadowSize"/>.
+    /// For each entity: skips if beyond fade distance, raycasts straight down to find the ground
+    /// block, computes an alpha that fades with distance and height-above-ground, then draws the
+    /// disc scaled/translated to the entity's footprint. Caller is expected to have depth writes
+    /// and blending in their normal render-order state; this method manages GL state itself and
+    /// restores it (blend/cull/depth-mask) before returning.
     /// </summary>
     public void Render(IEnumerable<Entity> entities, World world, Matrix4x4 view, Matrix4x4 proj, Vector3 cameraPos)
     {
         var gl = GlContext.Gl;
-        // Shadows are alpha-blended over the terrain and must not occlude/be occluded incorrectly, so depth writes are disabled (still depth-tested via the shared depth buffer) and back-face culling is off since the disc is a flat single-sided quad fan seen from above.
+        // Shadows are alpha-blended over the terrain and must not occlude/be occluded incorrectly,
+        // so depth writes are disabled (still depth-tested via the shared depth buffer) and
+        // back-face culling is off since the disc is a flat single-sided quad fan seen from above.
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         gl.DepthMask(false);
@@ -58,7 +70,8 @@ public class BlobShadowRenderer : IDisposable
             if (shadowSize <= 0f)
                 continue;
 
-            // Distance check uses only X/Z (horizontal) so shadows fade based on how far away the entity appears on the ground plane, ignoring camera height.
+            // Distance check uses only X/Z (horizontal) so shadows fade based on how far away the
+            // entity appears on the ground plane, ignoring camera height.
             float dx = entity.Position.X - cameraPos.X;
             float dz = entity.Position.Z - cameraPos.Z;
             if (dx * dx + dz * dz > FADE_DISTANCE * FADE_DISTANCE)
@@ -70,14 +83,18 @@ public class BlobShadowRenderer : IDisposable
             if (!TryFindGroundY(entity, world, out float groundY))
                 continue;
 
-            // Additional fade as the entity rises above the ground (e.g. jumping), and a flat 0.6 cap so shadows never appear fully opaque/black.
+            // Additional fade as the entity rises above the ground (e.g. jumping), and a flat 0.6
+            // cap so shadows never appear fully opaque/black.
             float heightAbove = entity.Position.Y - groundY;
             alpha *= (1f - Math.Clamp(heightAbove / MAX_DROP, 0f, 1f)) * 0.6f;
 
             if (alpha <= 0f)
                 continue;
 
-            // Model matrix: scale the unit disc to the entity's shadow radius, then translate it onto the entity's X/Z position at the found ground height (plus Y_BIAS). Multiplied by view/proj (row-vector convention, matches System.Numerics * order used throughout this codebase) to get the final clip-space MVP passed to the shader.
+            // Model matrix: scale the unit disc to the entity's shadow radius, then translate it
+            // onto the entity's X/Z position at the found ground height (plus Y_BIAS). Multiplied
+            // by view/proj (row-vector convention, matches System.Numerics * order used throughout
+            // this codebase) to get the final clip-space MVP passed to the shader.
             Matrix4x4 mvp = Matrix4x4.CreateScale(shadowSize) * Matrix4x4.CreateTranslation(entity.Position.X, groundY + Y_BIAS, entity.Position.Z) * view * proj;
 
             mShader.SetMatrix4("mvp", mvp);
@@ -93,7 +110,9 @@ public class BlobShadowRenderer : IDisposable
     }
 
     /// <summary>
-    /// Searches straight down from the entity's feet (up to <see cref="MAX_DROP"/> blocks) for the first solid, non-air block, returning the Y coordinate of its top surface. Used to place the shadow disc on the actual ground rather than at a fixed height.
+    /// Searches straight down from the entity's feet (up to <see cref="MAX_DROP"/> blocks) for the
+    /// first solid, non-air block, returning the Y coordinate of its top surface. Used to place the
+    /// shadow disc on the actual ground rather than at a fixed height.
     /// </summary>
     private bool TryFindGroundY(Entity entity, World world, out float groundY)
     {
@@ -106,7 +125,8 @@ public class BlobShadowRenderer : IDisposable
             var block = world.GetBlock(ex, by, ez);
             if (block != BlockType.Air && BlockRegistry.IsSolid(block))
             {
-                // +1 because block coordinates address the block's lower corner; the top surface of block `by` is at Y = by + 1.
+                // +1 because block coordinates address the block's lower corner; the top surface
+                // of block `by` is at Y = by + 1.
                 groundY = by + 1;
                 return true;
             }
@@ -117,7 +137,9 @@ public class BlobShadowRenderer : IDisposable
     }
 
     /// <summary>
-    /// Builds a unit-radius circular disc mesh (2D XY positions, consumed as XZ ground-plane coordinates by the vertex shader) as a triangle fan: a center vertex plus a ring of <see cref="DISC_SEGMENTS"/> perimeter vertices computed via cos/sin around the circle.
+    /// Builds a unit-radius circular disc mesh (2D XY positions, consumed as XZ ground-plane
+    /// coordinates by the vertex shader) as a triangle fan: a center vertex plus a ring of
+    /// <see cref="DISC_SEGMENTS"/> perimeter vertices computed via cos/sin around the circle.
     /// </summary>
     private static (uint vao, uint vbo, int count) BuildDisc()
     {

@@ -8,7 +8,10 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.BlockEntities;
 
 /// <summary>
-/// Block entity backing a double chest (two adjacent chest blocks merged into one 54-slot inventory). Registered under a single position in <see cref="BlockEntityManager"/> even though it visually spans two blocks; the pairing/anchor logic lives outside this class. Insert/drop behavior mirrors <see cref="ChestData"/> but with double the slot count.
+/// Block entity backing a double chest (two adjacent chest blocks merged into one 54-slot inventory).
+/// Registered under a single position in <see cref="BlockEntityManager"/> even though it visually spans
+/// two blocks; the pairing/anchor logic lives outside this class. Insert/drop behavior mirrors
+/// <see cref="ChestData"/> but with double the slot count.
 /// </summary>
 public class DoubleChestData : IBlockEntity
 {
@@ -30,7 +33,9 @@ public class DoubleChestData : IBlockEntity
     public void SetSlot(int index, ItemStack? stack) => mSlots[index] = stack;
 
     /// <summary>
-    /// Attempts to insert as much of <paramref name="stack"/> as will fit: first tops off any existing slots holding the same item type up to their max stack size, then fills empty slots with the remainder. Returns true if at least one item was placed (not necessarily all of it).
+    /// Attempts to insert as much of <paramref name="stack"/> as will fit: first tops off any existing
+    /// slots holding the same item type up to their max stack size, then fills empty slots with the
+    /// remainder. Returns true if at least one item was placed (not necessarily all of it).
     /// </summary>
     public bool TryAdd(ItemStack stack)
     {

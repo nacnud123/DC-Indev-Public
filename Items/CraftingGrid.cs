@@ -4,7 +4,9 @@ using VoxelEngine.GameEntity;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Backing model for a crafting UI's input grid (used by both the 2x2 inventory grid and the 3x3 workbench grid). Holds the raw slot contents plus the currently matched recipe's result (if any), recomputing the match any time a slot changes.
+/// Backing model for a crafting UI's input grid (used by both the 2x2 inventory grid and the
+/// 3x3 workbench grid). Holds the raw slot contents plus the currently matched recipe's result
+/// (if any), recomputing the match any time a slot changes.
 /// </summary>
 public class CraftingGrid
 {
@@ -37,7 +39,9 @@ public class CraftingGrid
     }
 
     /// <summary>
-    /// Consumes one item from every occupied ingredient slot (decrementing count, clearing slots that drop to 0) and returns the crafted result. Called when the player takes the crafted item out of the result slot. Returns null if no recipe currently matches.
+    /// Consumes one item from every occupied ingredient slot (decrementing count, clearing slots
+    /// that drop to 0) and returns the crafted result. Called when the player takes the crafted
+    /// item out of the result slot. Returns null if no recipe currently matches.
     /// </summary>
     public ItemStack? TakeResult()
     {
@@ -62,7 +66,8 @@ public class CraftingGrid
     }
 
     /// <summary>
-    /// Dumps every remaining ingredient back into the player's inventory and clears the grid. Used when a crafting UI (e.g. workbench) is closed with leftover ingredients still in it.
+    /// Dumps every remaining ingredient back into the player's inventory and clears the grid.
+    /// Used when a crafting UI (e.g. workbench) is closed with leftover ingredients still in it.
     /// </summary>
     public void ReturnItemsTo(PlayerInventory inv)
     {

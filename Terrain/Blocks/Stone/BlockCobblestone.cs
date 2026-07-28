@@ -4,6 +4,11 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>
+/// Standard crafting/building material dropped when BlockStone is mined (see
+/// BlockStone.GetDrop). Uses default Block.GetDrop, so mining a placed Cobblestone block
+/// simply drops itself.
+/// </summary>
 public class BlockCobblestone : Block
 {
     public override BlockType Type => BlockType.CobbleStone;

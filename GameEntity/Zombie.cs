@@ -9,7 +9,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Hostile mob: a zombie. Chases and melee-attacks the player via <see cref="ZombieAi"/> (which owns pathfinding/attack decisions - this class owns stats, model/animation, and damage/drop handling). Catches fire when standing in direct, unobstructed sunlight.
+/// Hostile mob: a zombie. Chases and melee-attacks the player via <see cref="ZombieAi"/>
+/// (which owns pathfinding/attack decisions - this class owns stats, model/animation, and
+/// damage/drop handling). Catches fire when standing in direct, unobstructed sunlight.
 /// </summary>
 public class Zombie : Entity
 {
@@ -50,7 +52,8 @@ public class Zombie : Entity
     private float mWalkPhase;   // radians; advances while moving, drives the sinusoidal leg-swing animation
     private float mLimbSwing;   // 0..1 blend factor; 1 while walking, decays toward 0 (SWING_DECAY) when idle
 
-    // Fixed stats: collision box dims, render scale, and movement speed. Setters are no-ops since Zombie does not allow per-instance variation of these values.
+    // Fixed stats: collision box dims, render scale, and movement speed. Setters are no-ops since Zombie
+    // does not allow per-instance variation of these values.
     public override float Width
     {
         get => 0.6f;
@@ -99,7 +102,14 @@ public class Zombie : Entity
     }
 
     /// <summary>
-    /// Classic zombie/skeleton undead behavior: ignite when standing directly under open sky during daylight hours. mTimeOfDay ([0,1), 0=dawn/0.25=noon/0.5=dusk/0.75=midnight, see Game.cs) is mapped to a full sine cycle so sunAngle sweeps 0..2*PI over one day. sunlightLevel = clamp(sin(sunAngle)*2, 0, 1) is >0 for roughly the daylight half of the cycle (sin positive from dawn to dusk) and saturates to 1 quickly away from the dawn/dusk edges (the *2 steepens the ramp so it isn't a slow fade). Sky light is only MAX_LIGHT when there is a clear, unobstructed path straight up to the sky (a roof or overhang blocks it), so this only burns mobs actually exposed to the sun, not ones merely outside at night or sheltered during the day.
+    /// Classic zombie/skeleton undead behavior: ignite when standing directly under open sky during
+    /// daylight hours. mTimeOfDay ([0,1), 0=dawn/0.25=noon/0.5=dusk/0.75=midnight, see Game.cs) is mapped
+    /// to a full sine cycle so sunAngle sweeps 0..2*PI over one day. sunlightLevel = clamp(sin(sunAngle)*2, 0, 1)
+    /// is >0 for roughly the daylight half of the cycle (sin positive from dawn to dusk) and saturates to
+    /// 1 quickly away from the dawn/dusk edges (the *2 steepens the ramp so it isn't a slow fade).
+    /// Sky light is only MAX_LIGHT when there is a clear, unobstructed path straight up to the sky (a roof
+    /// or overhang blocks it), so this only burns mobs actually exposed to the sun, not ones merely outside
+    /// at night or sheltered during the day.
     /// </summary>
     private void BurnInSunlight(World world)
     {
@@ -114,7 +124,8 @@ public class Zombie : Entity
         int hy = (int)MathF.Floor(Position.Y + Height);
         int hz = (int)MathF.Floor(Position.Z);
 
-        // FireTimer counts down in seconds (see Entity); 2f re-arms the burn duration each tick it's still exposed rather than stacking, so the mob stays on fire continuously while in the sun.
+        // FireTimer counts down in seconds (see Entity); 2f re-arms the burn duration each tick it's
+        // still exposed rather than stacking, so the mob stays on fire continuously while in the sun.
         if (world.GetSkyLight(hx, hy, hz) == Chunk.MAX_LIGHT)
             FireTimer = MathF.Max(FireTimer, 2f);
     }
@@ -140,7 +151,9 @@ public class Zombie : Entity
     }
 
     /// <summary>
-    /// Renders the zombie: body, head, two legs swung in antiphase for the walk cycle, and two arms held in a fixed outstretched pose (unlike the legs, arms never animate with movement - that's the classic zombie silhouette).
+    /// Renders the zombie: body, head, two legs swung in antiphase for the walk cycle, and two
+    /// arms held in a fixed outstretched pose (unlike the legs, arms never animate with movement -
+    /// that's the classic zombie silhouette).
     /// </summary>
     protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {

@@ -5,7 +5,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Abstract base for all hoe tiers. Unlike other tools, hoes don't scale mining speed or attack damage by tier (all tiers behave identically); their only real function is the shared till-farmland OnUse below, so concrete subclasses just supply Type/Name/ToolTier/ItemCoords.
+/// Abstract base for all hoe tiers. Unlike other tools, hoes don't scale mining speed or attack
+/// damage by tier (all tiers behave identically); their only real function is the shared
+/// till-farmland OnUse below, so concrete subclasses just supply Type/Name/ToolTier/ItemCoords.
 /// </summary>
 public abstract class ItemHoe : ItemTool
 {

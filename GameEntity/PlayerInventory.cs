@@ -6,14 +6,22 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// The player's entire item storage: a single flat array of TOTAL_SLOTS ItemStack? slots, laid out as [0, MAIN_SLOTS) main inventory, [HOTBAR_START, ARMOR_START) hotbar, and [ARMOR_START, TOTAL_SLOTS) armor (indexed by ArmorSlot). Any code indexing mSlots directly must respect this layout — off-by-one errors here silently corrupt the wrong region (e.g. writing into armor slots when main-inventory logic overruns). Serialization (SaveToSlots/LoadFromSlots) preserves absolute slot indices so saves stay correct even if slot contents shift around.
+/// The player's entire item storage: a single flat array of TOTAL_SLOTS ItemStack? slots, laid
+/// out as [0, MAIN_SLOTS) main inventory, [HOTBAR_START, ARMOR_START) hotbar, and
+/// [ARMOR_START, TOTAL_SLOTS) armor (indexed by ArmorSlot). Any code indexing mSlots directly must
+/// respect this layout — off-by-one errors here silently corrupt the wrong region (e.g. writing
+/// into armor slots when main-inventory logic overruns). Serialization (SaveToSlots/LoadFromSlots)
+/// preserves absolute slot indices so saves stay correct even if slot contents shift around.
 /// </summary>
 public class PlayerInventory
 {
     public const int MAIN_SLOTS = 27;
     public const int HOTBAR_SLOTS = 9;
     public const int ARMOR_SLOTS = 4;
-    // Slot layout (indices, half-open ranges): [0, HOTBAR_START)          = main inventory (27 slots) [HOTBAR_START, ARMOR_START) = hotbar (9 slots) — HOTBAR_START is the index of hotbar slot 0 [ARMOR_START, TOTAL_SLOTS)  = armor (4 slots, indexed by the ArmorSlot enum)
+    // Slot layout (indices, half-open ranges):
+    //   [0, HOTBAR_START)          = main inventory (27 slots)
+    //   [HOTBAR_START, ARMOR_START) = hotbar (9 slots) — HOTBAR_START is the index of hotbar slot 0
+    //   [ARMOR_START, TOTAL_SLOTS)  = armor (4 slots, indexed by the ArmorSlot enum)
     public const int HOTBAR_START = MAIN_SLOTS; // 27
     public const int ARMOR_START = MAIN_SLOTS + HOTBAR_SLOTS; // 36
     public const int TOTAL_SLOTS = MAIN_SLOTS + HOTBAR_SLOTS + ARMOR_SLOTS; // 40
@@ -22,7 +30,11 @@ public class PlayerInventory
     public Span<ItemStack?> HotbarSlots => mSlots[HOTBAR_START..ARMOR_START];
 
     /// <summary>
-    /// Attempts to add an item stack to the inventory, preferring the hotbar over the main inventory in both passes. Two-pass strategy: first merge into existing matching/partial stacks (to avoid fragmenting items across more slots than necessary), then fill any remaining count into empty slots. Returns true if at least part of the stack was placed (a partial add still returns true — check the caller's remaining-count logic if full-or-nothing is needed).
+    /// Attempts to add an item stack to the inventory, preferring the hotbar over the main
+    /// inventory in both passes. Two-pass strategy: first merge into existing matching/partial
+    /// stacks (to avoid fragmenting items across more slots than necessary), then fill any
+    /// remaining count into empty slots. Returns true if at least part of the stack was placed
+    /// (a partial add still returns true — check the caller's remaining-count logic if full-or-nothing is needed).
     /// </summary>
     public bool TryAdd(ItemStack stack)
     {
@@ -101,7 +113,9 @@ public class PlayerInventory
     }
 
     /// <summary>
-    /// Reduces the durability of the item in slotIndex by `amount`; the stack is destroyed (slot set to null) when durability drops to zero or below. No-op for items without durability (blocks, non-tool items) since HasDurability is false for those.
+    /// Reduces the durability of the item in slotIndex by `amount`; the stack is destroyed
+    /// (slot set to null) when durability drops to zero or below. No-op for items without
+    /// durability (blocks, non-tool items) since HasDurability is false for those.
     /// </summary>
     public void DamageTool(int slotIndex, int amount = 1)
     {

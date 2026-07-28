@@ -4,7 +4,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Saving;
 
 /// <summary>
-/// Legacy/alternate representation of a chunk's block data as a flat array of block type name strings (rather than the compact binary format used by <see cref="Serialization.SaveChunk"/>/<see cref="Serialization.Load"/>). Kept for structure import/export style workflows (ported from DuncanCraft2000) where a human-readable, XML/JSON-friendly string array is more convenient than the packed binary chunk format.
+/// Legacy/alternate representation of a chunk's block data as a flat array of block type name strings
+/// (rather than the compact binary format used by <see cref="Serialization.SaveChunk"/>/<see cref="Serialization.Load"/>).
+/// Kept for structure import/export style workflows (ported from DuncanCraft2000) where a human-readable,
+/// XML/JSON-friendly string array is more convenient than the packed binary chunk format.
 /// </summary>
 [Serializable]
 public class Save

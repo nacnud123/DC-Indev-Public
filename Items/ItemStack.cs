@@ -4,7 +4,11 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Immutable value type representing "N of a thing" in an inventory slot. A single stack can hold either a placeable block (<see cref="IsBlock"/> true, using <see cref="Block"/>) or a non-block item (using <see cref="Item"/>) — never both — which is why blocks and items share one slot representation throughout the inventory/crafting/UI code. Being a readonly struct, any "mutation" (changing count/durability) returns a new instance via the With* helpers.
+/// Immutable value type representing "N of a thing" in an inventory slot. A single stack can
+/// hold either a placeable block (<see cref="IsBlock"/> true, using <see cref="Block"/>) or a
+/// non-block item (using <see cref="Item"/>) — never both — which is why blocks and items share
+/// one slot representation throughout the inventory/crafting/UI code. Being a readonly struct,
+/// any "mutation" (changing count/durability) returns a new instance via the With* helpers.
 /// </summary>
 public readonly struct ItemStack : IEquatable<ItemStack>
 {
@@ -36,7 +40,8 @@ public readonly struct ItemStack : IEquatable<ItemStack>
     public static ItemStack FromBlock(BlockType b, int count = 1) => new(true, b, default, count, -1);
 
     /// <summary>
-    /// Creates a stack of a non-block item, looking up its definition to seed starting durability at the item's MaxDurability (or -1 if the item type has no durability, e.g. resources/food).
+    /// Creates a stack of a non-block item, looking up its definition to seed starting
+    /// durability at the item's MaxDurability (or -1 if the item type has no durability, e.g. resources/food).
     /// </summary>
     public static ItemStack FromItem(ItemType i, int count = 1)
     {
@@ -54,7 +59,9 @@ public readonly struct ItemStack : IEquatable<ItemStack>
     /// <summary>True for item stacks that track durability (tools/armor); always false for blocks.</summary>
     public bool HasDurability => !IsBlock && Durability >= 0;
 
-    // Equality/stacking compatibility is based on the block/item type only — Count and Durability are intentionally excluded so slots with differing counts (or partially-worn tools) can still be recognized as "the same kind of thing" for stacking/merging purposes.
+    // Equality/stacking compatibility is based on the block/item type only — Count and Durability
+    // are intentionally excluded so slots with differing counts (or partially-worn tools) can still
+    // be recognized as "the same kind of thing" for stacking/merging purposes.
     public bool Equals(ItemStack other) => IsBlock == other.IsBlock && (!IsBlock || Block == other.Block) &&
                                            (IsBlock || Item == other.Item);
 

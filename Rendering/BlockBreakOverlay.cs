@@ -6,7 +6,11 @@ using Silk.NET.OpenGL;
 namespace VoxelEngine.Rendering;
 
 /// <summary>
-/// Draws the "crack" overlay cube shown over a block while the player is breaking it. The cube is rendered slightly larger than a unit block (see <c>e</c> in <see cref="Render"/>) so its faces sit just outside the target block's faces, avoiding z-fighting with the terrain mesh. The shader source is inlined here (rather than loaded from Shaders/) since this is a tiny, self-contained effect.
+/// Draws the "crack" overlay cube shown over a block while the player is breaking it. The cube
+/// is rendered slightly larger than a unit block (see <c>e</c> in <see cref="Render"/>) so its
+/// faces sit just outside the target block's faces, avoiding z-fighting with the terrain mesh.
+/// The shader source is inlined here (rather than loaded from Shaders/) since this is a tiny,
+/// self-contained effect.
 /// </summary>
 public class BlockBreakOverlay : IDisposable
 {
@@ -23,7 +27,9 @@ void main() {
     vUv = aUv;
 }";
 
-    // Fragment shader: samples the alpha channel of the break-stage texture (crack pattern) and uses it as the overlay's opacity, tinted black at 60% max alpha so cracks darken the block without ever going fully opaque.
+    // Fragment shader: samples the alpha channel of the break-stage texture (crack pattern) and
+    // uses it as the overlay's opacity, tinted black at 60% max alpha so cracks darken the block
+    // without ever going fully opaque.
     private const string FragmentShaderSource = @"#version 330 core
 in vec2 vUv;
 out vec4 fragColor;
@@ -44,7 +50,10 @@ void main() {
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
         unsafe
         {
-            // 36 verts * 5 floats (pos + uv) - allocate max, update each frame. DynamicDraw + null initial data because the cube's vertex positions are rewritten every Render() call (they depend on which block is targeted), so this only reserves GPU-side storage; BufferSubData uploads the actual per-frame contents below.
+            // 36 verts * 5 floats (pos + uv) - allocate max, update each frame.
+            // DynamicDraw + null initial data because the cube's vertex positions are rewritten
+            // every Render() call (they depend on which block is targeted), so this only reserves
+            // GPU-side storage; BufferSubData uploads the actual per-frame contents below.
             gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(36 * 5 * sizeof(float)), null, BufferUsageARB.DynamicDraw);
         }
         // Interleaved layout: position (vec3) then UV (vec2), stride 5 floats.
@@ -71,7 +80,9 @@ void main() {
     }
 
     /// <summary>
-    /// Rebuilds the cube mesh around <paramref name="pos"/> for the given break <paramref name="stage"/> (0-6, mapping to 7 crack-texture frames stored side by side in <paramref name="breakTexture"/>), uploads it, and draws it with additive-style alpha blending on top of the world.
+    /// Rebuilds the cube mesh around <paramref name="pos"/> for the given break <paramref name="stage"/>
+    /// (0-6, mapping to 7 crack-texture frames stored side by side in <paramref name="breakTexture"/>),
+    /// uploads it, and draws it with additive-style alpha blending on top of the world.
     /// </summary>
     public void Render(Vector3i pos, int stage, Matrix4x4 view, Matrix4x4 proj, Texture breakTexture)
     {
@@ -83,11 +94,15 @@ void main() {
         float u1 = (stage + 1) / 7f;
 
         const float e = 0.001f; // slight expansion to avoid z-fighting
-        // Expand the cube bounds by e on every axis so its faces are just outside the target block's faces (which span [pos, pos+1]), preventing the overlay from z-fighting with the block's own rendered faces.
+        // Expand the cube bounds by e on every axis so its faces are just outside the target
+        // block's faces (which span [pos, pos+1]), preventing the overlay from z-fighting with
+        // the block's own rendered faces.
         float x0 = pos.X - e, y0 = pos.Y - e, z0 = pos.Z - e;
         float x1 = pos.X + 1 + e, y1 = pos.Y + 1 + e, z1 = pos.Z + 1 + e;
 
-        // 6 faces * 2 triangles * 3 verts, each vert = (x,y,z,u,v). Every face reuses the same u0/u1 UV strip (the crack pattern is applied uniformly to every visible face) with v flipped between 0/1 to orient the quad correctly per face winding.
+        // 6 faces * 2 triangles * 3 verts, each vert = (x,y,z,u,v). Every face reuses the same
+        // u0/u1 UV strip (the crack pattern is applied uniformly to every visible face) with v
+        // flipped between 0/1 to orient the quad correctly per face winding.
         float[] verts = {
             // Front face (z+)
             x0,y0,z1, u0,1, x1,y0,z1, u1,1, x1,y1,z1, u1,0,
@@ -118,7 +133,9 @@ void main() {
         Matrix4x4 mvp = Matrix4x4.Identity * view * proj;
         gl.UseProgram(mShader);
         int mvpLoc = gl.GetUniformLocation(mShader, "mvp");
-        // MemoryMarshal reinterprets the Matrix4x4's 16 floats as a contiguous span without copying, which is what UniformMatrix4 needs; this codebase's Shader class normally does the equivalent via `fixed(float* p = &m.M11)`, but this class manages GL calls manually.
+        // MemoryMarshal reinterprets the Matrix4x4's 16 floats as a contiguous span without copying,
+        // which is what UniformMatrix4 needs; this codebase's Shader class normally does the
+        // equivalent via `fixed(float* p = &m.M11)`, but this class manages GL calls manually.
         gl.UniformMatrix4(mvpLoc, 1, false,
             MemoryMarshal.Cast<Matrix4x4, float>(MemoryMarshal.CreateSpan(ref mvp, 1)));
 
@@ -127,9 +144,11 @@ void main() {
 
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-        // Overlay cube is drawn from outside/inside alike depending on camera position relative to the block, so culling is disabled to guarantee all faces render.
+        // Overlay cube is drawn from outside/inside alike depending on camera position relative to
+        // the block, so culling is disabled to guarantee all faces render.
         gl.Disable(EnableCap.CullFace);
-        // Polygon offset pushes the overlay's depth values away from the camera slightly, which (combined with the `e` expansion above) further guards against z-fighting with terrain.
+        // Polygon offset pushes the overlay's depth values away from the camera slightly, which
+        // (combined with the `e` expansion above) further guards against z-fighting with terrain.
         gl.Enable(EnableCap.PolygonOffsetFill);
         gl.PolygonOffset(-1f, -1f);
 

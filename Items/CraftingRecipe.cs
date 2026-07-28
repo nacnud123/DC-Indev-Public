@@ -2,7 +2,10 @@
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Defines a single crafting recipe: either a shaped pattern (ingredient positions matter, e.g. tools/stairs) or a shapeless bag of ingredients (position doesn't matter, e.g. stew). Instances are built via the static factory methods and matched against a live <see cref="CraftingGrid"/> by <see cref="CraftingRegistry"/>.
+/// Defines a single crafting recipe: either a shaped pattern (ingredient positions matter,
+/// e.g. tools/stairs) or a shapeless bag of ingredients (position doesn't matter, e.g. stew).
+/// Instances are built via the static factory methods and matched against a live
+/// <see cref="CraftingGrid"/> by <see cref="CraftingRegistry"/>.
 /// </summary>
 public class CraftingRecipe
 {
@@ -24,7 +27,9 @@ public class CraftingRecipe
     }
 
     /// <summary>
-    /// Builds a shaped recipe from a row-major pattern array. The pattern's bounding box (not the full grid) is what gets compared against the crafting grid's occupied cells, so a 1x2 pattern still matches wherever it's placed within a larger grid.
+    /// Builds a shaped recipe from a row-major pattern array. The pattern's bounding box (not
+    /// the full grid) is what gets compared against the crafting grid's occupied cells, so a
+    /// 1x2 pattern still matches wherever it's placed within a larger grid.
     /// </summary>
     public static CraftingRecipe Shaped(ItemStack result, int width, int height, ItemStack?[] pattern)
     {
@@ -35,7 +40,8 @@ public class CraftingRecipe
     }
 
     /// <summary>
-    /// Builds a shapeless recipe: matches any grid containing exactly these ingredients (by type and count), regardless of which slots they occupy.
+    /// Builds a shapeless recipe: matches any grid containing exactly these ingredients
+    /// (by type and count), regardless of which slots they occupy.
     /// </summary>
     public static CraftingRecipe Shapeless(ItemStack result, ItemStack[] ingredients)
     {

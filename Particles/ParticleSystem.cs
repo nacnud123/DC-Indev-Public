@@ -1,4 +1,5 @@
-// The main class for the particle system holds reference to particle rendering and movement | DA | 2/5/26 Both smoke and regular particles use instance rendering, making there is one draw call that renders all particles of the type.
+// The main class for the particle system holds reference to particle rendering and movement | DA | 2/5/26
+// Both smoke and regular particles use instance rendering, making there is one draw call that renders all particles of the type.
 using Silk.NET.OpenGL;
 
 using System.Runtime.InteropServices;
@@ -11,11 +12,25 @@ using VoxelEngine.Utils;
 namespace VoxelEngine.Particles;
 
 /// <summary>
-/// Owns GPU resources and simulation state for the two particle effect types (block-break debris and smoke puffs), and draws them using GPU instancing - one draw call renders every live particle of a given type as a camera-facing quad, with per-particle transform/UV/alpha supplied via a per-instance vertex buffer rather than one draw call per particle. Lifecycle: Spawn* methods add new particles; Update/UpdateSmoke integrate simple physics (gravity, water drag, ground collision) each tick and cull expired ones; Render/RenderSmoke upload the current particle state to the instance buffer and issue the instanced draw call. In the overall frame render order (see Core/Game.cs) particles are drawn after entities and paintings, but before the block highlight outline and HUD.
+/// Owns GPU resources and simulation state for the two particle effect types
+/// (block-break debris and smoke puffs), and draws them using GPU instancing -
+/// one draw call renders every live particle of a given type as a camera-facing
+/// quad, with per-particle transform/UV/alpha supplied via a per-instance vertex
+/// buffer rather than one draw call per particle.
+///
+/// Lifecycle: Spawn* methods add new particles; Update/UpdateSmoke integrate
+/// simple physics (gravity, water drag, ground collision) each tick and cull
+/// expired ones; Render/RenderSmoke upload the current particle state to the
+/// instance buffer and issue the instanced draw call. In the overall frame
+/// render order (see Core/Game.cs) particles are drawn after entities and
+/// paintings, but before the block highlight outline and HUD.
 /// </summary>
 public class ParticleSystem : IDisposable
 {
-    // Fixed capacity for each particle type's instance buffer - both the CPU-side array and the GPU buffer are sized to this; spawning beyond it is either ignored (smoke) or simply not rendered/updated for the overflow (block particles are capped only at render time via Math.Min(mParticles.Count, MAX_PARTICLES)).
+    // Fixed capacity for each particle type's instance buffer - both the CPU-side
+    // array and the GPU buffer are sized to this; spawning beyond it is either
+    // ignored (smoke) or simply not rendered/updated for the overflow (block particles
+    // are capped only at render time via Math.Min(mParticles.Count, MAX_PARTICLES)).
     private const int MAX_PARTICLES = 256;
     // 6 vertices (2 triangles) forming the flat quad each particle instance is drawn as.
     private const int QUAD_VERTEX_COUNT = 6;
@@ -45,13 +60,19 @@ public class ParticleSystem : IDisposable
         -0.5f, -0.5f, 0f,  0f, 0f,
     };
 
-    // [StructLayout(LayoutKind.Sequential)] guarantees the field order/packing here matches memory layout exactly, since this struct is uploaded directly as raw bytes to a GL buffer (via BufferSubData<T>) and read back by the vertex shader through the VertexAttribPointer offsets configured in SetupInstanceAttributes.
+    // [StructLayout(LayoutKind.Sequential)] guarantees the field order/packing here
+    // matches memory layout exactly, since this struct is uploaded directly as raw
+    // bytes to a GL buffer (via BufferSubData<T>) and read back by the vertex shader
+    // through the VertexAttribPointer offsets configured in SetupInstanceAttributes.
     [StructLayout(LayoutKind.Sequential)]
     private struct InstanceData
     {
-        // Per-particle model matrix (scale * translation) transforming the shared unit quad into the particle's world position/size. Occupies 64 bytes (4x Vector4 rows), consumed by shader attributes 2-5, one per matrix row.
+        // Per-particle model matrix (scale * translation) transforming the shared
+        // unit quad into the particle's world position/size. Occupies 64 bytes
+        // (4x Vector4 rows), consumed by shader attributes 2-5, one per matrix row.
         public Matrix4x4 ModelMatrix;
-        // (uvOffset.xy, uvSize.xy) packed into one vec4 - the sub-tile texture region (see UvHelper.GetRandomSubTile) this particle instance samples from.
+        // (uvOffset.xy, uvSize.xy) packed into one vec4 - the sub-tile texture
+        // region (see UvHelper.GetRandomSubTile) this particle instance samples from.
         public Vector4 UVRegion;
     }
 
@@ -59,7 +80,8 @@ public class ParticleSystem : IDisposable
     private struct SmokeInstanceData
     {
         public Matrix4x4 ModelMatrix;
-        // Fade-out opacity for this smoke instance (Lifetime / MaxLifetime), consumed by the smoke fragment shader instead of a texture UV region.
+        // Fade-out opacity for this smoke instance (Lifetime / MaxLifetime), consumed
+        // by the smoke fragment shader instead of a texture UV region.
         public float Alpha;
     }
 
@@ -72,7 +94,9 @@ public class ParticleSystem : IDisposable
         mVao = gl.GenVertexArray();
         gl.BindVertexArray(mVao);
 
-        // Shared unit-quad geometry (position.xyz + uv.xy per vertex, 5 floats/vertex), uploaded once as static data - all particle instances reuse this same quad and differ only via their per-instance attributes (model matrix, UV region/alpha).
+        // Shared unit-quad geometry (position.xyz + uv.xy per vertex, 5 floats/vertex),
+        // uploaded once as static data - all particle instances reuse this same quad
+        // and differ only via their per-instance attributes (model matrix, UV region/alpha).
         mVbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
         gl.BufferData<float>(BufferTargetARB.ArrayBuffer, QuadVertices, BufferUsageARB.StaticDraw);
@@ -85,7 +109,12 @@ public class ParticleSystem : IDisposable
         gl.VertexAttribPointer(1, 2, GLEnum.Float, false, (uint)(5 * sizeof(float)), (nint)(3 * sizeof(float)));
         gl.EnableVertexAttribArray(1);
 
-        // Per-instance buffer: allocated up-front at MAX_PARTICLES capacity with no initial data (null pointer + DynamicDraw hint since it's rewritten every frame via BufferSubData in Render()). The `null` pointer is a valid GL usage for BufferData - it just reserves GPU storage without an initial upload - so this call is technically unsafe-context only because Silk.NET's signature takes a raw pointer, not because dereferencing anything unsafe happens here.
+        // Per-instance buffer: allocated up-front at MAX_PARTICLES capacity with no
+        // initial data (null pointer + DynamicDraw hint since it's rewritten every
+        // frame via BufferSubData in Render()). The `null` pointer is a valid GL
+        // usage for BufferData - it just reserves GPU storage without an initial
+        // upload - so this call is technically unsafe-context only because Silk.NET's
+        // signature takes a raw pointer, not because dereferencing anything unsafe happens here.
         mInstanceVbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mInstanceVbo);
         unsafe
@@ -111,7 +140,8 @@ public class ParticleSystem : IDisposable
         gl.VertexAttribPointer(1, 2, GLEnum.Float, false, (uint)(5 * sizeof(float)), (nint)(3 * sizeof(float)));
         gl.EnableVertexAttribArray(1);
 
-        // Same "reserve GPU storage with null data" pattern as the block-particle instance buffer above, sized for SmokeInstanceData instead.
+        // Same "reserve GPU storage with null data" pattern as the block-particle
+        // instance buffer above, sized for SmokeInstanceData instead.
         mSmokeInstanceVbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mSmokeInstanceVbo);
         unsafe
@@ -124,7 +154,14 @@ public class ParticleSystem : IDisposable
         gl.BindVertexArray(0);
     }
 
-    // Set up the regular particle instance attributes. A Matrix4x4 can't be passed as a single vertex attribute (GL attributes max out at 4 components/vec4), so it's split across 4 consecutive attribute slots (2,3,4,5), one per matrix row, each a vec4 at a 16-byte (4-float) offset within the InstanceData struct. VertexAttribDivisor(attr, 1) is what makes these "per-instance" rather than "per-vertex" - the attribute advances once per particle instance drawn, instead of once per vertex of the shared quad.
+    // Set up the regular particle instance attributes.
+    //
+    // A Matrix4x4 can't be passed as a single vertex attribute (GL attributes max
+    // out at 4 components/vec4), so it's split across 4 consecutive attribute slots
+    // (2,3,4,5), one per matrix row, each a vec4 at a 16-byte (4-float) offset within
+    // the InstanceData struct. VertexAttribDivisor(attr, 1) is what makes these
+    // "per-instance" rather than "per-vertex" - the attribute advances once per
+    // particle instance drawn, instead of once per vertex of the shared quad.
     private void SetupInstanceAttributes(GL gl)
     {
         uint stride = (uint)Marshal.SizeOf<InstanceData>();
@@ -142,7 +179,9 @@ public class ParticleSystem : IDisposable
         gl.VertexAttribDivisor(6, 1);
     }
 
-    // Set up the smoke particle instance attributes. Same per-row matrix splitting as SetupInstanceAttributes, but attribute 6 is a single float (Alpha) instead of a vec4 UV region.
+    // Set up the smoke particle instance attributes. Same per-row matrix splitting
+    // as SetupInstanceAttributes, but attribute 6 is a single float (Alpha) instead
+    // of a vec4 UV region.
     private void SetupSmokeInstanceAttributes(GL gl)
     {
         uint stride = (uint)Marshal.SizeOf<SmokeInstanceData>();
@@ -162,7 +201,10 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Spawns a burst of 10-19 debris particles at a broken block's position, each textured with a random small sub-tile sampled from that block type's particle texture (see BlockRegistry.GetParticleTexture / UvHelper.GetRandomSubTile) so the debris visually resembles chunks of the block's own texture.
+    /// Spawns a burst of 10-19 debris particles at a broken block's position,
+    /// each textured with a random small sub-tile sampled from that block type's
+    /// particle texture (see BlockRegistry.GetParticleTexture / UvHelper.GetRandomSubTile)
+    /// so the debris visually resembles chunks of the block's own texture.
     /// </summary>
     public void SpawnBlockBreakParticles(Vector3 blockPos, BlockType type)
     {
@@ -175,7 +217,8 @@ public class ParticleSystem : IDisposable
 
             mParticles.Add(new BlockParticle
             {
-                // Spawn somewhere within the inner 60% of the block's 1x1x1 volume (0.2-0.8 on each axis) so particles don't appear to originate exactly on the block's edges.
+                // Spawn somewhere within the inner 60% of the block's 1x1x1 volume
+                // (0.2-0.8 on each axis) so particles don't appear to originate exactly on the block's edges.
                 Pos = blockPos + new Vector3(RandomRange(0.2f, 0.8f), RandomRange(0.2f, 0.8f), RandomRange(0.2f, 0.8f)),
                 // Random outward/upward "pop" velocity so particles scatter visibly.
                 Vel = new Vector3(RandomRange(-2f, 2f), RandomRange(1f, 4f), RandomRange(-2f, 2f)),
@@ -189,7 +232,8 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Spawns a single smoke puff (e.g. from a lit furnace/fire). Silently no-ops once the smoke pool is at MAX_PARTICLES capacity rather than growing unbounded.
+    /// Spawns a single smoke puff (e.g. from a lit furnace/fire). Silently no-ops
+    /// once the smoke pool is at MAX_PARTICLES capacity rather than growing unbounded.
     /// </summary>
     public void SpawnSmokeParticle(Vector3 position)
     {
@@ -199,7 +243,8 @@ public class ParticleSystem : IDisposable
         float lifetime = RandomRange(1.0f, 2.0f);
         mSmokeParticles.Add(new SmokeParticle
         {
-            // Offset upward/centered from the block origin (0.5, 0.7, 0.5) so smoke appears to rise from roughly the top-center of the source block.
+            // Offset upward/centered from the block origin (0.5, 0.7, 0.5) so smoke
+            // appears to rise from roughly the top-center of the source block.
             Pos = position + new Vector3(0.5f, 0.7f, 0.5f),
             Vel = new Vector3(RandomRange(-0.2f, 0.2f), RandomRange(0.5f, 1.0f), RandomRange(-0.2f, 0.2f)),
             Lifetime = lifetime,
@@ -210,7 +255,12 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Advances all live block-break particles by one tick: applies gravity (reduced/damped when submerged in water), moves them, and resolves a very simple collision - if the next position would land inside a solid (non-air, non-water) block, velocity is zeroed (particle "sticks"/stops) instead of moving into it. Expired particles are removed via swap-with-last for O(1) removal (order doesn't matter for particles, so this avoids an O(n) shift).
+    /// Advances all live block-break particles by one tick: applies gravity
+    /// (reduced/damped when submerged in water), moves them, and resolves a very
+    /// simple collision - if the next position would land inside a solid (non-air,
+    /// non-water) block, velocity is zeroed (particle "sticks"/stops) instead of
+    /// moving into it. Expired particles are removed via swap-with-last for O(1) removal
+    /// (order doesn't matter for particles, so this avoids an O(n) shift).
     /// </summary>
     public void Update(float deltaTime, World world)
     {
@@ -218,7 +268,8 @@ public class ParticleSystem : IDisposable
         {
             var p = mParticles[i];
 
-            // Floor the position to get the containing block's integer coordinates (world-space block grid), then check if it's water to apply buoyancy-like damping.
+            // Floor the position to get the containing block's integer coordinates
+            // (world-space block grid), then check if it's water to apply buoyancy-like damping.
             bool inWater = world.GetBlock((int)MathF.Floor(p.Pos.X), (int)MathF.Floor(p.Pos.Y), (int)MathF.Floor(p.Pos.Z)) == BlockType.Water;
             // Gravity is heavily reduced (15%) underwater so particles sink slowly instead of plummeting.
             float gravity = inWater ? p.Gravity * 0.15f : p.Gravity;
@@ -226,7 +277,9 @@ public class ParticleSystem : IDisposable
             p.Vel.Y -= gravity * deltaTime;
 
             if (inWater)
-                // Exponential drag: velocity decays toward zero at a rate independent of frame rate (0.6^(deltaTime*20) approaches 1 as deltaTime->0 and shrinks faster for larger steps), simulating water resistance.
+                // Exponential drag: velocity decays toward zero at a rate independent
+                // of frame rate (0.6^(deltaTime*20) approaches 1 as deltaTime->0 and
+                // shrinks faster for larger steps), simulating water resistance.
                 p.Vel *= MathF.Pow(0.6f, deltaTime * 20f);
 
             var newPos = p.Pos + p.Vel * deltaTime;
@@ -237,7 +290,8 @@ public class ParticleSystem : IDisposable
             var blockAtNew = world.GetBlock(bx, by, bz);
 
             if (blockAtNew != BlockType.Air && blockAtNew != BlockType.Water)
-                // Naive collision response: rather than sliding/bouncing, the particle simply stops dead (velocity zeroed) and stays at its last valid position.
+                // Naive collision response: rather than sliding/bouncing, the particle
+                // simply stops dead (velocity zeroed) and stays at its last valid position.
                 p.Vel = Vector3.Zero;
             else
                 p.Pos = newPos;
@@ -246,7 +300,8 @@ public class ParticleSystem : IDisposable
 
             if (p.Lifetime <= 0)
             {
-                // Swap-remove: overwrite the expired particle with the last one in the list and shrink by one, avoiding an O(n) shift from RemoveAt(i).
+                // Swap-remove: overwrite the expired particle with the last one in the
+                // list and shrink by one, avoiding an O(n) shift from RemoveAt(i).
                 mParticles[i] = mParticles[mParticles.Count - 1];
                 mParticles.RemoveAt(mParticles.Count - 1);
             }
@@ -256,7 +311,10 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Advances all live smoke particles: simple upward drift (velocity gains a small constant upward acceleration) plus straight-line movement, no collision against the world (smoke passes through blocks). Expired particles are removed via the same swap-with-last trick as Update().
+    /// Advances all live smoke particles: simple upward drift (velocity gains a
+    /// small constant upward acceleration) plus straight-line movement, no collision
+    /// against the world (smoke passes through blocks). Expired particles are removed
+    /// via the same swap-with-last trick as Update().
     /// </summary>
     public void UpdateSmoke(float deltaTime, World world)
     {
@@ -278,20 +336,29 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Uploads current block-break particle state into the instance buffer and issues a single instanced draw call for all live particles (up to MAX_PARTICLES). The model matrix here is deliberately NOT billboarded toward the camera (unlike some particle systems) - it's a plain scale-then-translate, so the quad's facing is fixed rather than rotating to face the viewer; the vertex/fragment shader (ParticleVert/FragShader) is responsible for any additional camera-facing behavior if present.
+    /// Uploads current block-break particle state into the instance buffer and
+    /// issues a single instanced draw call for all live particles (up to
+    /// MAX_PARTICLES). The model matrix here is deliberately NOT billboarded
+    /// toward the camera (unlike some particle systems) - it's a plain
+    /// scale-then-translate, so the quad's facing is fixed rather than rotating to
+    /// face the viewer; the vertex/fragment shader (ParticleVert/FragShader) is
+    /// responsible for any additional camera-facing behavior if present.
     /// </summary>
     public void Render(Matrix4x4 view, Matrix4x4 projection, Texture worldTexture)
     {
         if (mParticles.Count == 0)
             return;
 
-        // Only render up to buffer capacity even if more particles exist logically (shouldn't normally happen since spawn count is small, but guards the buffer).
+        // Only render up to buffer capacity even if more particles exist logically
+        // (shouldn't normally happen since spawn count is small, but guards the buffer).
         int renderCount = Math.Min(mParticles.Count, MAX_PARTICLES);
 
         for (int i = 0; i < renderCount; i++)
         {
             var p = mParticles[i];
-            // Order matters: CreateScale then CreateTranslation (matrices compose right-to-left applied to a vector) scales the unit quad to Size first, then moves it to the particle's world position.
+            // Order matters: CreateScale then CreateTranslation (matrices compose
+            // right-to-left applied to a vector) scales the unit quad to Size first,
+            // then moves it to the particle's world position.
             mInstanceBuffer[i] = new InstanceData
             {
                 ModelMatrix = Matrix4x4.CreateScale(p.Size) * Matrix4x4.CreateTranslation(p.Pos),
@@ -301,7 +368,8 @@ public class ParticleSystem : IDisposable
 
         var gl = GlContext.Gl;
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mInstanceVbo);
-        // Upload only the live portion of the CPU-side instance array (not the full MAX_PARTICLES-sized buffer) directly into the GPU buffer allocated earlier.
+        // Upload only the live portion of the CPU-side instance array (not the
+        // full MAX_PARTICLES-sized buffer) directly into the GPU buffer allocated earlier.
         gl.BufferSubData<InstanceData>(BufferTargetARB.ArrayBuffer, 0,
             mInstanceBuffer.AsSpan(0, renderCount));
 
@@ -312,12 +380,14 @@ public class ParticleSystem : IDisposable
 
         worldTexture.Use(TextureUnit.Texture0);
 
-        // Alpha blending so particle edges/any semi-transparent texels composite correctly against the scene rather than being hard-edged.
+        // Alpha blending so particle edges/any semi-transparent texels composite
+        // correctly against the scene rather than being hard-edged.
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
         gl.BindVertexArray(mVao);
-        // One draw call renders QUAD_VERTEX_COUNT vertices x renderCount instances, using the per-instance attributes (divisor 1) set up in SetupInstanceAttributes.
+        // One draw call renders QUAD_VERTEX_COUNT vertices x renderCount instances,
+        // using the per-instance attributes (divisor 1) set up in SetupInstanceAttributes.
         gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, QUAD_VERTEX_COUNT, (uint)renderCount);
         gl.BindVertexArray(0);
 
@@ -325,7 +395,8 @@ public class ParticleSystem : IDisposable
     }
 
     /// <summary>
-    /// Same pattern as Render() but for smoke particles: uploads instance data (model matrix + fade alpha) and issues one instanced draw call.
+    /// Same pattern as Render() but for smoke particles: uploads instance data
+    /// (model matrix + fade alpha) and issues one instanced draw call.
     /// </summary>
     public void RenderSmoke(Matrix4x4 view, Matrix4x4 projection)
     {

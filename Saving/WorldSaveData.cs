@@ -25,7 +25,8 @@ public class SavedPainting
     public string ArtName = "";
 }
 
-// Serializable snapshot of a world entity (mob or dropped item). Type is the entity class name: "Pig", "Sheep", "Zombie", "Skeleton", "Stalker", "DroppedItem".
+// Serializable snapshot of a world entity (mob or dropped item).
+// Type is the entity class name: "Pig", "Sheep", "Zombie", "Skeleton", "Stalker", "DroppedItem".
 [Serializable]
 public class SavedEntity
 {

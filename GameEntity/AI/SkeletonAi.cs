@@ -7,7 +7,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity.AI;
 
 /// <summary>
-/// Hostile AI for the Skeleton mob. Overrides melee attacking with a ranged bow attack: once within AttackRange (10 blocks) and with LOS (handled by the base HostileEntityAi state machine), it periodically fires an arrow at the player instead of closing to melee distance.
+/// Hostile AI for the Skeleton mob. Overrides melee attacking with a ranged bow attack:
+/// once within AttackRange (10 blocks) and with LOS (handled by the base
+/// HostileEntityAi state machine), it periodically fires an arrow at the player instead
+/// of closing to melee distance.
 /// </summary>
 public class SkeletonAi : HostileEntityAi
 {
@@ -44,7 +47,9 @@ public class SkeletonAi : HostileEntityAi
         float dx = playerPos.X - origin.X;
         float dy = playerPos.Y + 0.9f - origin.Y - 0.2f; // aim at player chest
         float dz = playerPos.Z - origin.Z;
-        // Arrows are not affected by an arc/gravity compensation model here beyond this simple linear fudge: bias the vertical aim upward proportionally to horizontal range so shots at longer distances (which drop more before impact) still tend to land.
+        // Arrows are not affected by an arc/gravity compensation model here beyond this simple
+        // linear fudge: bias the vertical aim upward proportionally to horizontal range so
+        // shots at longer distances (which drop more before impact) still tend to land.
         float horizDist = MathF.Sqrt(dx * dx + dz * dz) * 0.2f; // arc compensation proportional to range
 
         Vector3 dir = Vector3.Normalize(new Vector3(dx, dy + horizDist, dz));

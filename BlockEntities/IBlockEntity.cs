@@ -5,7 +5,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.BlockEntities;
 
 /// <summary>
-/// Common contract for all block entities (<see cref="ChestData"/>, <see cref="DoubleChestData"/>, <see cref="FurnaceData"/>) so <see cref="BlockEntityManager"/> can store them polymorphically in a single position-keyed dictionary and handle generic operations like destruction uniformly.
+/// Common contract for all block entities (<see cref="ChestData"/>, <see cref="DoubleChestData"/>,
+/// <see cref="FurnaceData"/>) so <see cref="BlockEntityManager"/> can store them polymorphically in a
+/// single position-keyed dictionary and handle generic operations like destruction uniformly.
 /// </summary>
 public interface IBlockEntity
 {

@@ -9,7 +9,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.BlockEntities;
 
 /// <summary>
-/// Block entity backing a furnace block: three inventory slots (input/fuel/output) plus burn and smelt-progress counters. All tick logic (fuel consumption, smelting, lit/unlit block swapping) lives in <see cref="BlockEntityManager.TickFurnaces"/> - this class is purely the data container.
+/// Block entity backing a furnace block: three inventory slots (input/fuel/output) plus burn and
+/// smelt-progress counters. All tick logic (fuel consumption, smelting, lit/unlit block swapping)
+/// lives in <see cref="BlockEntityManager.TickFurnaces"/> - this class is purely the data container.
 /// </summary>
 public class FurnaceData : IBlockEntity
 {

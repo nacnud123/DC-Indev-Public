@@ -14,7 +14,7 @@ public abstract class Block
     // Fallback UV rect (atlas tile 0,0) used by any texture property a subclass doesn't override.
     private static readonly TextureCoords KDefaultCoords = UvHelper.FromTileCoords(0, 0);
 
-    /// <summaBlockAirry>
+    /// <summary>
     /// The BlockType enum value this instance represents. Used as the lookup key in BlockRegistry and is the only thing actually stored per-block in a Chunk's byte array.
     /// </summary>
     public abstract BlockType Type { get; }
@@ -133,7 +133,9 @@ public abstract class Block
     public virtual Vector3 BoundsMin => Vector3.Zero;
     public virtual Vector3 BoundsMax => Vector3.One;
 
-    // Per-face atlas UV rects. Side faces (Front/Back/Left/Right) default to SideTextureCoords so a simple block only needs to set Top/Bottom/Side; blocks with distinct faces per direction (furnace front, chest front, logs, etc.) override the individual face directly.
+    // Per-face atlas UV rects. Side faces (Front/Back/Left/Right) default to SideTextureCoords so a
+    // simple block only needs to set Top/Bottom/Side; blocks with distinct faces per direction
+    // (furnace front, chest front, logs, etc.) override the individual face directly.
     public virtual TextureCoords TopTextureCoords => KDefaultCoords;
     /// <summary>
     /// Metadata-aware variant of TopTextureCoords, used by blocks whose top face changes appearance based on stored metadata (e.g. crop growth stage). Defaults to the static top texture.

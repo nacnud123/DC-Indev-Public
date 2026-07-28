@@ -6,12 +6,14 @@ using System.Numerics;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Fullscreen black "Loading..." overlay shown by <c>Game</c> while a world is being generated or read from disk. Purely presentational - has no update logic or state of its own.
+/// Fullscreen black "Loading..." overlay shown by <c>Game</c> while a world is being generated
+/// or read from disk. Purely presentational - has no update logic or state of its own.
 /// </summary>
 internal class LoadingScreen
 {
     /// <summary>
-    /// Draws a fullscreen, non-interactive black window with a centered "Loading..." label. Called once per frame while <c>GameState.Loading</c> is active.
+    /// Draws a fullscreen, non-interactive black window with a centered "Loading..." label.
+    /// Called once per frame while <c>GameState.Loading</c> is active.
     /// </summary>
     public void Render()
     {
@@ -22,7 +24,8 @@ internal class LoadingScreen
         ImGui.SetNextWindowPos(Vector2.Zero);
         ImGui.SetNextWindowSize(displaySize);
 
-        // Strip every bit of normal window chrome/interaction - this is a static overlay, not a real window the player can move, resize, or focus.
+        // Strip every bit of normal window chrome/interaction - this is a static overlay,
+        // not a real window the player can move, resize, or focus.
         ImGuiWindowFlags windowFlags = ImGuiWindowFlags.NoTitleBar |
                                          ImGuiWindowFlags.NoResize |
                                          ImGuiWindowFlags.NoMove |

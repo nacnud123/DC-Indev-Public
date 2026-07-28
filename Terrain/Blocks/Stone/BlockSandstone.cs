@@ -4,6 +4,10 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>
+/// Building-material stone variant generated in desert-like terrain. Uses default
+/// Block.GetDrop, so it drops itself when mined (no separate raw/refined form).
+/// </summary>
 public class BlockSandstone: Block
 {
     public override BlockType Type => BlockType.Sandstone;

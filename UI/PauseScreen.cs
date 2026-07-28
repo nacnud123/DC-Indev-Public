@@ -6,7 +6,9 @@ using VoxelEngine.Core;
 
 namespace VoxelEngine.UI;
 /// <summary>
-/// Semi-transparent pause overlay shown over the frozen game world (<c>GameState.Paused</c>). Presents Resume/Save/Quit buttons; Game.cs subscribes to the events below to actually perform the state transitions, save, or application exit.
+/// Semi-transparent pause overlay shown over the frozen game world (<c>GameState.Paused</c>).
+/// Presents Resume/Save/Quit buttons; Game.cs subscribes to the events below to actually
+/// perform the state transitions, save, or application exit.
 /// </summary>
 public class PauseScreen
 {
@@ -80,7 +82,8 @@ public class PauseScreen
             OnSaveGame?.Invoke();
         }
 
-        // Quit button - styled red/destructive via pushed Button/Hovered/Active colors, popped together below (PopStyleColor(3)) once the button is drawn.
+        // Quit button - styled red/destructive via pushed Button/Hovered/Active colors,
+        // popped together below (PopStyleColor(3)) once the button is drawn.
         ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * 2f));
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.9f, 0.3f, 0.3f, 1.0f));

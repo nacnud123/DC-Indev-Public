@@ -15,7 +15,15 @@ using VoxelEngine.Utils;
 namespace VoxelEngine.Rendering;
 
 /// <summary>
-/// Owns and orchestrates every per-frame OpenGL draw call for an active play session. This is the single place that defines render order (see <see cref="RenderFrame"/>): sky -> clouds -> world (opaque) -> world (transparent) -> blob shadows -> entities -> paintings -> particles -> block highlight -> player arm -> HUD (crosshair, then ImGui overlay separately via <see cref="RenderHudOverlay"/>). Sub-renderers for each stage (sky, clouds, shadows, etc.) are created once in <see cref="Init"/> and reused every frame; per-world/per-player state (world, player, hotbar, etc.) is injected via <see cref="SetSession"/> when a game session starts and cleared via <see cref="ClearSession"/> on teardown, so this class can outlive individual play sessions (e.g. across returning to the main menu and loading a new world).
+/// Owns and orchestrates every per-frame OpenGL draw call for an active play session. This is the
+/// single place that defines render order (see <see cref="RenderFrame"/>):
+/// sky -> clouds -> world (opaque) -> world (transparent) -> blob shadows -> entities -> paintings
+/// -> particles -> block highlight -> player arm -> HUD (crosshair, then ImGui overlay separately
+/// via <see cref="RenderHudOverlay"/>). Sub-renderers for each stage (sky, clouds, shadows, etc.)
+/// are created once in <see cref="Init"/> and reused every frame; per-world/per-player state
+/// (world, player, hotbar, etc.) is injected via <see cref="SetSession"/> when a game session
+/// starts and cleared via <see cref="ClearSession"/> on teardown, so this class can outlive
+/// individual play sessions (e.g. across returning to the main menu and loading a new world).
 /// </summary>
 public class GameRenderer : IDisposable
 {
@@ -46,7 +54,9 @@ public class GameRenderer : IDisposable
     private bool mDisposed;
 
     /// <summary>
-    /// One-time setup: stores shared shader/texture/particle references owned by <c>Game</c>, and creates + initializes all the per-stage sub-renderers used by <see cref="RenderFrame"/>. Must be called once before any world session starts.
+    /// One-time setup: stores shared shader/texture/particle references owned by <c>Game</c>, and
+    /// creates + initializes all the per-stage sub-renderers used by <see cref="RenderFrame"/>.
+    /// Must be called once before any world session starts.
     /// </summary>
     public void Init(Shader worldShader, Texture worldTexture, Texture paintingsTexture, ParticleSystem particles)
     {
@@ -96,7 +106,12 @@ public class GameRenderer : IDisposable
     public void ResetCloudOffset() => mCloudRenderer?.ResetOffset();
 
     /// <summary>
-    /// Draws one full frame of the 3D world for the current session, in the fixed pipeline order: sky, clouds, opaque world geometry, transparent world geometry, blob shadows, entities, paintings, particles, block highlight/break overlay, first-person player arm, and finally the crosshair. View/projection matrices are computed once here from the player's camera and threaded through every stage so they all agree on the same frame's camera state. No-ops if there is no active session (world/player not set).
+    /// Draws one full frame of the 3D world for the current session, in the fixed pipeline order:
+    /// sky, clouds, opaque world geometry, transparent world geometry, blob shadows, entities,
+    /// paintings, particles, block highlight/break overlay, first-person player arm, and finally
+    /// the crosshair. View/projection matrices are computed once here from the player's camera and
+    /// threaded through every stage so they all agree on the same frame's camera state. No-ops if
+    /// there is no active session (world/player not set).
     /// </summary>
     public void RenderFrame(float timeOfDay, WorldGenSettings settings)
     {
@@ -118,7 +133,9 @@ public class GameRenderer : IDisposable
     }
 
     /// <summary>
-    /// Draws the ImGui-based HUD (hotbar, health, etc.) plus the full-screen fire vignette when the player is on fire. Separate from <see cref="RenderFrame"/> because ImGui draw calls happen in a different pass (ImGui's own render loop) than the raw GL calls in the 3D frame.
+    /// Draws the ImGui-based HUD (hotbar, health, etc.) plus the full-screen fire vignette when the
+    /// player is on fire. Separate from <see cref="RenderFrame"/> because ImGui draw calls happen in
+    /// a different pass (ImGui's own render loop) than the raw GL calls in the 3D frame.
     /// </summary>
     public void RenderHudOverlay()
     {
@@ -133,10 +150,14 @@ public class GameRenderer : IDisposable
             RenderFireOverlay(display);
     }
 
-    // Draws the sky dome/background. Recomputes dayFactor (0=full night, 1=full day) from timeOfDay via a clamped sine curve so lighting transitions ease in/out near dawn/dusk rather than changing linearly.
+    // Draws the sky dome/background. Recomputes dayFactor (0=full night, 1=full day) from
+    // timeOfDay via a clamped sine curve so lighting transitions ease in/out near dawn/dusk
+    // rather than changing linearly.
     private void RenderSky(Matrix4x4 view, Matrix4x4 proj, float timeOfDay, WorldGenSettings settings)
     {
-        // timeOfDay in [0,1) maps to a full 0..2π sine cycle; sin() peaks at noon (0.25) and troughs at midnight (0.75). Clamped to a 0.05 floor so it's never fully black (some ambient light always remains) and multiplied by 2 to reach full brightness before noon.
+        // timeOfDay in [0,1) maps to a full 0..2π sine cycle; sin() peaks at noon (0.25) and
+        // troughs at midnight (0.75). Clamped to a 0.05 floor so it's never fully black (some
+        // ambient light always remains) and multiplied by 2 to reach full brightness before noon.
         float sunAngle = timeOfDay * MathF.PI * 2f;
         float sunLightLevel = Math.Clamp(MathF.Sin(sunAngle) * 2f, .05f, 1.0f);
         // Remap sunLightLevel's [0.05, 1.0] range to a normalized [0, 1] dayFactor for color lerps.
@@ -145,7 +166,8 @@ public class GameRenderer : IDisposable
         mSkyRenderer.Render(mPlayer!.Position, timeOfDay, settings, dayFactor, view, proj);
     }
 
-    // Draws the scrolling cloud plane. Uses the tick system's partial-tick value to interpolate cloud scroll smoothly between fixed ticks (avoids visible stepping when frame rate > tick rate).
+    // Draws the scrolling cloud plane. Uses the tick system's partial-tick value to interpolate
+    // cloud scroll smoothly between fixed ticks (avoids visible stepping when frame rate > tick rate).
     private void RenderClouds(Matrix4x4 view, Matrix4x4 proj, float timeOfDay, WorldGenSettings settings)
     {
         float sunAngle = timeOfDay * MathF.PI * 2f;
@@ -162,14 +184,19 @@ public class GameRenderer : IDisposable
         mCloudRenderer.Render(mPlayer.Position, settings, dayFactor, partialTick, fogColor, fogDist, view, proj);
     }
 
-    // Draws all opaque chunk geometry, then all transparent chunk geometry (water/glass) in a second pass with blending enabled. Also sets the shared lighting/fog uniforms used by entities later in the frame (via the static Entity.LightDir/AmbientStrength/SunlightLevel fields) and picks fog/clear color based on whether the camera is submerged in water or lava.
+    // Draws all opaque chunk geometry, then all transparent chunk geometry (water/glass) in a
+    // second pass with blending enabled. Also sets the shared lighting/fog uniforms used by
+    // entities later in the frame (via the static Entity.LightDir/AmbientStrength/SunlightLevel
+    // fields) and picks fog/clear color based on whether the camera is submerged in water or lava.
     private void RenderWorld(Matrix4x4 view, Matrix4x4 proj, float timeOfDay, WorldGenSettings settings)
     {
         float sunAngle = timeOfDay * MathF.PI * 2f;
         float sunlightLevel = Math.Clamp(MathF.Sin(sunAngle) * 2f, 0.05f, 1.0f);
         float dayFactor = (sunlightLevel - 0.05f) / 0.95f;
 
-        // Directional "sun" vector: rotates around the horizon following sunAngle, with a fixed downward -0.3 Z bias so the sun is never perfectly horizontal (keeps shading from going degenerate at dawn/dusk). Normalized because it's used as a light direction.
+        // Directional "sun" vector: rotates around the horizon following sunAngle, with a fixed
+        // downward -0.3 Z bias so the sun is never perfectly horizontal (keeps shading from
+        // going degenerate at dawn/dusk). Normalized because it's used as a light direction.
         Vector3 lightDir = Vector3.Normalize(new Vector3(-MathF.Cos(sunAngle), -MathF.Sin(sunAngle), -0.3f));
         Vector3 lightColor = GetSunColor(dayFactor);
         Vector3 nightSky = settings.DaySkyColor * 0.02f;
@@ -177,7 +204,8 @@ public class GameRenderer : IDisposable
         Vector3 fogColor = Vector3.Lerp(nightSky, settings.DayFogColor, dayFactor);
         float ambientStrength = 0.08f + dayFactor * 0.22f;
 
-        // Published as static state so Entity/mob rendering later in the frame (RenderEntities) picks up the same lighting without needing these values passed through explicitly.
+        // Published as static state so Entity/mob rendering later in the frame (RenderEntities)
+        // picks up the same lighting without needing these values passed through explicitly.
         Entity.LightDir = lightDir;
         Entity.AmbientStrength = ambientStrength + 0.1f;
         Entity.SunlightLevel = sunlightLevel;
@@ -195,7 +223,9 @@ public class GameRenderer : IDisposable
         mWorldShader.SetVector3("fogColor", fogColor);
 
         var gl = GlContext.Gl;
-        // Underwater/underlava fog overrides completely replace the normal day/night fog: a much shorter, tinted fog band so the player can't see far, plus a matching clear color so the "void" beyond the far fog plane matches the submerged tint instead of the sky.
+        // Underwater/underlava fog overrides completely replace the normal day/night fog: a much
+        // shorter, tinted fog band so the player can't see far, plus a matching clear color so the
+        // "void" beyond the far fog plane matches the submerged tint instead of the sky.
         if (mPlayer.IsUnderWater)
         {
             mWorldShader.SetFloat("fogStart", 2.0f);
@@ -225,11 +255,17 @@ public class GameRenderer : IDisposable
         mWorldTexture.Use(TextureUnit.Texture0);
         mWorldShader.SetInt("blockTexture", 0);
 
-        // Pass 1: opaque geometry. alphaOverride=0 tells the shader to use each block's native alpha (effectively opaque) rather than a forced blend value.
+        // Pass 1: opaque geometry. alphaOverride=0 tells the shader to use each block's native alpha
+        // (effectively opaque) rather than a forced blend value.
         mWorldShader.SetFloat("alphaOverride", 0.0f);
         mWorld!.Render(mPlayer.Camera);
 
-        // Pass 2: transparent geometry (water, glass, etc). Standard alpha blending is enabled; depth writes are disabled so overlapping transparent faces don't occlude each other based on draw order, while depth testing against the opaque pass remains active. Backface culling is disabled so the far side of transparent volumes (e.g. water) still renders. A small negative polygon offset pushes transparent faces slightly toward the camera to avoid z-fighting with coincident opaque faces (e.g. water surface flush with a shoreline block).
+        // Pass 2: transparent geometry (water, glass, etc). Standard alpha blending is enabled;
+        // depth writes are disabled so overlapping transparent faces don't occlude each other based
+        // on draw order, while depth testing against the opaque pass remains active. Backface
+        // culling is disabled so the far side of transparent volumes (e.g. water) still renders.
+        // A small negative polygon offset pushes transparent faces slightly toward the camera to
+        // avoid z-fighting with coincident opaque faces (e.g. water surface flush with a shoreline block).
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         gl.Enable(EnableCap.PolygonOffsetFill);
@@ -248,7 +284,8 @@ public class GameRenderer : IDisposable
         mWorldShader.SetFloat("alphaOverride", 0.0f);
     }
 
-    // Interpolates the directional light (sun/moon) color across the day cycle: night(0.3,0.3,0.5) -> sunset(1,0.6,0.3) -> day(1,1,0.95)
+    // Interpolates the directional light (sun/moon) color across the day cycle:
+    // night(0.3,0.3,0.5) -> sunset(1,0.6,0.3) -> day(1,1,0.95)
     private static Vector3 GetSunColor(float dayFactor)
     {
         if (dayFactor > 0.5f)
@@ -256,14 +293,16 @@ public class GameRenderer : IDisposable
         return Vector3.Lerp(new Vector3(0.3f, 0.3f, 0.5f), new Vector3(1f, 0.6f, 0.3f), dayFactor * 2f);
     }
 
-    // Draws soft blob shadows under every entity (including the player). Entities and the player share one draw call by concatenating them via Append rather than special-casing the player.
+    // Draws soft blob shadows under every entity (including the player). Entities and the player
+    // share one draw call by concatenating them via Append rather than special-casing the player.
     private void RenderShadows(Matrix4x4 view, Matrix4x4 proj)
     {
         var allEntities = mWorld!.Entities.Append(mPlayer!);
         mBlobShadowRenderer.Render(allEntities, mWorld, view, proj, mPlayer.Camera.Position);
     }
 
-    // Draws all mobs/entities in render distance. Publishes the camera position via the static Entity.CameraPosition field, consumed by entity shaders for billboarding/distance fade etc.
+    // Draws all mobs/entities in render distance. Publishes the camera position via the static
+    // Entity.CameraPosition field, consumed by entity shaders for billboarding/distance fade etc.
     private void RenderEntities(Matrix4x4 view, Matrix4x4 proj)
     {
         Entity.CameraPosition = mPlayer!.Camera.Position;
@@ -277,7 +316,9 @@ public class GameRenderer : IDisposable
         mPaintingRenderer.Render(paintings, mPaintingsTexture, view, proj);
     }
 
-    // Draws block-texture particles (dust, breaking-block bits) and smoke particles. Depth writes are disabled for the whole particle pass so overlapping particles don't fight each other or punch holes in geometry behind them, while still depth-testing against solid world geometry.
+    // Draws block-texture particles (dust, breaking-block bits) and smoke particles. Depth writes
+    // are disabled for the whole particle pass so overlapping particles don't fight each other or
+    // punch holes in geometry behind them, while still depth-testing against solid world geometry.
     private void RenderParticles(Matrix4x4 view, Matrix4x4 proj)
     {
         GlContext.Gl.DepthMask(false);
@@ -286,7 +327,8 @@ public class GameRenderer : IDisposable
         GlContext.Gl.DepthMask(true);
     }
 
-    // Draws the wireframe outline around the block the player is looking at, plus the progressive break-stage crack overlay while a block is being mined.
+    // Draws the wireframe outline around the block the player is looking at, plus the
+    // progressive break-stage crack overlay while a block is being mined.
     private void RenderBlockHighlight(Matrix4x4 view, Matrix4x4 proj)
     {
         var hit = mWorld!.Raycast(mPlayer!.Camera.Position, mPlayer.Camera.Front);
@@ -296,7 +338,8 @@ public class GameRenderer : IDisposable
             var boundsMin = BlockRegistry.GetBoundsMin(hit.BlockType);
             var boundsMax = BlockRegistry.GetBoundsMax(hit.BlockType);
 
-            // Torches use per-metadata wall-mounted bounding boxes instead of the registry default (metadata 0 = standing torch, uses default bounds; >0 = wall torch facing direction).
+            // Torches use per-metadata wall-mounted bounding boxes instead of the registry default
+            // (metadata 0 = standing torch, uses default bounds; >0 = wall torch facing direction).
             if (hit.BlockType == BlockType.Torch)
             {
                 int meta = mWorld.GetMetadata(hit.BlockPos.X, hit.BlockPos.Y, hit.BlockPos.Z);
@@ -313,7 +356,8 @@ public class GameRenderer : IDisposable
             mBlockBreakOverlay.Render(mPlayer.BreakingBlockPos.Value, breakStage, view, proj, mBreakTexture);
     }
 
-    // Draws the center-screen crosshair on top of everything else in the 3D scene by disabling depth testing for this one draw, then restoring it immediately after.
+    // Draws the center-screen crosshair on top of everything else in the 3D scene by disabling
+    // depth testing for this one draw, then restoring it immediately after.
     private void RenderHud()
     {
         GlContext.Gl.Disable(EnableCap.DepthTest);
@@ -321,11 +365,15 @@ public class GameRenderer : IDisposable
         GlContext.Gl.Enable(EnableCap.DepthTest);
     }
 
-    // Draws a full-screen reddish fire vignette (using a tile from the world atlas as a full-screen tinted overlay) when the player is burning, via ImGui's background draw list rather than a raw GL draw so it composites correctly with the rest of the ImGui HUD pass.
+    // Draws a full-screen reddish fire vignette (using a tile from the world atlas as a
+    // full-screen tinted overlay) when the player is burning, via ImGui's background draw list
+    // rather than a raw GL draw so it composites correctly with the rest of the ImGui HUD pass.
     private void RenderFireOverlay(System.Numerics.Vector2 display)
     {
         var fireUv = UvHelper.FromTileCoords(6, 7);
-        // ImGui's AddImage expects UV0 = top-left and UV1 = bottom-right in image space (Y down), while UvHelper's TopLeft/BottomRight are in GL texture space (Y up) - so the Y components are swapped here to flip the sampled region vertically for correct on-screen orientation.
+        // ImGui's AddImage expects UV0 = top-left and UV1 = bottom-right in image space (Y down),
+        // while UvHelper's TopLeft/BottomRight are in GL texture space (Y up) - so the Y components
+        // are swapped here to flip the sampled region vertically for correct on-screen orientation.
         var uvMin = new System.Numerics.Vector2(fireUv.TopLeft.X, fireUv.BottomRight.Y);
         var uvMax = new System.Numerics.Vector2(fireUv.BottomRight.X, fireUv.TopLeft.Y);
         // ARGB-ish packed tint (0x990066FF): translucent reddish-orange overlay color.

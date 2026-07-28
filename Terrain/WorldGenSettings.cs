@@ -5,17 +5,25 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.Terrain;
 
 /// <summary>
-/// The overall shape/layout strategy used when building the heightmap in TerrainGen. Island: edge falloff sinks terrain toward world borders, producing an island surrounded by ocean. Inland: no edge falloff - terrain continues to the world border. Floating: heightmap + a second carve noise produce disconnected floating landmasses stacked in layers. Flat: heightmap generation is skipped entirely (superflat world).
+/// The overall shape/layout strategy used when building the heightmap in TerrainGen.
+/// Island: edge falloff sinks terrain toward world borders, producing an island surrounded by ocean.
+/// Inland: no edge falloff - terrain continues to the world border.
+/// Floating: heightmap + a second carve noise produce disconnected floating landmasses stacked in layers.
+/// Flat: heightmap generation is skipped entirely (superflat world).
 /// </summary>
 public enum WorldTye { Island, Inland, Floating, Flat }
 
 /// <summary>
-/// Cosmetic/environmental theme applied on top of the world type - controls ocean fluid, sky/fog colors, cloud appearance, and light level ranges. See WorldGenSettings.Build.
+/// Cosmetic/environmental theme applied on top of the world type - controls ocean fluid,
+/// sky/fog colors, cloud appearance, and light level ranges. See WorldGenSettings.Build.
 /// </summary>
 public enum WorldTheme { Normal, Hell, Paradise, Woods }
 
 /// <summary>
-/// Bundles all the tunable, per-world-type/theme constants that TerrainGen and the renderer consume - ocean fluid choice, coastline behavior, tree density, sky/fog/cloud colors, and light level clamps. Built once via <see cref="Build"/> from the selected type/theme indices and then read-only for the lifetime of the world.
+/// Bundles all the tunable, per-world-type/theme constants that TerrainGen and the renderer
+/// consume - ocean fluid choice, coastline behavior, tree density, sky/fog/cloud colors, and
+/// light level clamps. Built once via <see cref="Build"/> from the selected type/theme indices
+/// and then read-only for the lifetime of the world.
 /// </summary>
 public struct WorldGenSettings
 {
@@ -52,7 +60,11 @@ public struct WorldGenSettings
     public WorldGenSettings() { }
 
     /// <summary>
-    /// Constructs a fully-populated WorldGenSettings for the given world type/theme combination. Each theme case hardcodes ocean fluid, coastline, tree density, sky/fog/cloud colors, and light level ranges; <paramref name="typeIndex"/> maps to <see cref="WorldTye"/> and <paramref name="themeIndex"/> maps to <see cref="WorldTheme"/> (both cast from raw ints, e.g. from UI dropdowns or saved world metadata).
+    /// Constructs a fully-populated WorldGenSettings for the given world type/theme combination.
+    /// Each theme case hardcodes ocean fluid, coastline, tree density, sky/fog/cloud colors, and
+    /// light level ranges; <paramref name="typeIndex"/> maps to <see cref="WorldTye"/> and
+    /// <paramref name="themeIndex"/> maps to <see cref="WorldTheme"/> (both cast from raw ints,
+    /// e.g. from UI dropdowns or saved world metadata).
     /// </summary>
     public static WorldGenSettings Build(int typeIndex, int themeIndex)
     {

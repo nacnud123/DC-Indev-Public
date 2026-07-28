@@ -10,7 +10,9 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.BlockEntities;
 
 /// <summary>
-/// Block entity backing a single chest block: a fixed 27-slot inventory keyed to a world position by <see cref="BlockEntityManager"/>. Handles inserting items (stacking onto existing piles first, then filling empty slots) and dumping its contents as dropped-item entities when the chest is broken.
+/// Block entity backing a single chest block: a fixed 27-slot inventory keyed to a world position by
+/// <see cref="BlockEntityManager"/>. Handles inserting items (stacking onto existing piles first, then
+/// filling empty slots) and dumping its contents as dropped-item entities when the chest is broken.
 /// </summary>
 public class ChestData : IBlockEntity
 {
@@ -32,7 +34,9 @@ public class ChestData : IBlockEntity
     public void SetSlot(int index, ItemStack? stack) => mSlots[index] = stack;
 
     /// <summary>
-    /// Attempts to insert as much of <paramref name="stack"/> as will fit: first tops off any existing slots holding the same item type up to their max stack size, then fills empty slots with the remainder. Returns true if at least one item was placed (not necessarily all of it).
+    /// Attempts to insert as much of <paramref name="stack"/> as will fit: first tops off any existing
+    /// slots holding the same item type up to their max stack size, then fills empty slots with the
+    /// remainder. Returns true if at least one item was placed (not necessarily all of it).
     /// </summary>
     public bool TryAdd(ItemStack stack)
     {

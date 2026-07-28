@@ -11,18 +11,24 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Always-visible bottom-of-screen hotbar (9 slots) drawn during normal gameplay. Renders directly to ImGui's background draw list (rather than inside an ImGui window) so it stays fixed on screen without any window chrome or interaction. Reads/writes slot contents through <c>PlayerInventory</c>'s hotbar range and tracks which slot is currently selected for use as the active block/item.
+/// Always-visible bottom-of-screen hotbar (9 slots) drawn during normal gameplay. Renders
+/// directly to ImGui's background draw list (rather than inside an ImGui window) so it stays
+/// fixed on screen without any window chrome or interaction. Reads/writes slot contents
+/// through <c>PlayerInventory</c>'s hotbar range and tracks which slot is currently selected
+/// for use as the active block/item.
 /// </summary>
 internal class Hotbar
 {
     private const int HOTBAR_SLOTS = PlayerInventory.HOTBAR_SLOTS;
     private const int HOTBAR_START = PlayerInventory.HOTBAR_START;
-    private const float SLOT_SIZE = 48f * UIHelper.UI_SCALE;
-    private const float ITEM_SIZE = 36f * UIHelper.UI_SCALE;
-    private const float ITEM_PADDING = (SLOT_SIZE - ITEM_SIZE) / 2f;
-    private const float BAR_PADDING = 6f * UIHelper.UI_SCALE;
-    private const float HOTBAR_WIDTH = HOTBAR_SLOTS * SLOT_SIZE + BAR_PADDING * 2;
-    private const float HOTBAR_HEIGHT = SLOT_SIZE + BAR_PADDING * 2;
+    // Properties (not cached static readonly fields) so these track UIHelper.UI_SCALE live
+    // if the player changes UI scaling in the options menu mid-session.
+    private static float SLOT_SIZE => 48f * UIHelper.UI_SCALE;
+    private static float ITEM_SIZE => 36f * UIHelper.UI_SCALE;
+    private static float ITEM_PADDING => (SLOT_SIZE - ITEM_SIZE) / 2f;
+    private static float BAR_PADDING => 6f * UIHelper.UI_SCALE;
+    private static float HOTBAR_WIDTH => HOTBAR_SLOTS * SLOT_SIZE + BAR_PADDING * 2;
+    private static float HOTBAR_HEIGHT => SLOT_SIZE + BAR_PADDING * 2;
 
     private static readonly uint ColorBg = ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
     private static readonly uint ColorSlot = ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.60f));
@@ -38,7 +44,8 @@ internal class Hotbar
 
     public int SelectedSlotIndex => mSelectedSlot;
 
-    // Exposed so other UI (e.g. block highlight / crosshair layout) can position itself relative to the hotbar without duplicating its size/position math.
+    // Exposed so other UI (e.g. block highlight / crosshair layout) can position itself
+    // relative to the hotbar without duplicating its size/position math.
     public float GetHotbarX(float displayWidth) => (displayWidth - HOTBAR_WIDTH) / 2f;
     public float GetHotbarY(float displayHeight) => displayHeight - HOTBAR_HEIGHT - 10f;
     public float HotbarWidth => HOTBAR_WIDTH;
@@ -50,7 +57,8 @@ internal class Hotbar
         mInventory = inventory;
     }
 
-    // Hotbar slot indices (0-8) map onto a contiguous range of the shared PlayerInventory array starting at HOTBAR_START, so the hotbar and full inventory screen see the same data.
+    // Hotbar slot indices (0-8) map onto a contiguous range of the shared PlayerInventory array
+    // starting at HOTBAR_START, so the hotbar and full inventory screen see the same data.
     private ItemStack? GetSlot(int i) => mInventory.GetSlot(HOTBAR_START + i);
     private void SetSlot(int i, ItemStack? s) => mInventory.SetSlot(HOTBAR_START + i, s);
 
@@ -86,7 +94,10 @@ internal class Hotbar
     public ItemStack? GetSelectedStack() => GetSlot(mSelectedSlot);
 
     /// <summary>
-    /// Draws the hotbar background, all 9 slots (icon, stack count, durability bar), the selection highlight, and the floating name label above the currently selected item. Uses the ImGui background draw list so it renders every frame regardless of which ImGui windows/screens are open, without needing its own Begin/End window.
+    /// Draws the hotbar background, all 9 slots (icon, stack count, durability bar), the
+    /// selection highlight, and the floating name label above the currently selected item.
+    /// Uses the ImGui background draw list so it renders every frame regardless of which
+    /// ImGui windows/screens are open, without needing its own Begin/End window.
     /// </summary>
     public void Render()
     {
@@ -139,7 +150,10 @@ internal class Hotbar
         }
     }
 
-    // Blocks use a pre-rendered icon texture (via BlockIconRenderer, full 0-1 UV range); items are sampled directly from the shared item atlas using their registered UV rect. V coordinates are flipped (BottomRight.Y first) to account for the atlas texture's vertical orientation vs. ImGui's top-left-origin UV space.
+    // Blocks use a pre-rendered icon texture (via BlockIconRenderer, full 0-1 UV range);
+    // items are sampled directly from the shared item atlas using their registered UV rect.
+    // V coordinates are flipped (BottomRight.Y first) to account for the atlas texture's
+    // vertical orientation vs. ImGui's top-left-origin UV space.
     private void DrawItem(ImDrawListPtr drawList, ItemStack stack, float x, float y, float size)
     {
         var min = new Vector2(x, y);
@@ -156,7 +170,8 @@ internal class Hotbar
         }
     }
 
-    // Draws text twice (offset black "shadow" copy behind a white copy) for legibility over any background color/terrain, mimicking Minecraft's text style without needing a font atlas.
+    // Draws text twice (offset black "shadow" copy behind a white copy) for legibility over
+    // any background color/terrain, mimicking Minecraft's text style without needing a font atlas.
     private static void DrawShadowedText(ImDrawListPtr drawList, Vector2 pos, string text)
     {
         drawList.AddText(pos + Vector2.One, ColorShadow, text);

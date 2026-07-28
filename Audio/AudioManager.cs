@@ -1,4 +1,5 @@
-// The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26 Updated with more complex sound playing functions, also added the ability to play background music.
+// The audio manager for the game. It lets you play sounds / manages what sounds should be played. | DA | 8/1/25 - 2/14/26
+// Updated with more complex sound playing functions, also added the ability to play background music.
 
 using SFML.Audio;
 using System;
@@ -9,7 +10,11 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Audio
 {
     /// <summary>
-    /// Thin wrapper around SFML.Audio for playing sound effects and looping background music. Caches each `.ogg` as a `SoundBuffer` keyed by file path (buffers are the decoded PCM data, shared and reused across every `Sound` instance that plays that file) and tracks all currently-playing `Sound` instances so they can be volume-adjusted, stopped, or garbage collected once they finish. All playback methods no-op once `Dispose` has run.
+    /// Thin wrapper around SFML.Audio for playing sound effects and looping background music.
+    /// Caches each `.ogg` as a `SoundBuffer` keyed by file path (buffers are the decoded PCM data,
+    /// shared and reused across every `Sound` instance that plays that file) and tracks all
+    /// currently-playing `Sound` instances so they can be volume-adjusted, stopped, or garbage
+    /// collected once they finish. All playback methods no-op once `Dispose` has run.
     /// </summary>
     public class AudioManager : IDisposable
     {
@@ -19,7 +24,8 @@ namespace VoxelEngine.Audio
         private List<Sound> mActiveSounds;
         private bool mDisposed = false;
 
-        // 0-100 style volume sliders; SFML's own scale is also 0-100, so these are used directly as `Sound.Volume` without conversion.
+        // 0-100 style volume sliders; SFML's own scale is also 0-100, so these are used directly
+        // as `Sound.Volume` without conversion.
         public int SfxVol { get; set; }
         public int MusicVol { get; set; }
 
@@ -65,7 +71,10 @@ namespace VoxelEngine.Audio
         }
 
         /// <summary>
-        /// One-shot (or looping) sound playback entry point most other Play* helpers funnel through. Lazily loads and caches the SoundBuffer for `filePath` on first use. When `forcePitch` is not given, one-shot sounds get a small random pitch wobble (0.9-1.1x) so repeated sounds (footsteps, block breaks) don't sound identically robotic on every play.
+        /// One-shot (or looping) sound playback entry point most other Play* helpers funnel through.
+        /// Lazily loads and caches the SoundBuffer for `filePath` on first use. When `forcePitch` is
+        /// not given, one-shot sounds get a small random pitch wobble (0.9-1.1x) so repeated sounds
+        /// (footsteps, block breaks) don't sound identically robotic on every play.
         /// </summary>
         public void PlayAudio(string filePath, int vol, bool loop = false, float forcePitch = -1f)
         {
@@ -288,7 +297,8 @@ namespace VoxelEngine.Audio
                     }
                 }
 
-                // Give SFML's audio thread a moment to actually stop each sound before disposing - disposing an SFML Sound while it's still playing can throw/crash on some platforms.
+                // Give SFML's audio thread a moment to actually stop each sound before disposing -
+                // disposing an SFML Sound while it's still playing can throw/crash on some platforms.
                 System.Threading.Thread.Sleep(50);
 
                 // Dispose all sounds

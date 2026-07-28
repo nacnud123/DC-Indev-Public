@@ -13,25 +13,30 @@ using VoxelEngine.Utils;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// The survival-mode inventory screen (opened with the Inventory keybind): armor column on the left, the shared 9x3 main grid + hotbar in the middle, and a 2x2 crafting grid with a result slot on the right. Crafting output is recomputed by <see cref="CraftingGrid"/> whenever its input slots change.
+/// The survival-mode inventory screen (opened with the Inventory keybind): armor
+/// column on the left, the shared 9x3 main grid + hotbar in the middle, and a 2x2
+/// crafting grid with a result slot on the right. Crafting output is recomputed by
+/// <see cref="CraftingGrid"/> whenever its input slots change.
 /// </summary>
 public class InventoryScreen : InventoryScreenBase
 {
     // Craft area
     private const int CRAFT_COLS = 2;
     private const int CRAFT_ROWS = 2;
-    private const float CRAFT_GAP = 8f * UIHelper.UI_SCALE;
-    private const float ARROW_W = 24f * UIHelper.UI_SCALE;
-    private const float CRAFT_AREA_W = CRAFT_COLS * SLOT_SIZE + CRAFT_GAP + ARROW_W + CRAFT_GAP + SLOT_SIZE;
+    // Properties (not cached static readonly fields) so these track UIHelper.UI_SCALE live
+    // if the player changes UI scaling in the options menu mid-session.
+    private static float CRAFT_GAP => 8f * UIHelper.UI_SCALE;
+    private static float ARROW_W => 24f * UIHelper.UI_SCALE;
+    private static float CRAFT_AREA_W => CRAFT_COLS * SLOT_SIZE + CRAFT_GAP + ARROW_W + CRAFT_GAP + SLOT_SIZE;
 
     // Armor column
     private const int ARMOR_COUNT = 4;
-    private const float ARMOR_GAP = 8f * UIHelper.UI_SCALE;
-    private const float ARMOR_COL_W = SLOT_SIZE + ARMOR_GAP;
-    private const float ARMOR_Y_OFFSET = 25f * UIHelper.UI_SCALE;
+    private static float ARMOR_GAP => 8f * UIHelper.UI_SCALE;
+    private static float ARMOR_COL_W => SLOT_SIZE + ARMOR_GAP;
+    private static float ARMOR_Y_OFFSET => 25f * UIHelper.UI_SCALE;
 
-    private const float PANEL_W = ARMOR_COL_W + COLS * SLOT_SIZE + CRAFT_GAP + CRAFT_AREA_W + PADDING * 2;
-    private const float PANEL_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP + PADDING * 2;
+    private static float PANEL_W => ARMOR_COL_W + COLS * SLOT_SIZE + CRAFT_GAP + CRAFT_AREA_W + PADDING * 2;
+    private static float PANEL_H => (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP + PADDING * 2;
 
     // Empty-slot placeholder icons
     private static readonly TextureCoords[] ArmorSlotIcons =
@@ -49,7 +54,8 @@ public class InventoryScreen : InventoryScreenBase
     {
     }
 
-    // Dump any items left in the crafting grid and cursor back into the player's inventory so closing the screen never destroys items.
+    // Dump any items left in the crafting grid and cursor back into the player's
+    // inventory so closing the screen never destroys items.
     public void OnClose()
     {
         var inv = Game.Instance.PlayerInventory;
@@ -71,7 +77,8 @@ public class InventoryScreen : InventoryScreenBase
         var drawList = ImGui.GetBackgroundDrawList();
         var displaySize = io.DisplaySize;
 
-        // All positions below are derived from PANEL_W/PANEL_H so the whole layout stays centered and self-consistent if slot size or panel size changes.
+        // All positions below are derived from PANEL_W/PANEL_H so the whole layout
+        // stays centered and self-consistent if slot size or panel size changes.
         float panelX = (displaySize.X - PANEL_W) / 2f;
         float panelY = (displaySize.Y - PANEL_H) / 2f;
         float armorX = panelX + PADDING;
@@ -214,7 +221,10 @@ public class InventoryScreen : InventoryScreenBase
         return (int)(relY / SLOT_SIZE) * CRAFT_COLS + (int)(relX / SLOT_SIZE);
     }
 
-    // Equip logic: an item may only be placed in an armor slot if it's flagged as armor for that specific slot (e.g. a helmet can't go in the boots slot). Only 1 armor piece is ever equipped at once, so extras beyond count 1 spill back into the main inventory.
+    // Equip logic: an item may only be placed in an armor slot if it's flagged as
+    // armor for that specific slot (e.g. a helmet can't go in the boots slot).
+    // Only 1 armor piece is ever equipped at once, so extras beyond count 1 spill
+    // back into the main inventory.
     private void HandleArmorLeftClick(PlayerInventory inv, ArmorSlot slot)
     {
         var existing = inv.GetArmorSlot(slot);
@@ -346,7 +356,9 @@ public class InventoryScreen : InventoryScreenBase
         }
     }
 
-    // Taking the crafted result: stack onto the cursor if it matches, otherwise (cursor empty or holding something else) either place it on the cursor or push it straight into the main inventory.
+    // Taking the crafted result: stack onto the cursor if it matches, otherwise
+    // (cursor empty or holding something else) either place it on the cursor or
+    // push it straight into the main inventory.
     private void HandleResultClick()
     {
         var result = mCraftGrid.TakeResult();

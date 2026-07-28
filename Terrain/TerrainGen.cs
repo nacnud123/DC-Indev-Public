@@ -2,7 +2,15 @@
 namespace VoxelEngine.Terrain;
 
 /// <summary>
-/// Drives InDev-style multi-phase world generation for a single chunk at a time. Phases run in a fixed order from <see cref="GenerateChunk"/>: raise (heightmap) -> erode (smoothing) -> soil (stone/dirt/grass layering) -> caves (CaveCarver voids) -> ores (vein scattering) -> flood (water/lava fill) -> cave decoration (mushrooms/webs/clay/gravel) -> grow (trees/flowers/grass tufts). "Raise" and "erode" build a world-wide heightmap once (see EnsureHeightMap) and every other phase operates chunk-local using that shared heightmap. Floating worlds replace the "soil" phase with a two-noise carve (heightmap for the top surface, a second noise for the concave underside) and skip caves/flooding since floating islands have no ocean or below-island interior to carve.
+/// Drives InDev-style multi-phase world generation for a single chunk at a time. Phases run in a
+/// fixed order from <see cref="GenerateChunk"/>: raise (heightmap) -> erode (smoothing) -> soil
+/// (stone/dirt/grass layering) -> caves (CaveCarver voids) -> ores (vein scattering) -> flood
+/// (water/lava fill) -> cave decoration (mushrooms/webs/clay/gravel) -> grow (trees/flowers/grass
+/// tufts). "Raise" and "erode" build a world-wide heightmap once (see EnsureHeightMap) and every
+/// other phase operates chunk-local using that shared heightmap. Floating worlds replace the
+/// "soil" phase with a two-noise carve (heightmap for the top surface, a second noise for the
+/// concave underside) and skip caves/flooding since floating islands have no ocean or below-island
+/// interior to carve.
 /// </summary>
 public class TerrainGen
 {
@@ -21,7 +29,10 @@ public class TerrainGen
     // Divides total world area to get the target tree count; larger divisor = sparser forests.
     private const int TREE_DENSITY_DIVISOR = 200;
 
-    // Raising: two distorted noise pairs blended by a selector. Each "source" noise is domain-warped by its paired "distort" noise (the source is sampled at an X offset driven by the distort noise's output) to break up perfectly regular Perlin contours into more organic, InDev-style terrain shapes.
+    // Raising: two distorted noise pairs blended by a selector.
+    // Each "source" noise is domain-warped by its paired "distort" noise (the source is sampled at
+    // an X offset driven by the distort noise's output) to break up perfectly regular Perlin
+    // contours into more organic, InDev-style terrain shapes.
     private readonly FastNoiseLite mRaise1Source = CreateOctaveNoise(8);
     private readonly FastNoiseLite mRaise1Distort = CreateOctaveNoise(8);
     private readonly FastNoiseLite mRaise2Source = CreateOctaveNoise(8);
@@ -54,14 +65,18 @@ public class TerrainGen
     private int mLayerCount;
     private int[]? mLayerWaterLevels;
 
-    // Floating vegetation: while iterating layers in GenerateChunk, these bias GetHeight()/the vegetation floor so tree/flower/grass placement targets the current layer's surface instead of always the base layer. Reset to 0/SEA_LEVEL once all layers are processed.
+    // Floating vegetation: while iterating layers in GenerateChunk, these bias GetHeight()/the
+    // vegetation floor so tree/flower/grass placement targets the current layer's surface instead
+    // of always the base layer. Reset to 0/SEA_LEVEL once all layers are processed.
     private int mSurfaceYAdjust = 0;
     private int mVegetationFloor = SEA_LEVEL;
 
     public WorldGenSettings WorldSettings;
 
     /// <summary>
-    /// Frees the cached world-wide heightmap and floating-layer data. Called when a world is unloaded/regenerated so the next EnsureHeightMap call rebuilds from scratch instead of reusing stale data (e.g. if world size changed).
+    /// Frees the cached world-wide heightmap and floating-layer data. Called when a world is
+    /// unloaded/regenerated so the next EnsureHeightMap call rebuilds from scratch instead of
+    /// reusing stale data (e.g. if world size changed).
     /// </summary>
     public void ReleaseGenerationData()
     {
@@ -72,7 +87,13 @@ public class TerrainGen
     }
 
     /// <summary>
-    /// Runs every generation phase for one chunk, in order: ensures the shared heightmap exists, lays down stone/dirt/grass (soil), carves caves (skipped for Floating worlds, which have no solid interior to carve caves into), scatters ore veins, floods water/lava, decorates cave surfaces, then places vegetation. For Floating worlds, vegetation runs once per stacked island layer (adjusting <see cref="mSurfaceYAdjust"/>/<see cref="mVegetationFloor"/> so GetHeight and floor checks target each layer's own surface) instead of once for the whole column.
+    /// Runs every generation phase for one chunk, in order: ensures the shared heightmap exists,
+    /// lays down stone/dirt/grass (soil), carves caves (skipped for Floating worlds, which have no
+    /// solid interior to carve caves into), scatters ore veins, floods water/lava, decorates cave
+    /// surfaces, then places vegetation. For Floating worlds, vegetation runs once per stacked
+    /// island layer (adjusting <see cref="mSurfaceYAdjust"/>/<see cref="mVegetationFloor"/> so
+    /// GetHeight and floor checks target each layer's own surface) instead of once for the whole
+    /// column.
     /// </summary>
     public void GenerateChunk(World world, int chunkX, int chunkZ, int seed)
     {
@@ -131,7 +152,13 @@ public class TerrainGen
     }
 
     /// <summary>
-    /// Phase: raise + erode. Lazily builds (or rebuilds, if world size changed) the world-wide heightmap shared by every chunk. This is where "raise" (base terrain shape via blended, domain-warped Perlin noise, with world-type-specific edge falloff) and "erode" (noise-driven step smoothing) actually happen; every other generation phase just reads the resulting heightmap via <see cref="GetHeight"/>. For Floating worlds, also computes the stacked island layer water levels and biases the heightmap so GetHeight()+SEA_LEVEL lines up with the topmost layer's absolute surface Y.
+    /// Phase: raise + erode. Lazily builds (or rebuilds, if world size changed) the world-wide
+    /// heightmap shared by every chunk. This is where "raise" (base terrain shape via blended,
+    /// domain-warped Perlin noise, with world-type-specific edge falloff) and "erode" (noise-driven
+    /// step smoothing) actually happen; every other generation phase just reads the resulting
+    /// heightmap via <see cref="GetHeight"/>. For Floating worlds, also computes the stacked
+    /// island layer water levels and biases the heightmap so GetHeight()+SEA_LEVEL lines up with
+    /// the topmost layer's absolute surface Y.
     /// </summary>
     private void EnsureHeightMap(World world, int seed)
     {
@@ -154,7 +181,8 @@ public class TerrainGen
                 float fx = x * 1.3f;
                 float fz = z * 1.3f;
 
-                // Domain warp: offset the X sample of the "source" noise by the "distort" noise's output (scaled by 10) so straight Perlin contours become wavy/organic.
+                // Domain warp: offset the X sample of the "source" noise by the "distort" noise's
+                // output (scaled by 10) so straight Perlin contours become wavy/organic.
                 double warp1 = mRaise1Distort.GetNoise(fx, fz) * 10.0;
                 // "primary" terrain candidate: rescaled/re-centered so its useful range sits roughly around 0 (lower, rolling terrain).
                 double primary = mRaise1Source.GetNoise(fx + (float)warp1, fz) * 8.0 / 6.0 - 4.0;
@@ -163,7 +191,9 @@ public class TerrainGen
                 // "alternative" terrain candidate: rescaled and shifted +10 higher than primary, producing taller landmass where selected (mountains/highlands).
                 double alternative = mRaise2Source.GetNoise(fx + (float)warp2, fz) * 8.0 / 5.0 + 10.0 - 4.0;
 
-                // Selector noise decides, per-column, whether to fall back to "primary" instead of "alternative" - selector > 0 forces flatter terrain, creating sharp boundaries between highland and lowland regions rather than a smooth gradient.
+                // Selector noise decides, per-column, whether to fall back to "primary" instead of
+                // "alternative" - selector > 0 forces flatter terrain, creating sharp boundaries
+                // between highland and lowland regions rather than a smooth gradient.
                 double selector = mSelectorNoise.GetNoise((float)x, (float)z) * 6.0 / 8.0;
                 if (selector > 0.0)
                     alternative = primary;
@@ -202,7 +232,9 @@ public class TerrainGen
             }
         }
 
-        // Eroding: noise-driven step smoothing - ((h - mask) / 2 * 2) + mask. Only applied where a separate "erosionAmount" noise exceeds a threshold, so erosion is patchy rather than uniform across the whole map (mimics InDev's terracing/erosion look).
+        // Eroding: noise-driven step smoothing - ((h - mask) / 2 * 2) + mask.
+        // Only applied where a separate "erosionAmount" noise exceeds a threshold, so erosion is
+        // patchy rather than uniform across the whole map (mimics InDev's terracing/erosion look).
         for (int z = 0; z < mHmDepth; z++)
         {
             for (int x = 0; x < mHmWidth; x++)
@@ -220,7 +252,9 @@ public class TerrainGen
                 if (erosionAmount > 2.0)
                 {
                     int h = mHeightMap[x + z * mHmWidth];
-                    // Integer division by 2 then back to *2 snaps height to an even number (offset by mask), collapsing fine height variation into 2-block "steps"/terraces - this is the actual erosion/smoothing effect.
+                    // Integer division by 2 then back to *2 snaps height to an even number (offset
+                    // by mask), collapsing fine height variation into 2-block "steps"/terraces -
+                    // this is the actual erosion/smoothing effect.
                     h = ((h - mask) / 2 * 2) + mask;
                     mHeightMap[x + z * mHmWidth] = h;
                 }
@@ -243,7 +277,10 @@ public class TerrainGen
         }
     }
 
-    // Looks up the (possibly layer-adjusted, via mSurfaceYAdjust) heightmap value for a world column. Out-of-bounds columns return a low fallback (SEA_LEVEL - 10) so edge sampling (e.g. from CaveCarver-adjacent logic or tree canopy checks near chunk borders) doesn't index outside the heightmap array.
+    // Looks up the (possibly layer-adjusted, via mSurfaceYAdjust) heightmap value for a world
+    // column. Out-of-bounds columns return a low fallback (SEA_LEVEL - 10) so edge sampling
+    // (e.g. from CaveCarver-adjacent logic or tree canopy checks near chunk borders) doesn't index
+    // outside the heightmap array.
     private int GetHeight(int worldX, int worldZ)
     {
         if (worldX < 0 || worldX >= mHmWidth || worldZ < 0 || worldZ >= mHmDepth)
@@ -253,7 +290,10 @@ public class TerrainGen
     }
 
     /// <summary>
-    /// Phase: soil. Fills each column of the chunk with Bedrock (bottom layers) / Stone / Dirt / Grass (or Dirt for the Hell theme, which has no grass) up to the heightmap surface, with a noise-varied dirt layer thickness. Delegates to <see cref="GenerateSoilFloating"/> for Floating worlds, which use a different (carved, layered) surface shape.
+    /// Phase: soil. Fills each column of the chunk with Bedrock (bottom layers) / Stone / Dirt /
+    /// Grass (or Dirt for the Hell theme, which has no grass) up to the heightmap surface, with a
+    /// noise-varied dirt layer thickness. Delegates to <see cref="GenerateSoilFloating"/> for
+    /// Floating worlds, which use a different (carved, layered) surface shape.
     /// </summary>
     private void GenerateSoil(World world, int originX, int originZ)
     {
@@ -302,7 +342,11 @@ public class TerrainGen
     }
 
     /// <summary>
-    /// Floating-world variant of the soil phase. Heightmap drives the top surface; mCarveNoise determines the bottom via the InDev var76 formula. Cubic edge falloff (var27) tapers the island to nothing at world borders (so floating islands don't extend into the sky at the world edge). Runs once per stacked layer (see mLayerWaterLevels), each layer generating its own independent island slab bounded above by its water level and below by the carved floor.
+    /// Floating-world variant of the soil phase. Heightmap drives the top surface; mCarveNoise
+    /// determines the bottom via the InDev var76 formula. Cubic edge falloff (var27) tapers the
+    /// island to nothing at world borders (so floating islands don't extend into the sky at the
+    /// world edge). Runs once per stacked layer (see mLayerWaterLevels), each layer generating its
+    /// own independent island slab bounded above by its water level and below by the carved floor.
     /// </summary>
     private void GenerateSoilFloating(World world, int originX, int originZ)
     {
@@ -333,7 +377,8 @@ public class TerrainGen
                 double var27 = Math.Pow(Math.Max(Math.Abs(normX), Math.Abs(normZ)), 3.0);
 
                 double carveRaw = mCarveNoise.GetNoise(worldX * 2.3f, worldZ * 2.3f) / 24.0;
-                // Signed sqrt: sqrt(|x|) preserves the original sign but compresses large magnitudes, producing a carve depth that varies more gently than raw noise (avoids jagged undersides), then scaled up by 100 to reach block-scale depths.
+                // Signed sqrt: sqrt(|x|) preserves the original sign but compresses large magnitudes,
+                // producing a carve depth that varies more gently than raw noise (avoids jagged undersides), then scaled up by 100 to reach block-scale depths.
                 double sqrtCarve = Math.Sqrt(Math.Abs(carveRaw)) * Math.Sign(carveRaw) * 100.0;
 
                 for (int layer = 0; layer < mLayerCount; layer++)
@@ -371,7 +416,11 @@ public class TerrainGen
     }
 
     /// <summary>
-    /// Phase: grow (coastline pass, despite the "growing" name this does not place vegetation - see GenerateTrees/GenerateFlowers/GenerateGrassTufts for that). Converts grass/dirt near sea level into a coastal block (sand or gravel, per WorldSettings.CoastIsGrass), and adds scattered inland gravel patches on higher terrain. Skipped for Flat and Floating worlds, which have no sea-level coastline to dress.
+    /// Phase: grow (coastline pass, despite the "growing" name this does not place vegetation -
+    /// see GenerateTrees/GenerateFlowers/GenerateGrassTufts for that). Converts grass/dirt near
+    /// sea level into a coastal block (sand or gravel, per WorldSettings.CoastIsGrass), and adds
+    /// scattered inland gravel patches on higher terrain. Skipped for Flat and Floating worlds,
+    /// which have no sea-level coastline to dress.
     /// </summary>
     private void GenerateGrowing(World world, int originX, int originZ, int seed)
     {

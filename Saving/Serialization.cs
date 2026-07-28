@@ -14,7 +14,10 @@ public struct SaveBlock
 }
 
 /// <summary>
-/// Central hub for all on-disk persistence: per-chunk binary files (gzip-compressed, sparse - only non-air blocks are stored) and per-world XML metadata (seed, size, player state, etc). Also provides the world browser (main menu) with a sorted list of saved worlds. Every world lives under <c>DCIndevSaves/&lt;WorldName&gt;/</c>.
+/// Central hub for all on-disk persistence: per-chunk binary files (gzip-compressed, sparse - only
+/// non-air blocks are stored) and per-world XML metadata (seed, size, player state, etc). Also provides
+/// the world browser (main menu) with a sorted list of saved worlds. Every world lives under
+/// <c>DCIndevSaves/&lt;WorldName&gt;/</c>.
 /// </summary>
 public class Serialization
 {
@@ -135,7 +138,11 @@ public class Serialization
     }
 
     /// <summary>
-    /// Writes a chunk to <c>chunk_&lt;x&gt;_&lt;z&gt;.bin</c> in the active world's save folder using a sparse, gzip-compressed binary format: chunk coordinates, a count of non-air blocks, then for each one a packed 16-bit position index plus a block-type byte (with its high bit repurposed as a "has metadata" flag) and an optional metadata byte. Air blocks are never written since most of a chunk's volume is air - this keeps save files small. Overwrites any existing file for this chunk.
+    /// Writes a chunk to <c>chunk_&lt;x&gt;_&lt;z&gt;.bin</c> in the active world's save folder using a sparse,
+    /// gzip-compressed binary format: chunk coordinates, a count of non-air blocks, then for each one a packed
+    /// 16-bit position index plus a block-type byte (with its high bit repurposed as a "has metadata" flag)
+    /// and an optional metadata byte. Air blocks are never written since most of a chunk's volume is air -
+    /// this keeps save files small. Overwrites any existing file for this chunk.
     /// </summary>
     public static void SaveChunk(Chunk chunk)
     {
@@ -187,7 +194,9 @@ public class Serialization
     }
 
     /// <summary>
-    /// Reads a chunk's saved binary file (see <see cref="SaveChunk"/> for the format) and populates <paramref name="chunk"/> in place. Returns false without modifying the chunk if no save file exists yet (e.g. a chunk that has never been player-modified and can just be regenerated).
+    /// Reads a chunk's saved binary file (see <see cref="SaveChunk"/> for the format) and populates
+    /// <paramref name="chunk"/> in place. Returns false without modifying the chunk if no save file
+    /// exists yet (e.g. a chunk that has never been player-modified and can just be regenerated).
     /// </summary>
     public static bool Load(Chunk chunk)
     {
@@ -249,7 +258,10 @@ public class Serialization
     }
 
     /// <summary>
-    /// Scans the save root for every world subdirectory with valid metadata and returns them sorted most-recently-played first, for display in the world selection/main menu screen. Worlds with a missing/zeroed last-played timestamp fall back to the directory's creation time (or a year-old placeholder if that can't be read), so they still sort sensibly rather than floating to the top.
+    /// Scans the save root for every world subdirectory with valid metadata and returns them sorted
+    /// most-recently-played first, for display in the world selection/main menu screen. Worlds with a
+    /// missing/zeroed last-played timestamp fall back to the directory's creation time (or a year-old
+    /// placeholder if that can't be read), so they still sort sensibly rather than floating to the top.
     /// </summary>
     public static List<WorldSaveData> GetAllWorlds()
     {

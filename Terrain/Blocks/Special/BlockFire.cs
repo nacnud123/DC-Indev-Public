@@ -6,6 +6,15 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>
+/// Non-solid, damaging-by-nature (rendered via a dedicated Fire render type), self-consuming
+/// and spreading block modeled closely on Minecraft Indev-era fire. Uses per-position metadata
+/// as an age counter (0-15) that both gates when the fire attempts to spread and, combined with
+/// neighboring fuel, determines when it burns out. Ages via ScheduledTick, which is invoked
+/// every TickRate (20) ticks as long as the fire keeps rescheduling itself. Spread logic checks
+/// two static flammability tables (GetEncouragement/GetCatchability) to decide which neighboring
+/// blocks can ignite. Has no hardness (Hardness = 0) and drops nothing when removed.
+/// </summary>
 public class BlockFire : Block
 {
     public override BlockType Type => BlockType.Fire;
@@ -14,20 +23,33 @@ public class BlockFire : Block
     public override BlockBreakMaterial BreakMaterial => BlockBreakMaterial.None;
 
     public override bool IsSolid => false;
+    // Placing another block where fire currently is simply overwrites/extinguishes it.
     public override bool IsReplaceable => true;
     public override bool IsBreakable => true;
+    // No mining time and no drop - fire is "broken" instantly and yields nothing.
     public override float Hardness => 0f;
     public override ItemStack? GetDrop(byte metadata) => null;
+    // Never blocks light passing through it.
     public override int LightOpacity => 0;
+    // Bright light source (near-max of the 0-15 scale), so fire lights up its surroundings.
     public override int LightEmission => 12;
+    // Drives the ScheduledTick cadence below: fire re-evaluates itself every 20 ticks.
     public override int TickRate => 20;
 
+    // Atlas tile (6,7); the actual animated flame look comes from RenderType.Fire in the
+    // mesh builder/shader, not from switching texture coords here.
     public override TextureCoords TopTextureCoords => UvHelper.FromTileCoords(6, 7);
     public override TextureCoords BottomTextureCoords => TopTextureCoords;
     public override TextureCoords SideTextureCoords => TopTextureCoords;
 
     // --- Placement ---
 
+    /// <summary>
+    /// Called once immediately after fire is placed into the world (e.g. by TryIgniteNeighbor,
+    /// flint-and-steel, lava, etc.). Verifies the fire has something to sustain it - either solid
+    /// ground beneath it or at least one flammable neighbor - and immediately extinguishes itself
+    /// (reverts to Air) if not. Otherwise schedules its first ScheduledTick.
+    /// </summary>
     public override void OnPlaced(World world, int x, int y, int z)
     {
         // Fire needs a solid block below OR at least one flammable neighbor to survive.
@@ -42,6 +64,12 @@ public class BlockFire : Block
 
     // --- Scheduled tick (fires every 20 game ticks) ---
 
+    /// <summary>
+    /// Core fire simulation step, run every TickRate (20) ticks while the fire keeps
+    /// rescheduling itself. Three phases per call: (1) age the fire via its metadata byte,
+    /// (2) decide whether the fire survives this tick or burns out, (3) attempt to spread to
+    /// nearby flammable blocks. See inline PHASE comments below for the exact rules.
+    /// </summary>
     public override void ScheduledTick(World world, int x, int y, int z, Random random)
     {
         // PHASE 1: age the fire (metadata 0-15)
@@ -79,7 +107,8 @@ public class BlockFire : Block
         // PHASE 3: spread (only at ages 10 and 15)
         if (age % 5 == 0 && age > 5)
         {
-            // Mechanism A: directly ignite or consume the 6 face-adjacent blocks. Y-1 has a much higher chance (100) so fire drops aggressively downward.
+            // Mechanism A: directly ignite or consume the 6 face-adjacent blocks.
+            // Y-1 has a much higher chance (100) so fire drops aggressively downward.
             TryIgniteNeighbor(world, x - 1, y,     z,     300, random);
             TryIgniteNeighbor(world, x + 1, y,     z,     300, random);
             TryIgniteNeighbor(world, x,     y - 1, z,     100, random);
@@ -87,7 +116,9 @@ public class BlockFire : Block
             TryIgniteNeighbor(world, x,     y,     z - 1, 300, random);
             TryIgniteNeighbor(world, x,     y,     z + 1, 300, random);
 
-            // Mechanism B: long-range scan — any air block within a 3×3×6 volume (3 wide, 6 tall extending above) can spontaneously ignite if a flammable block neighbors it.  Height penalty makes upward leap increasingly rare.
+            // Mechanism B: long-range scan — any air block within a 3×3×6 volume
+            // (3 wide, 6 tall extending above) can spontaneously ignite if a flammable
+            // block neighbors it.  Height penalty makes upward leap increasingly rare.
             for (int nx = x - 1; nx <= x + 1; nx++)
             for (int ny = y - 1; ny <= y + 4; ny++)
             for (int nz = z - 1; nz <= z + 1; nz++)
@@ -105,19 +136,30 @@ public class BlockFire : Block
             }
         }
 
-        // Reschedule for the next tick.  ScheduleBlockTick is a no-op if the fire block was replaced during spread (e.g. by water), keeping the queue clean.
+        // Reschedule for the next tick.  ScheduleBlockTick is a no-op if the fire
+        // block was replaced during spread (e.g. by water), keeping the queue clean.
         world.ScheduleBlockTick(x, y, z);
     }
 
     // --- Visual (cosmetic only, no gameplay effect) ---
 
+    /// <summary>Purely cosmetic per-frame smoke particle spawn; does not affect simulation state.</summary>
     public override void RandomDisplayTick(int x, int y, int z, Random random)
     {
         Game.Instance?.ParticleSystem?.SpawnSmokeParticle(new Vector3(x, y, z));
     }
 
-    // --- Static flammability tables (Indev values) --- GetEncouragement  how strongly a block fuels nearby fire (higher = fire lasts longer) GetCatchability   how easily a block ignites (higher = catches fire faster)
+    // --- Static flammability tables (Indev values) ---
+    //
+    // GetEncouragement  how strongly a block fuels nearby fire (higher = fire lasts longer)
+    // GetCatchability   how easily a block ignites (higher = catches fire faster)
 
+    /// <summary>
+    /// "Encouragement" value for a block type: how strongly it sustains fire that is adjacent
+    /// to it. Used both to decide whether fire should keep burning (survival check) and, in
+    /// GetMaxEncouragement, to weight ignition chance during spread. 0 means the block gives
+    /// fire no fuel at all (non-flammable).
+    /// </summary>
     public static int GetEncouragement(BlockType type) => type switch
     {
         BlockType.Planks        => 5,
@@ -143,6 +185,11 @@ public class BlockFire : Block
         _ => 0
     };
 
+    /// <summary>
+    /// "Catchability" value for a block type: how likely it is to actually ignite (or be
+    /// consumed) when TryIgniteNeighbor rolls against it. Higher = catches faster/more often.
+    /// 0 means the block cannot catch fire at all.
+    /// </summary>
     public static int GetCatchability(BlockType type) => type switch
     {
         BlockType.Planks        => 20,
@@ -168,7 +215,7 @@ public class BlockFire : Block
         _ => 0
     };
 
-    // Returns true if any of the 6 face-adjacent blocks can catch fire.
+    /// <summary>Returns true if any of the 6 face-adjacent blocks can catch fire (encouragement > 0).</summary>
     public static bool CanNeighborCatchFire(World world, int x, int y, int z) =>
         GetEncouragement(world.GetBlock(x - 1, y, z)) > 0 ||
         GetEncouragement(world.GetBlock(x + 1, y, z)) > 0 ||
@@ -190,7 +237,8 @@ public class BlockFire : Block
         return max;
     }
 
-    // Attempt to ignite or consume the block at (x,y,z). chance is the roll denominator — lower = more likely (Y-1 uses 100, sides use 300).
+    // Attempt to ignite or consume the block at (x,y,z).
+    // chance is the roll denominator — lower = more likely (Y-1 uses 100, sides use 300).
     private static void TryIgniteNeighbor(World world, int x, int y, int z, int chance, Random random)
     {
         var blockType = world.GetBlock(x, y, z);

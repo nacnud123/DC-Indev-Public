@@ -53,7 +53,8 @@ public class TntEntity : Entity
         Game.Instance?.AudioManager.PlayAudio("Resources/Audio/TNTHiss.ogg", Game.Instance.AudioManager.SfxVol);
     }
 
-    // Builds a plain textured cube mesh by hand (2 triangles per face x 6 faces = 36 vertices) and uploads it to the GPU. This runs once when the TNT entity spawns, not every frame.
+    // Builds a plain textured cube mesh by hand (2 triangles per face x 6 faces = 36 vertices) and
+    // uploads it to the GPU. This runs once when the TNT entity spawns, not every frame.
     private void BuildCubeMesh()
     {
         var top = TextureBlock.TopTextureCoords;
@@ -153,7 +154,8 @@ public class TntEntity : Entity
 
         mFuseTimer -= dt;
 
-        // t goes from 0 (fuse just started) to 1 (about to explode), so the flash speeds up (flashInterval shrinks) the closer we get to exploding.
+        // t goes from 0 (fuse just started) to 1 (about to explode), so the flash speeds up
+        // (flashInterval shrinks) the closer we get to exploding.
         float t = MathF.Max(0f, 1f - mFuseTimer / inFuseTimer);
         float flashInterval = (FLASH_INTERVAL_START + (FLASH_INTERVAL_END - FLASH_INTERVAL_START) * t);
         mFlashTimer -= dt;

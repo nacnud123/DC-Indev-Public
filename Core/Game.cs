@@ -23,7 +23,11 @@ using Shader = VoxelEngine.Rendering.Shader;
 namespace VoxelEngine.Core;
 
 /// <summary>
-/// Drives which per-frame update/render path <see cref="Game"/> runs. Every state has a corresponding branch in the update and render dispatch (see the switch statements in OnUpdateFrame/OnRenderFrame region below) and typically its own ImGui screen instance. Only one state is active at a time; UI screens like Inventory/Crafting/Furnace/Chest are "paused-but-visible" states layered over the (frozen) world rather than separate scenes.
+/// Drives which per-frame update/render path <see cref="Game"/> runs. Every state has a
+/// corresponding branch in the update and render dispatch (see the switch statements in
+/// OnUpdateFrame/OnRenderFrame region below) and typically its own ImGui screen instance.
+/// Only one state is active at a time; UI screens like Inventory/Crafting/Furnace/Chest are
+/// "paused-but-visible" states layered over the (frozen) world rather than separate scenes.
 /// </summary>
 public enum GameState
 {
@@ -40,11 +44,19 @@ public enum GameState
 }
 
 /// <summary>
-/// Top-level owner of every engine subsystem: window/input, world/player, rendering, audio, and all UI screens. Wires Silk.NET's window lifecycle events (Load/Update/ Render/Resize/Closing) to its own methods and is the single process-wide instance accessed via <see cref="Instance"/>. Most cross-cutting game code (blocks, entities, UI) reaches back into engine state through <c>Game.Instance</c> rather than being passed references directly, so this class effectively acts as the service locator / composition root for the whole engine.
+/// Top-level owner of every engine subsystem: window/input, world/player, rendering,
+/// audio, and all UI screens. Wires Silk.NET's window lifecycle events (Load/Update/
+/// Render/Resize/Closing) to its own methods and is the single process-wide instance
+/// accessed via <see cref="Instance"/>. Most cross-cutting game code (blocks, entities,
+/// UI) reaches back into engine state through <c>Game.Instance</c> rather than being
+/// passed references directly, so this class effectively acts as the service locator /
+/// composition root for the whole engine.
 /// </summary>
 public class Game : IDisposable
 {
-    // Process-wide singleton, set at the top of OnLoad() once the window/GL context exist. Other systems (blocks, entities, UI) reach through this rather than holding direct references, since they're often instantiated far from where Game itself is created.
+    // Process-wide singleton, set at the top of OnLoad() once the window/GL context exist.
+    // Other systems (blocks, entities, UI) reach through this rather than holding direct
+    // references, since they're often instantiated far from where Game itself is created.
     public static Game Instance { get; private set; } = null!;
 
     #region Vars
@@ -119,7 +131,9 @@ public class Game : IDisposable
     private AudioManager mAudioManager;
     public AudioManager AudioManager => mAudioManager;
 
-    // Day/Night cycle Normalized position in the day/night cycle, in [0,1): 0=dawn, 0.25=noon, 0.5=dusk, 0.75=midnight. Advances by (deltaTime / DAY_LENGTH) each update and wraps via modulo.
+    // Day/Night cycle
+    // Normalized position in the day/night cycle, in [0,1): 0=dawn, 0.25=noon, 0.5=dusk,
+    // 0.75=midnight. Advances by (deltaTime / DAY_LENGTH) each update and wraps via modulo.
     private float mTimeOfDay = 0.0f; // 0=dawn, 0.25=noon, 0.5=dusk, 0.75=midnight
     private const float DAY_LENGTH = 1200f; // 10 minutes full cycle, in seconds
     public float TimeOfDay => mTimeOfDay;
@@ -132,7 +146,10 @@ public class Game : IDisposable
     // Structures
     private readonly StructureLoader mStructureLoader = new();
 
-    // Structure export selection corners F1/F2 set these two block-space corners in-game to mark a region for exporting to a JSON structure file (see StructureLoader); null until the player has pressed F1/F2 for this selection.
+    // Structure export selection corners
+    // F1/F2 set these two block-space corners in-game to mark a region for exporting to a
+    // JSON structure file (see StructureLoader); null until the player has pressed F1/F2
+    // for this selection.
     private Vector3i? mExportCorner1;
     private Vector3i? mExportCorner2;
 
@@ -140,7 +157,9 @@ public class Game : IDisposable
     private Random mGameRandom = new();
     public Random GameRandom => mGameRandom;
 
-    // ASCII post-processing effect: renders the normal scene to an off-screen framebuffer, then a fullscreen-quad shader pass samples it and maps each cell to an ASCII glyph from mAsciiAtlas, producing a text-mode-style visual filter when AsciiEnabled is true.
+    // ASCII post-processing effect: renders the normal scene to an off-screen framebuffer,
+    // then a fullscreen-quad shader pass samples it and maps each cell to an ASCII glyph
+    // from mAsciiAtlas, producing a text-mode-style visual filter when AsciiEnabled is true.
     private AsciiFramebuffer mAsciiFbo = null!;
     private Shader mAsciiShader = null!;
     private FullscreenQuad mFsQuad = null!;
@@ -148,19 +167,38 @@ public class Game : IDisposable
     private int mAsciiCharCount; // number of glyphs in mAsciiAtlas, used by the shader for lookup
     public bool AsciiEnabled { get; set; } = false;
 
+    /// <summary>
+    /// Applies a new UI scale live (options menu "Screen Scaling" setting) - updates
+    /// UIHelper.UI_SCALE (read by the custom-drawn hotbar/HUD/inventory screens on their next
+    /// draw) and tells the ImGui controller to rebuild its fonts/style at the new scale (native
+    /// menu widgets don't re-read UI_SCALE on their own since they're baked in at font/style
+    /// build time).
+    /// </summary>
+    public void SetUiScale(float uiScale)
+    {
+        UIHelper.UI_SCALE = uiScale;
+        mImGuiController?.ApplyUiScale(uiScale);
+    }
+
     // Game State
     public GameState CurrentState { get; private set; }
 
     #endregion
 
-    // Input helpers IsKeyPressed = true for exactly one frame, the frame the key was first pushed down (good for one-shot actions like opening inventory). IsKeyDown = true every frame the key is held (good for continuous actions like walking).
+    // Input helpers
+    // IsKeyPressed = true for exactly one frame, the frame the key was first pushed down (good
+    // for one-shot actions like opening inventory). IsKeyDown = true every frame the key is held
+    // (good for continuous actions like walking).
     public bool IsKeyPressed(SilkKey key) => mPressedThisFrame.Contains(key);
     public bool IsKeyDown(SilkKey key) => mKeyboard?.IsKeyPressed(key) ?? false;
     public bool IsMouseButtonPressed(SilkMouseButton button) => mMouseButtonsPressed.Contains(button);
     public bool IsMouseButtonDown(SilkMouseButton button) => mMouse?.IsButtonPressed(button) ?? false;
 
     /// <summary>
-    /// Creates the Silk.NET window (OpenGL 3.3 Core, no VSync) and wires its lifecycle events to this instance's handler methods. Does not create a GL context or start the message loop yet — that happens lazily when <see cref="Run"/> is called and Silk.NET fires <c>Load</c>.
+    /// Creates the Silk.NET window (OpenGL 3.3 Core, no VSync) and wires its lifecycle
+    /// events to this instance's handler methods. Does not create a GL context or start
+    /// the message loop yet — that happens lazily when <see cref="Run"/> is called and
+    /// Silk.NET fires <c>Load</c>.
     /// </summary>
     public Game(int width, int height, string title)
     {
@@ -171,9 +209,10 @@ public class Game : IDisposable
         options.Size = new Silk.NET.Maths.Vector2D<int>(width, height);
         options.Title = title;
         options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3));
-        options.VSync = false;
+        options.VSync = true;
 
-        // Create the window, then hook up our methods to Silk.NET's lifecycle events. None of these run yet - Run() below is what actually starts the window's main loop.
+        // Create the window, then hook up our methods to Silk.NET's lifecycle events. None of
+        // these run yet - Run() below is what actually starts the window's main loop.
         mWindow = Window.Create(options);
         mWindow.Load += OnLoad;
         mWindow.Update += OnUpdateFrame;
@@ -183,7 +222,9 @@ public class Game : IDisposable
     }
 
     /// <summary>
-    /// Blocks the calling thread and runs Silk.NET's main window loop (which internally pumps OnLoad, then repeatedly Update/Render, until the window is closed), then disposes the window. This is the entry point called from Program.Main.
+    /// Blocks the calling thread and runs Silk.NET's main window loop (which internally
+    /// pumps OnLoad, then repeatedly Update/Render, until the window is closed), then
+    /// disposes the window. This is the entry point called from Program.Main.
     /// </summary>
     public void Run()
     {
@@ -196,19 +237,26 @@ public class Game : IDisposable
 
     #region Life
 
-    // Runs once, after the window and GL context exist. Everything that needs a graphics context (shaders, textures, the world, UI screens) gets created here.
+    // Runs once, after the window and GL context exist. Everything that needs a graphics
+    // context (shaders, textures, the world, UI screens) gets created here.
     private void OnLoad()
     {
         Instance = this;
 
         GlContext.Gl = GL.GetApi(mWindow);
 
+        // Must run before any UI class (Hotbar, HudScreen, InventoryScreenBase-derived screens,
+        // ImGuiController) is constructed, since their pixel-size fields are computed from
+        // UIHelper.UI_SCALE at that point.
+        UIHelper.InitScale(mWindow.Size.Y);
+
         // Set up input
         mInputContext = mWindow.CreateInput();
         mKeyboard = mInputContext.Keyboards.Count > 0 ? mInputContext.Keyboards[0] : throw new Exception("No keyboard found");
         mMouse = mInputContext.Mice.Count > 0 ? mInputContext.Mice[0] : throw new Exception("No mouse found");
 
-        // Silk.NET only tells us "key went down" as an event, not "is it down right now" per frame, so we record it here and clear the set at the end of every Update.
+        // Silk.NET only tells us "key went down" as an event, not "is it down right now" per
+        // frame, so we record it here and clear the set at the end of every Update.
         mKeyboard.KeyDown += (kb, key, scancode) => mPressedThisFrame.Add(key);
         mKeyboard.KeyChar += (kb, c) => mImGuiController?.PressChar(c);
         mMouse.MouseDown += (mouse, button) => mMouseButtonsPressed.Add(button);
@@ -243,7 +291,9 @@ public class Game : IDisposable
         (mAsciiAtlas, mAsciiCharCount) = LoadAsciiAtlas();
     }
 
-    // Fires whenever the window is resized. Keeps the GL viewport, the player camera's aspect ratio, the ASCII post-process framebuffer, and ImGui all in sync with the new window dimensions.
+    // Fires whenever the window is resized. Keeps the GL viewport, the player camera's
+    // aspect ratio, the ASCII post-process framebuffer, and ImGui all in sync with the new
+    // window dimensions.
     private void OnResize(Silk.NET.Maths.Vector2D<int> size)
     {
         GlContext.Gl.Viewport(0, 0, (uint)size.X, (uint)size.Y);
@@ -260,10 +310,12 @@ public class Game : IDisposable
         mImGuiController?.WindowResized(size.X, size.Y);
     }
 
-    // Guards against double-disposal: Silk.NET's Closing event and an explicit Dispose() call could both reach OnUnload, so this flag makes the cleanup idempotent.
+    // Guards against double-disposal: Silk.NET's Closing event and an explicit Dispose()
+    // call could both reach OnUnload, so this flag makes the cleanup idempotent.
     private bool mUnloaded;
 
-    // Frees all GL-backed and unmanaged resources. Runs on window close (via mWindow.Closing) and/or explicit Dispose(); guarded by mUnloaded so it only ever executes once.
+    // Frees all GL-backed and unmanaged resources. Runs on window close (via mWindow.Closing)
+    // and/or explicit Dispose(); guarded by mUnloaded so it only ever executes once.
     private void OnUnload()
     {
         if (mUnloaded) return;
@@ -297,7 +349,9 @@ public class Game : IDisposable
 
     #region Inits
 
-    // One-time GL state setup: background clear color (sky blue, used before the sky shader/dome takes over), depth testing for correct 3D occlusion, and backface culling with counter-clockwise winding as the "front" face convention used by all mesh builders.
+    // One-time GL state setup: background clear color (sky blue, used before the sky
+    // shader/dome takes over), depth testing for correct 3D occlusion, and backface culling
+    // with counter-clockwise winding as the "front" face convention used by all mesh builders.
     private void InitGl()
     {
         var gl = GlContext.Gl;
@@ -329,7 +383,8 @@ public class Game : IDisposable
         gl.FrontFace(FrontFaceDirection.Ccw);
     }
 
-    // Loads all shaders/textures/subsystems that don't depend on a specific world/save (as opposed to InitWorld, which is per-save). Called once from OnLoad.
+    // Loads all shaders/textures/subsystems that don't depend on a specific world/save
+    // (as opposed to InitWorld, which is per-save). Called once from OnLoad.
     private void LoadResources()
     {
         mShader = new Shader(File.ReadAllText("Shaders/vertex.glsl"), File.ReadAllText("Shaders/fragment.glsl"));
@@ -352,7 +407,11 @@ public class Game : IDisposable
         Entity.PlayStepSoundCallback = mAudioManager.PlayBlockContactSound;
     }
 
-    // Loads or creates the current save (Serialization.WorldName), constructs the World, Player, inventory, and dependent systems, restores saved state (position, health, inventory, paintings, entities, block entities), and — for a brand-new world only — places starting structures. Called when transitioning from MainMenu/Loading into Playing.
+    // Loads or creates the current save (Serialization.WorldName), constructs the World,
+    // Player, inventory, and dependent systems, restores saved state (position, health,
+    // inventory, paintings, entities, block entities), and — for a brand-new world only —
+    // places starting structures. Called when transitioning from MainMenu/Loading into
+    // Playing.
     private void InitWorld()
     {
         bool isNewWorld = !Serialization.HasSavedChunks(Serialization.WorldName);
@@ -369,7 +428,8 @@ public class Game : IDisposable
         IsCreative = worldData.IsCreative;
         this.mTimeOfDay = worldData.WorldTime;
 
-        // Normalize the loaded time-of-day back into [0,1) in case it was saved slightly out of range (e.g. from floating point drift over a long play session).
+        // Normalize the loaded time-of-day back into [0,1) in case it was saved slightly
+        // out of range (e.g. from floating point drift over a long play session).
         mTimeOfDay -= MathF.Floor(mTimeOfDay);
         if (mTimeOfDay < 0f)
             mTimeOfDay += 1f;
@@ -450,12 +510,17 @@ public class Game : IDisposable
             mStructureLoader.PlaceUnderground(mWorld, dungeon, changeRandomBlocks: true,
                 rndOriginalType: BlockType.CobbleStone, rndNewType: BlockType.MossyCobblestone, rndChance: .5f);
 
-            // Newly-placed structures make many chunks dirty; force all of them to be treated as modified so they get written out by the save system rather than being silently regenerated from the seed (which would lose the placement) on next load.
+            // Newly-placed structures make many chunks dirty; force all of them to be
+            // treated as modified so they get written out by the save system rather than
+            // being silently regenerated from the seed (which would lose the placement)
+            // on next load.
             mWorld.MarkAllChunksWithBlocksAsModified();
         }
     }
 
-    // Creates the ImGuiController and every UI screen instance up front (screens are cheap to keep alive and swap visibility on rather than construct/destroy per state change), then wires the few cross-screen callbacks (pause menu buttons, death screen, main menu).
+    // Creates the ImGuiController and every UI screen instance up front (screens are cheap
+    // to keep alive and swap visibility on rather than construct/destroy per state change),
+    // then wires the few cross-screen callbacks (pause menu buttons, death screen, main menu).
     private void InitUi()
     {
         mImGuiController = new ImGuiController(mWindow.Size.X, mWindow.Size.Y);
@@ -485,7 +550,10 @@ public class Game : IDisposable
 
     #region Update
 
-    // Runs once per frame. CurrentState decides which "screen" is active - most non-Playing states are just an inventory-like screen layered on top of the normal game (world keeps ticking via UpdateGameLogic, but Escape/inventory key closes the screen instead of opening the pause menu).
+    // Runs once per frame. CurrentState decides which "screen" is active - most non-Playing
+    // states are just an inventory-like screen layered on top of the normal game (world keeps
+    // ticking via UpdateGameLogic, but Escape/inventory key closes the screen instead of opening
+    // the pause menu).
     private void OnUpdateFrame(double deltaTime)
     {
         float dt = (float)deltaTime;
@@ -501,7 +569,10 @@ public class Game : IDisposable
                 mLoadingScreen?.Render();
                 mLoadingFrames++;
 
-                // Wait a few frames before calling the (synchronous, blocking) InitWorld so the loading screen actually gets a chance to be drawn and presented to the player first; otherwise the world generation would run within the same frame the state changed to Loading and the screen would never be seen.
+                // Wait a few frames before calling the (synchronous, blocking) InitWorld so
+                // the loading screen actually gets a chance to be drawn and presented to the
+                // player first; otherwise the world generation would run within the same
+                // frame the state changed to Loading and the screen would never be seen.
                 if (mLoadingFrames >= 3)
                 {
                     InitWorld();
@@ -617,7 +688,10 @@ public class Game : IDisposable
         mMouseButtonsPressed.Clear();
     }
 
-    // Handles all per-frame input for the Playing state: debug toggles/hotkeys, mouse-look, hotbar slot selection, item dropping, and player/attack/interaction updates. Only called while GameState.Playing is active (other states have their own more limited Escape/inventory-key handling inline in OnUpdateFrame).
+    // Handles all per-frame input for the Playing state: debug toggles/hotkeys, mouse-look,
+    // hotbar slot selection, item dropping, and player/attack/interaction updates. Only
+    // called while GameState.Playing is active (other states have their own more limited
+    // Escape/inventory-key handling inline in OnUpdateFrame).
     private void ProcessInput(float dt)
     {
         mPlayer.SelectedBlock = mHotbar?.GetSelectedBlock() ?? BlockType.Air;
@@ -625,7 +699,11 @@ public class Game : IDisposable
         if (IsKeyPressed(Keybindings.Wireframe))
         {
             mWireframeMode = !mWireframeMode;
-            // NOTE: ImGuiController unconditionally resets GL PolygonMode to Fill every frame (see its Render/NewFrame code) without restoring whatever mode was active before it ran. Since ImGui renders after the 3D world each frame, this stomps the wireframe toggle here almost immediately, silently breaking the X-key wireframe view. Known issue, not fixed here.
+            // NOTE: ImGuiController unconditionally resets GL PolygonMode to Fill every
+            // frame (see its Render/NewFrame code) without restoring whatever mode was
+            // active before it ran. Since ImGui renders after the 3D world each frame,
+            // this stomps the wireframe toggle here almost immediately, silently breaking
+            // the X-key wireframe view. Known issue, not fixed here.
             GlContext.Gl.PolygonMode(TriangleFace.FrontAndBack, mWireframeMode ? PolygonMode.Line : PolygonMode.Fill);
         }
 
@@ -651,7 +729,9 @@ public class Game : IDisposable
         if (IsKeyPressed(Keybindings.Screenshot))
             TakeIsoScreenshot();
 
-        // F1/F2: structure export tool. F1 marks the first corner of a box under the crosshair, F2 marks the second and immediately serializes every block within the resulting box to a new JSON structure file via StructureLoader.Export.
+        // F1/F2: structure export tool. F1 marks the first corner of a box under the
+        // crosshair, F2 marks the second and immediately serializes every block within the
+        // resulting box to a new JSON structure file via StructureLoader.Export.
         if (IsKeyPressed(SilkKey.F1))
         {
             var hit = mWorld.Raycast(mPlayer.Camera.Position, mPlayer.Camera.Front);
@@ -690,7 +770,10 @@ public class Game : IDisposable
 
         if (mCursorGrabbed)
         {
-            // On the first frame after grabbing the cursor (or right after startup), there's no previous mouse position to diff against, which would otherwise produce a huge spurious look-delta jump. Snap mLastMousePos to the current position once instead so the first frame's delta is zero.
+            // On the first frame after grabbing the cursor (or right after startup), there's
+            // no previous mouse position to diff against, which would otherwise produce a
+            // huge spurious look-delta jump. Snap mLastMousePos to the current position once
+            // instead so the first frame's delta is zero.
             if (mFirstMouse)
             {
                 mLastMousePos = mMousePosition;
@@ -765,7 +848,8 @@ public class Game : IDisposable
         }
     }
 
-    // F7: renders an off-screen isometric snapshot of the world (see IsoScreenshot) and saves it to the user's Documents folder, independent of the normal first-person view.
+    // F7: renders an off-screen isometric snapshot of the world (see IsoScreenshot) and
+    // saves it to the user's Documents folder, independent of the normal first-person view.
     private void TakeIsoScreenshot()
     {
         if (mWorld == null || mPlayer == null)
@@ -785,18 +869,25 @@ public class Game : IDisposable
             mPlayer.SelectedBlock = block.Value;
     }
 
-    // Runs the actual simulation: day/night, entities, and however many fixed-length "ticks" have built up since last frame (see TickSystem - this decouples game logic speed from framerate).
+    // Runs the actual simulation: day/night, entities, and however many fixed-length "ticks" have
+    // built up since last frame (see TickSystem - this decouples game logic speed from framerate).
     private void UpdateGameLogic(float dt)
     {
         Entity.ListenerPosition = mPlayer.Position;
         Entity.SfxVol = mAudioManager.SfxVol;
 
-        // Day/night advances continuously with real elapsed time (not per-tick), so it stays smooth even if the fixed-tick loop below runs zero or many ticks this frame.
+        // Day/night advances continuously with real elapsed time (not per-tick), so it stays
+        // smooth even if the fixed-tick loop below runs zero or many ticks this frame.
         mTimeOfDay += dt / DAY_LENGTH;
         if (mTimeOfDay >= 1f)
             mTimeOfDay -= 1f;
 
-        // Everything in this loop runs at a fixed 20 Hz regardless of framerate (see TickSystem). Order matters: entities tick before mob spawning (so newly-dead entities are removed before spawn caps are counted), world block/light updates happen before scheduled/random ticks (so e.g. water flow this tick sees freshly placed/removed blocks), and furnace ticking is last so it reflects this tick's world state.
+        // Everything in this loop runs at a fixed 20 Hz regardless of framerate (see
+        // TickSystem). Order matters: entities tick before mob spawning (so newly-dead
+        // entities are removed before spawn caps are counted), world block/light updates
+        // happen before scheduled/random ticks (so e.g. water flow this tick sees freshly
+        // placed/removed blocks), and furnace ticking is last so it reflects this tick's
+        // world state.
         int ticks = mTickSystem.Accumulate(dt);
         for (int i = 0; i < ticks; i++)
         {
@@ -825,7 +916,8 @@ public class Game : IDisposable
 
     #region Render
 
-    // Runs once per frame after Update. Draws the 3D world (optionally through the ASCII post-processing pass) and then the ImGui-based UI on top.
+    // Runs once per frame after Update. Draws the 3D world (optionally through the ASCII
+    // post-processing pass) and then the ImGui-based UI on top.
     private void OnRenderFrame(double deltaTime)
     {
         var gl = GlContext.Gl;
@@ -834,7 +926,8 @@ public class Game : IDisposable
         {
             UpdateTitle(deltaTime);
 
-            // ASCII mode: render the normal scene into an off-screen framebuffer first, then draw a fullscreen quad that turns it into colored ASCII characters via a shader.
+            // ASCII mode: render the normal scene into an off-screen framebuffer first, then draw
+            // a fullscreen quad that turns it into colored ASCII characters via a shader.
             if (AsciiEnabled)
             {
                 gl.BindFramebuffer(FramebufferTarget.Framebuffer, mAsciiFbo.Fbo);
@@ -877,7 +970,9 @@ public class Game : IDisposable
         // Silk.NET swaps buffers automatically
     }
 
-    // Rebuilds the window title once per second with FPS/TPS/position/mode/time debug info (the game has no persistent on-screen debug overlay, so the title bar serves as one). hours24 remaps mTimeOfDay (0=dawn) to a 24-hour clock where dawn reads as 06:00.
+    // Rebuilds the window title once per second with FPS/TPS/position/mode/time debug info
+    // (the game has no persistent on-screen debug overlay, so the title bar serves as one).
+    // hours24 remaps mTimeOfDay (0=dawn) to a 24-hour clock where dawn reads as 06:00.
     private void UpdateTitle(double deltaTime)
     {
         mFrameCount++;
@@ -908,13 +1003,22 @@ public class Game : IDisposable
         }
     }
 
-    // Builds the GL texture atlas used by the ASCII post-processing shader (see AsciiEnabled/OnRenderFrame). Each character glyph is hand-encoded as a 64-bit bitmask representing an 8x8 pixel grid (1 bit per pixel, row-major), baked into `glyphs` below; this method rasterizes those bitmasks into actual texture pixels and uploads them as a horizontal strip atlas (one 8x8 glyph per column), in the same left-to-right order as `chars`, so the shader can look up a glyph by its brightness-sorted index.
+    // Builds the GL texture atlas used by the ASCII post-processing shader (see
+    // AsciiEnabled/OnRenderFrame). Each character glyph is hand-encoded as a 64-bit bitmask
+    // representing an 8x8 pixel grid (1 bit per pixel, row-major), baked into `glyphs`
+    // below; this method rasterizes those bitmasks into actual texture pixels and uploads
+    // them as a horizontal strip atlas (one 8x8 glyph per column), in the same left-to-right
+    // order as `chars`, so the shader can look up a glyph by its brightness-sorted index.
     private (uint texId, int charCount) LoadAsciiAtlas()
     {
         string chars = " .'`^\",:;il!i+_-?|/\\(){}[]<>tfjrxnuvczXYUJCLQ0OZmwqpdbkhaoegsyISTADEFGHKNPRVegsyIo*#MW&8%B@$23456791█";
         int charW = 8, charH = 8;
 
-        // Each entry maps a character to its 8x8 monochrome glyph bitmap, packed as a 64-bit integer (bit i = pixel (i%8, i/8), 1 = filled). Ordered/selected so that `chars` above goes roughly from "visually sparse" to "visually dense" glyphs, letting the ASCII shader approximate per-pixel brightness of the source scene by picking a glyph whose ink density matches.
+        // Each entry maps a character to its 8x8 monochrome glyph bitmap, packed as a
+        // 64-bit integer (bit i = pixel (i%8, i/8), 1 = filled). Ordered/selected so that
+        // `chars` above goes roughly from "visually sparse" to "visually dense" glyphs,
+        // letting the ASCII shader approximate per-pixel brightness of the source scene by
+        // picking a glyph whose ink density matches.
         var glyphs = new Dictionary<char, ulong>
         {
             [' '] = 0x0000000000000000UL,
@@ -1021,7 +1125,8 @@ public class Game : IDisposable
             ulong glyph = glyphs.TryGetValue(chars[ci], out var g) ? g : 0UL;
             for (int row = 0; row < charH; row++)
             {
-                // The 64-bit glyph is packed most-significant-byte-first as row 0, so shift right by (56 - row*8) to bring the current row's 8 bits into the low byte.
+                // The 64-bit glyph is packed most-significant-byte-first as row 0, so shift
+                // right by (56 - row*8) to bring the current row's 8 bits into the low byte.
                 byte rowBits = (byte)((glyph >> (56 - row * 8)) & 0xFF);
                 for (int col = 0; col < charW; col++)
                 {
@@ -1055,20 +1160,29 @@ public class Game : IDisposable
 
     #region Cursor
 
-    // Disabled cursor mode both hides the OS cursor and lets Silk.NET report unbounded relative mouse motion (needed for FPS-style look), vs. Normal mode for UI screens where the player needs a visible, unconstrained cursor to click widgets.
+    // Disabled cursor mode both hides the OS cursor and lets Silk.NET report unbounded
+    // relative mouse motion (needed for FPS-style look), vs. Normal mode for UI screens
+    // where the player needs a visible, unconstrained cursor to click widgets.
     private void SetCursorGrabbed(bool grabbed)
     {
         mCursorGrabbed = grabbed;
         if (mMouse != null)
             mMouse.Cursor.CursorMode = grabbed ? CursorMode.Disabled : CursorMode.Normal;
         if (grabbed)
-            // Re-grabbing after being ungrabbed means the OS may have moved/reset the mouse position outside our tracking, so force a re-sync next frame (see mFirstMouse handling in ProcessInput) to avoid a big spurious look-delta jump.
+            // Re-grabbing after being ungrabbed means the OS may have moved/reset the mouse
+            // position outside our tracking, so force a re-sync next frame (see mFirstMouse
+            // handling in ProcessInput) to avoid a big spurious look-delta jump.
             mFirstMouse = true;
     }
 
     #endregion
 
-    // The Open*/Close* method pairs below (Inventory/Crafting/Furnace/Chest/DoubleChest) all follow the same pattern: switch CurrentState, release the cursor so the player can interact with ImGui widgets, and re-center the OS cursor so it doesn't reappear wherever it happened to be during first-person mouse-look. Close* additionally lets the screen commit any pending change (e.g. writing back inventory slot edits) via its OnClose() before returning control to Playing.
+    // The Open*/Close* method pairs below (Inventory/Crafting/Furnace/Chest/DoubleChest)
+    // all follow the same pattern: switch CurrentState, release the cursor so the player
+    // can interact with ImGui widgets, and re-center the OS cursor so it doesn't reappear
+    // wherever it happened to be during first-person mouse-look. Close* additionally lets
+    // the screen commit any pending change (e.g. writing back inventory slot edits) via its
+    // OnClose() before returning control to Playing.
     #region Game State
 
     private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0,
@@ -1186,7 +1300,10 @@ public class Game : IDisposable
     private void LoadWorldEntities(List<SavedEntity> saved) =>
         WorldEntitySerializer.Load(saved, mWorld, WorldTexture);
 
-    // Writes the current save to disk: only chunks flagged HasChunkBeenModified are rewritten (unmodified chunks can always be regenerated identically from the seed, so skipping them significantly cuts save time/disk writes on large worlds), plus block entities, player state, inventory, paintings, and world entities via XML metadata.
+    // Writes the current save to disk: only chunks flagged HasChunkBeenModified are
+    // rewritten (unmodified chunks can always be regenerated identically from the seed, so
+    // skipping them significantly cuts save time/disk writes on large worlds), plus block
+    // entities, player state, inventory, paintings, and world entities via XML metadata.
     private void SaveWorldToDisk()
     {
         int savedCount = 0;
@@ -1244,7 +1361,9 @@ public class Game : IDisposable
 
     private void SaveGame() => SaveWorldToDisk();
 
-    // Releases the current world/player and all session-scoped renderer state, then returns to the main menu. Shared by both the "save and quit" and "quit without saving" (e.g. after death) flows below.
+    // Releases the current world/player and all session-scoped renderer state, then
+    // returns to the main menu. Shared by both the "save and quit" and "quit without
+    // saving" (e.g. after death) flows below.
     private void TeardownWorld()
     {
         mRenderer.ClearSession();

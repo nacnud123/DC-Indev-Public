@@ -43,7 +43,8 @@ public abstract class BlockWheatBase : Block
 
     public override ItemStack? GetDrop(byte metadata)
     {
-        // Drop is handled via OnRemoved / RandomTick for multi-drop. For tool breaking, return seeds as fallback.
+        // Drop is handled via OnRemoved / RandomTick for multi-drop.
+        // For tool breaking, return seeds as fallback.
         return ItemStack.FromItem(ItemType.Seeds);
     }
 

@@ -4,7 +4,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Static registry of every crafting recipe in the game. Recipes are registered once in the static constructor (<see cref="RegisterAll"/>) and matched linearly (first match wins) against a live crafting grid's contents whenever the UI needs to know what, if anything, the current arrangement of items crafts.
+/// Static registry of every crafting recipe in the game. Recipes are registered once in the
+/// static constructor (<see cref="RegisterAll"/>) and matched linearly (first match wins)
+/// against a live crafting grid's contents whenever the UI needs to know what, if anything,
+/// the current arrangement of items crafts.
 /// </summary>
 public static class CraftingRegistry
 {
@@ -30,7 +33,11 @@ public static class CraftingRegistry
     }
 
     /// <summary>
-    /// Shaped-recipe matching: first finds the bounding box of non-empty cells in the grid (so the pattern can be placed anywhere in a larger grid, e.g. a 2x2 pattern in a 3x3 workbench grid), checks its size matches the recipe, then compares contents — trying both the normal orientation and a horizontal mirror (since many recipes like axes/hoes are handed and should still craft when placed mirrored).
+    /// Shaped-recipe matching: first finds the bounding box of non-empty cells in the grid
+    /// (so the pattern can be placed anywhere in a larger grid, e.g. a 2x2 pattern in a 3x3
+    /// workbench grid), checks its size matches the recipe, then compares contents — trying
+    /// both the normal orientation and a horizontal mirror (since many recipes like axes/hoes
+    /// are handed and should still craft when placed mirrored).
     /// </summary>
     private static bool MatchShaped(CraftingRecipe recipe, ItemStack?[] grid, int gridWidth, int gridHeight)
     {
@@ -72,7 +79,9 @@ public static class CraftingRegistry
     }
 
     /// <summary>
-    /// Compares the recipe's ingredient pattern against the grid's content bounding box, cell by cell. When mirrorH is true, recipe columns are read right-to-left, allowing e.g. an axe recipe to match whether the handle is placed on the left or right.
+    /// Compares the recipe's ingredient pattern against the grid's content bounding box,
+    /// cell by cell. When mirrorH is true, recipe columns are read right-to-left, allowing
+    /// e.g. an axe recipe to match whether the handle is placed on the left or right.
     /// </summary>
     private static bool ComparePattern(CraftingRecipe recipe, ItemStack?[] grid, int gridWidth, int minRow, int minCol, bool mirrorH)
     {
@@ -99,7 +108,10 @@ public static class CraftingRegistry
     }
 
     /// <summary>
-    /// Shapeless-recipe matching: ignores slot positions entirely and just checks that the grid contains exactly the same set of distinct items with exactly the same counts as the recipe's ingredient list (note: ItemStack equality ignores Count, so counting by occurrence per distinct stack is what enforces quantity here).
+    /// Shapeless-recipe matching: ignores slot positions entirely and just checks that the
+    /// grid contains exactly the same set of distinct items with exactly the same counts as
+    /// the recipe's ingredient list (note: ItemStack equality ignores Count, so counting by
+    /// occurrence per distinct stack is what enforces quantity here).
     /// </summary>
     private static bool MatchShapeless(CraftingRecipe recipe, ItemStack?[] grid)
     {
@@ -134,7 +146,9 @@ public static class CraftingRegistry
         return counts;
     }
 
-    // Registers every recipe in the game. Local helpers B()/I() build a single-count ItemStack for a block/item respectively, and single-letter locals (W, P, C, S, Di, Fe, Au, St, Wo) alias common ingredients so the shaped patterns below read as a visual grid layout.
+    // Registers every recipe in the game. Local helpers B()/I() build a single-count ItemStack
+    // for a block/item respectively, and single-letter locals (W, P, C, S, Di, Fe, Au, St, Wo)
+    // alias common ingredients so the shaped patterns below read as a visual grid layout.
     private static void RegisterAll()
     {
         // Short aliases so pattern arrays read as visual grids below.

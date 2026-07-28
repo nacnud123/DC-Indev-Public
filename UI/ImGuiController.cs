@@ -13,7 +13,12 @@ using SilkKey = Silk.NET.Input.Key;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Hand-rolled ImGui.NET backend for Silk.NET (deliberately not the Silk.NET.OpenGL.Extensions.ImGui package, so the game controls exactly how ImGui's own GL resources and draw calls interact with the rest of the renderer). Owns ImGui's device objects (VAO/VBO/EBO/font texture/shader), feeds it per-frame input from Silk.NET's IMouse/IKeyboard, and issues its draw calls each frame. Because this runs interleaved with the world renderer (HUD/menus draw every frame on top of the 3D scene), RenderImDrawData is careful to save and restore any GL state it touches - see the comments there.
+/// Hand-rolled ImGui.NET backend for Silk.NET (deliberately not the Silk.NET.OpenGL.Extensions.ImGui
+/// package, so the game controls exactly how ImGui's own GL resources and draw calls interact with
+/// the rest of the renderer). Owns ImGui's device objects (VAO/VBO/EBO/font texture/shader), feeds it
+/// per-frame input from Silk.NET's IMouse/IKeyboard, and issues its draw calls each frame. Because
+/// this runs interleaved with the world renderer (HUD/menus draw every frame on top of the 3D scene),
+/// RenderImDrawData is careful to save and restore any GL state it touches - see the comments there.
 /// </summary>
 public class ImGuiController : IDisposable
 {
@@ -30,6 +35,12 @@ public class ImGuiController : IDisposable
     private int mShaderFontTextureLocation;
     private int mShaderProjectionMatrixLocation;
 
+    // ImGui's pristine default style, snapshotted once before any scaling is ever applied.
+    // ApplyUiScale() restores this baseline before re-scaling so repeated scale changes at
+    // runtime don't compound on top of an already-scaled style (ScaleAllSizes multiplies
+    // whatever is currently set).
+    private ImGuiStyle mBaseStyle;
+
     private int mWindowWidth;
     private int mWindowHeight;
 
@@ -45,28 +56,26 @@ public class ImGuiController : IDisposable
         ImGui.SetCurrentContext(context);
         var io = ImGui.GetIO();
 
-        // Default font used by most UI text; kept as a static so screens can reference it without going through the controller instance.
-        fontNormal = io.Fonts.AddFontDefault();
+        // Snapshot ImGui's pristine (unscaled) default style before touching it. ApplyUiScale()
+        // always re-scales from this baseline, so it's safe to call more than once at runtime.
+        unsafe { mBaseStyle = *ImGui.GetStyle().NativePtr; }
 
-        unsafe
-        {
-            // Second font atlas entry at a larger fixed pixel size, used for titles/headers. Oversample 1 + PixelSnapH keeps it crisp at this exact size rather than smoothed.
-            ImFontConfigPtr config = ImGuiNative.ImFontConfig_ImFontConfig();
-            config.OversampleH = 1;
-            config.OversampleV = 1;
-            config.PixelSnapH = true;
-            config.SizePixels = 26;
-            fontLarge = io.Fonts.AddFontDefault(config);
-        }
+        // Both fonts and every native ImGui widget metric (padding, spacing, button size, etc.)
+        // are scaled by UIHelper.UI_SCALE so native-widget screens (main menu, pause, death,
+        // options, ...) match the custom-drawn hotbar/HUD/inventory scale on the same window.
+        BuildFonts(UIHelper.UI_SCALE);
+        ApplyStyleScale(UIHelper.UI_SCALE);
 
-        // VtxOffset lets ImGui reuse a 16-bit index buffer across draw lists larger than 65536 vertices (via glDrawElementsBaseVertex) instead of forcing 32-bit indices everywhere.
+        // VtxOffset lets ImGui reuse a 16-bit index buffer across draw lists larger than 65536
+        // vertices (via glDrawElementsBaseVertex) instead of forcing 32-bit indices everywhere.
         io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
         io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 
         CreateDeviceResources();
         SetPerFrameImGuiData(1f / 60f);
 
-        // Start the first ImGui frame immediately so screens can call ImGui.* before the first real Update() tick (e.g. during Game.Load).
+        // Start the first ImGui frame immediately so screens can call ImGui.* before the first
+        // real Update() tick (e.g. during Game.Load).
         ImGui.NewFrame();
         mFrameBegun = true;
     }
@@ -77,10 +86,68 @@ public class ImGuiController : IDisposable
         mWindowHeight = height;
     }
 
+    /// <summary>
+    /// Re-applies UI_SCALE to fonts and native ImGui widget metrics. Unlike the constructor's
+    /// one-time setup, this is safe to call repeatedly at runtime (e.g. every time the player
+    /// changes the scaling option) - fonts are rebuilt from scratch and style metrics are always
+    /// re-derived from the pristine baseline captured in the constructor, so nothing compounds.
+    /// </summary>
+    public void ApplyUiScale(float uiScale)
+    {
+        BuildFonts(uiScale);
+        RecreateFontDeviceTexture();
+        ApplyStyleScale(uiScale);
+    }
+
+    /// <summary>
+    /// (Re)builds the font atlas at the given scale. Clears any previously registered fonts
+    /// first so this can be called again later without accumulating duplicate font entries.
+    /// </summary>
+    private unsafe void BuildFonts(float uiScale)
+    {
+        var io = ImGui.GetIO();
+        io.Fonts.Clear();
+
+        // Default font used by most UI text; kept as a static so screens can reference it
+        // without going through the controller instance. 13px is ImGui's built-in default
+        // size - an explicit config is needed here (instead of AddFontDefault()) to scale it.
+        ImFontConfigPtr normalConfig = ImGuiNative.ImFontConfig_ImFontConfig();
+        normalConfig.OversampleH = 1;
+        normalConfig.OversampleV = 1;
+        normalConfig.PixelSnapH = true;
+        normalConfig.SizePixels = 13f * uiScale;
+        fontNormal = io.Fonts.AddFontDefault(normalConfig);
+
+        // Second font atlas entry at a larger fixed pixel size, used for titles/headers.
+        // Oversample 1 + PixelSnapH keeps it crisp at this exact size rather than smoothed.
+        ImFontConfigPtr config = ImGuiNative.ImFontConfig_ImFontConfig();
+        config.OversampleH = 1;
+        config.OversampleV = 1;
+        config.PixelSnapH = true;
+        config.SizePixels = 26f * uiScale;
+        fontLarge = io.Fonts.AddFontDefault(config);
+    }
+
+    /// <summary>
+    /// Resets ImGui's style to the pristine baseline captured in the constructor, then scales it.
+    /// Always resetting first (rather than calling ScaleAllSizes directly on the live style)
+    /// is what makes this idempotent - calling it twice in a row with the same scale doesn't
+    /// double-apply it.
+    /// </summary>
+    private unsafe void ApplyStyleScale(float uiScale)
+    {
+        var style = ImGui.GetStyle();
+        *style.NativePtr = mBaseStyle;
+        style.ScaleAllSizes(uiScale);
+    }
+
     public void DestroyDeviceObjects() => Dispose();
 
     /// <summary>
-    /// Allocates ImGui's own VAO/VBO/EBO, compiles its shader, and uploads the font atlas. Buffer sizes start small and are grown on demand in RenderImDrawData. Saves/restores the caller's VAO/VBO bindings so this can safely run mid-frame without disturbing whatever the game was about to bind next.
+    /// Allocates ImGui's own VAO/VBO/EBO, compiles its shader, and uploads the font atlas.
+    /// Buffer sizes start small and are grown on demand in RenderImDrawData. Saves/restores the
+    /// caller's VAO/VBO bindings so this can safely run mid-frame without disturbing whatever the
+    /// game was about to bind next.
     /// </summary>
     public void CreateDeviceResources()
     {
@@ -142,7 +209,8 @@ void main()
         mShaderProjectionMatrixLocation = gl.GetUniformLocation(mShader, "projection_matrix");
         mShaderFontTextureLocation = gl.GetUniformLocation(mShader, "in_fontTexture");
 
-        // ImDrawVert's layout is fixed by ImGui itself: 2 floats position, 2 floats UV, 4 bytes RGBA color (packed, hence UnsignedByte + normalize=true). Offsets below match that struct.
+        // ImDrawVert's layout is fixed by ImGui itself: 2 floats position, 2 floats UV, 4 bytes
+        // RGBA color (packed, hence UnsignedByte + normalize=true). Offsets below match that struct.
         uint stride = (uint)Unsafe.SizeOf<ImDrawVert>();
         gl.VertexAttribPointer(0, 2, GLEnum.Float, false, stride, 0);
         gl.VertexAttribPointer(1, 2, GLEnum.Float, false, stride, 8);
@@ -156,7 +224,8 @@ void main()
     }
 
     /// <summary>
-    /// Rasterizes ImGui's font atlas (all registered fonts packed into one bitmap) into a GL texture. Called once at startup; would need to be called again if fonts were added/changed at runtime.
+    /// Rasterizes ImGui's font atlas (all registered fonts packed into one bitmap) into a GL texture.
+    /// Called at startup, and again from ApplyUiScale() whenever fonts are rebuilt at runtime.
     /// </summary>
     public void RecreateFontDeviceTexture()
     {
@@ -170,6 +239,12 @@ void main()
         gl.GetInteger(GetPName.ActiveTexture, out int prevActiveTexture);
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.GetInteger(GetPName.TextureBinding2D, out int prevTexture2D);
+
+        // Rescaling (ApplyUiScale) calls this again later, at which point mFontTexture already
+        // holds a live GL texture from the previous build - free it first so scale changes don't
+        // leak a texture object every time.
+        if (mFontTexture != 0)
+            gl.DeleteTexture(mFontTexture);
 
         mFontTexture = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, mFontTexture);
@@ -205,7 +280,9 @@ void main()
     }
 
     /// <summary>
-    /// Called once per game tick before any ImGui.* UI code runs. Closes out the previous frame if Render() wasn't called on it (defensive - avoids ImGui asserting on NewFrame-without-Render), pushes fresh input state, and opens the next frame.
+    /// Called once per game tick before any ImGui.* UI code runs. Closes out the previous frame if
+    /// Render() wasn't called on it (defensive - avoids ImGui asserting on NewFrame-without-Render),
+    /// pushes fresh input state, and opens the next frame.
     /// </summary>
     public void Update(float deltaSeconds, IMouse mouse, IKeyboard keyboard)
     {
@@ -224,7 +301,9 @@ void main()
         io.DeltaTime = deltaSeconds;
     }
 
-    // Text-input characters queued by PressChar (fed from the window's character-typed event) and flushed into ImGui's IO once per Update - keeps this decoupled from the raw key-down events used for TranslateKey below, since ImGui wants Unicode text input separately from key codes.
+    // Text-input characters queued by PressChar (fed from the window's character-typed event) and
+    // flushed into ImGui's IO once per Update - keeps this decoupled from the raw key-down events
+    // used for TranslateKey below, since ImGui wants Unicode text input separately from key codes.
     readonly List<char> mPressedChars = new();
 
     private void UpdateImGuiInput(IMouse mouse, IKeyboard keyboard)
@@ -237,7 +316,9 @@ void main()
 
         io.MousePos = new System.Numerics.Vector2(mouse.Position.X, mouse.Position.Y);
 
-        // Every frame, walk the full Silk.NET Key enum and tell ImGui the down/up state of each one. This is a polling approach (not event-driven), so it's simple but does mean ImGui itself handles edge-detection (e.g. "was this key just pressed this frame") internally.
+        // Every frame, walk the full Silk.NET Key enum and tell ImGui the down/up state of each one.
+        // This is a polling approach (not event-driven), so it's simple but does mean ImGui itself
+        // handles edge-detection (e.g. "was this key just pressed this frame") internally.
         foreach (SilkKey key in Enum.GetValues<SilkKey>())
         {
             if (key == SilkKey.Unknown) continue;
@@ -263,7 +344,15 @@ void main()
     }
 
     /// <summary>
-    /// Translates ImGui's recorded draw commands (vertex/index buffers + per-command clip rects and textures) into actual GL calls. This runs every frame after the world/entities/HUD have already rendered, so it must not leave GL in a state the *next* frame's world render doesn't expect - every piece of state this method changes (bindings, blend/cull/depth/scissor toggles, polygon mode, active texture unit) is queried up front and restored at the end. This save/ restore discipline is what the wireframe-toggle bug taught us matters: this method used to force PolygonMode to Fill without saving/restoring it, which silently undid the game's wireframe debug toggle every single frame since this runs after the toggle's effect. The prevPolygonMode save/restore pair below is the fix.
+    /// Translates ImGui's recorded draw commands (vertex/index buffers + per-command clip rects and
+    /// textures) into actual GL calls. This runs every frame after the world/entities/HUD have
+    /// already rendered, so it must not leave GL in a state the *next* frame's world render doesn't
+    /// expect - every piece of state this method changes (bindings, blend/cull/depth/scissor toggles,
+    /// polygon mode, active texture unit) is queried up front and restored at the end. This save/
+    /// restore discipline is what the wireframe-toggle bug taught us matters: this method used to
+    /// force PolygonMode to Fill without saving/restoring it, which silently undid the game's
+    /// wireframe debug toggle every single frame since this runs after the toggle's effect. The
+    /// prevPolygonMode save/restore pair below is the fix.
     /// </summary>
     private void RenderImDrawData(ImDrawDataPtr drawData)
     {
@@ -291,18 +380,22 @@ void main()
         Span<int> prevScissorBox = stackalloc int[4];
         unsafe { fixed (int* p = prevScissorBox) { gl.GetInteger(GetPName.ScissorBox, p); } }
 
-        // PolygonMode is queried as 2 ints (front-face mode, back-face mode) even though the game always sets both faces together via TriangleFace.FrontAndBack - GL_POLYGON_MODE just always reports both slots, so index [0] is enough to restore correctly below.
+        // PolygonMode is queried as 2 ints (front-face mode, back-face mode) even though the game
+        // always sets both faces together via TriangleFace.FrontAndBack - GL_POLYGON_MODE just
+        // always reports both slots, so index [0] is enough to restore correctly below.
         Span<int> prevPolygonMode = stackalloc int[2];
         unsafe { fixed (int* p = prevPolygonMode) { gl.GetInteger(GetPName.PolygonMode, p); } }
 
-        // ImGui is always drawn filled/solid regardless of the game's wireframe debug toggle - wireframe mode is meant to visualize world geometry, not the UI on top of it.
+        // ImGui is always drawn filled/solid regardless of the game's wireframe debug toggle -
+        // wireframe mode is meant to visualize world geometry, not the UI on top of it.
         gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
         gl.ActiveTexture(TextureUnit.Texture0);
 
         gl.BindVertexArray(mVertexArray);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVertexBuffer);
 
-        // Grow the shared vertex/index buffers (1.5x) if this frame's UI needs more room than last frame's allocation - avoids reallocating every frame once a high-water mark is hit.
+        // Grow the shared vertex/index buffers (1.5x) if this frame's UI needs more room than
+        // last frame's allocation - avoids reallocating every frame once a high-water mark is hit.
         for (int i = 0; i < drawData.CmdListsCount; i++)
         {
             ImDrawListPtr cmdList = drawData.CmdLists[i];
@@ -325,7 +418,8 @@ void main()
         }
 
         ImGuiIOPtr io = ImGui.GetIO();
-        // Simple 2D orthographic projection in screen pixels, Y-down (top=0) to match ImGui's own screen-space coordinate convention rather than GL's usual bottom-left origin.
+        // Simple 2D orthographic projection in screen pixels, Y-down (top=0) to match ImGui's own
+        // screen-space coordinate convention rather than GL's usual bottom-left origin.
         Matrix4x4 mvp = Matrix4x4.CreateOrthographicOffCenter(0f, io.DisplaySize.X, io.DisplaySize.Y, 0f, -1f, 1f);
 
         gl.UseProgram(mShader);
@@ -336,7 +430,8 @@ void main()
         gl.BindVertexArray(mVertexArray);
         drawData.ScaleClipRects(io.DisplayFramebufferScale);
 
-        // Standard alpha-blended, unculled, non-depth-tested UI rendering: text/icons need blending, 2D quads have no "back face" to cull, and UI should always draw on top regardless of depth.
+        // Standard alpha-blended, unculled, non-depth-tested UI rendering: text/icons need blending,
+        // 2D quads have no "back face" to cull, and UI should always draw on top regardless of depth.
         gl.Enable(EnableCap.Blend);
         gl.Enable(EnableCap.ScissorTest);
         gl.BlendEquation(BlendEquationModeEXT.FuncAdd);
@@ -344,7 +439,8 @@ void main()
         gl.Disable(EnableCap.CullFace);
         gl.Disable(EnableCap.DepthTest);
 
-        // One draw call per ImGui draw-list (roughly: one per ImGui window/layer), each potentially spanning multiple ImDrawCmd entries (one per distinct texture/clip-rect within that list).
+        // One draw call per ImGui draw-list (roughly: one per ImGui window/layer), each potentially
+        // spanning multiple ImDrawCmd entries (one per distinct texture/clip-rect within that list).
         for (int n = 0; n < drawData.CmdListsCount; n++)
         {
             ImDrawListPtr cmdList = drawData.CmdLists[n];
@@ -364,13 +460,16 @@ void main()
                 gl.ActiveTexture(TextureUnit.Texture0);
                 gl.BindTexture(TextureTarget.Texture2D, (uint)(nint)pcmd.TextureId);
 
-                // ImGui's clip rect is in screen space with Y-down/top-left origin; GL's scissor box is Y-up/bottom-left origin, hence flipping via (mWindowHeight - clip.W).
+                // ImGui's clip rect is in screen space with Y-down/top-left origin; GL's scissor box
+                // is Y-up/bottom-left origin, hence flipping via (mWindowHeight - clip.W).
                 var clip = pcmd.ClipRect;
                 gl.Scissor((int)clip.X, mWindowHeight - (int)clip.W, (uint)(clip.Z - clip.X), (uint)(clip.W - clip.Y));
 
                 unsafe
                 {
-                    // BaseVertex draw path lets each draw command reference vertices at an offset into the shared buffer without ImGui having to rebase indices itself - only available/used when RendererHasVtxOffset was advertised in Update() above.
+                    // BaseVertex draw path lets each draw command reference vertices at an offset
+                    // into the shared buffer without ImGui having to rebase indices itself - only
+                    // available/used when RendererHasVtxOffset was advertised in Update() above.
                     if ((io.BackendFlags & ImGuiBackendFlags.RendererHasVtxOffset) != 0)
                         gl.DrawElementsBaseVertex(PrimitiveType.Triangles, pcmd.ElemCount, DrawElementsType.UnsignedShort, (void*)(pcmd.IdxOffset * sizeof(ushort)), (int)pcmd.VtxOffset);
                     else
@@ -382,7 +481,8 @@ void main()
         gl.Disable(EnableCap.Blend);
         gl.Disable(EnableCap.ScissorTest);
 
-        // --- Restore every piece of state snapshotted above, in no particular order, so the next frame's world render (and any wireframe/other debug toggles) sees GL exactly as it left it ---
+        // --- Restore every piece of state snapshotted above, in no particular order, so the next
+        // frame's world render (and any wireframe/other debug toggles) sees GL exactly as it left it ---
         gl.BindTexture(TextureTarget.Texture2D, (uint)prevTexture2D);
         gl.ActiveTexture((TextureUnit)prevActiveTexture);
         gl.UseProgram((uint)prevProgram);
@@ -471,7 +571,9 @@ void main()
     }
 
     /// <summary>
-    /// Maps a Silk.NET key to ImGui's own key enum. Contiguous ranges (digits, letters, keypad, function keys) are mapped by offset arithmetic since both enums keep those runs in order; everything else falls through to an explicit lookup table below.
+    /// Maps a Silk.NET key to ImGui's own key enum. Contiguous ranges (digits, letters, keypad,
+    /// function keys) are mapped by offset arithmetic since both enums keep those runs in order;
+    /// everything else falls through to an explicit lookup table below.
     /// </summary>
     public static ImGuiKey TranslateKey(SilkKey key)
     {

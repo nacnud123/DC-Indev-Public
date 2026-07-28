@@ -6,12 +6,17 @@ using SilkKey = Silk.NET.Input.Key;
 namespace VoxelEngine.Core;
 
 /// <summary>
-/// Static, process-wide registry mapping abstract player <see cref="Action"/>s to concrete Silk.NET keyboard keys, plus load/save of a simple "Action=Key" text config file so rebindings persist between sessions. Game code should always look up keys through this class (e.g. <see cref="MoveForward"/>) rather than hardcoding a <see cref="SilkKey"/>, so that any future in-game rebind UI works everywhere automatically.
+/// Static, process-wide registry mapping abstract player <see cref="Action"/>s to concrete
+/// Silk.NET keyboard keys, plus load/save of a simple "Action=Key" text config file so
+/// rebindings persist between sessions. Game code should always look up keys through this
+/// class (e.g. <see cref="MoveForward"/>) rather than hardcoding a <see cref="SilkKey"/>,
+/// so that any future in-game rebind UI works everywhere automatically.
 /// </summary>
 public static class Keybindings
 {
     /// <summary>
-    /// Abstract, rebindable player actions. Game logic should branch on these rather than on raw keys, so a user rebind takes effect without touching gameplay code.
+    /// Abstract, rebindable player actions. Game logic should branch on these rather than
+    /// on raw keys, so a user rebind takes effect without touching gameplay code.
     /// </summary>
     public enum Action
     {
@@ -59,7 +64,8 @@ public static class Keybindings
     /// <summary>Rebinds an action to a new key at runtime (not persisted until <see cref="Save"/> is called).</summary>
     public static void Set(Action action, SilkKey key) => Bindings[action] = key;
 
-    // Convenience properties so call sites read as `Keybindings.Jump` instead of `Keybindings.Get(Keybindings.Action.Jump)`.
+    // Convenience properties so call sites read as `Keybindings.Jump` instead of
+    // `Keybindings.Get(Keybindings.Action.Jump)`.
     public static SilkKey MoveForward => Get(Action.MoveForward);
     public static SilkKey MoveBack => Get(Action.MoveBack);
     public static SilkKey MoveLeft => Get(Action.MoveLeft);
@@ -81,7 +87,9 @@ public static class Keybindings
     private const string SavePath = "keybindings.cfg";
 
     /// <summary>
-    /// Writes all current bindings to <see cref="SavePath"/> as simple "Action=Key" lines (one per binding), using the enum names' ToString() representations so they can be round-tripped by Enum.TryParse in <see cref="Load"/>.
+    /// Writes all current bindings to <see cref="SavePath"/> as simple "Action=Key" lines
+    /// (one per binding), using the enum names' ToString() representations so they can be
+    /// round-tripped by Enum.TryParse in <see cref="Load"/>.
     /// </summary>
     public static void Save()
     {
@@ -91,7 +99,10 @@ public static class Keybindings
     }
 
     /// <summary>
-    /// Reads <see cref="SavePath"/> if it exists and overlays any successfully-parsed bindings on top of the defaults. Malformed lines or unrecognized enum names are silently skipped, leaving the default binding for that action in place (keeps a hand-edited or stale config file from crashing the game on startup).
+    /// Reads <see cref="SavePath"/> if it exists and overlays any successfully-parsed
+    /// bindings on top of the defaults. Malformed lines or unrecognized enum names are
+    /// silently skipped, leaving the default binding for that action in place (keeps a
+    /// hand-edited or stale config file from crashing the game on startup).
     /// </summary>
     public static void Load()
     {

@@ -11,11 +11,18 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.BlockEntities;
 
 /// <summary>
-/// Static registry of all "block entities" in the currently loaded world - chests, double chests, and furnaces - keyed by their world-space block position. Block entities hold state that a plain block byte in the chunk data cannot (inventory slots, furnace burn progress, etc). This class is the single source of truth for that state: chunk meshing/serialization only knows about the block type/metadata, while this manager tracks the "rich" data attached to specific positions. Also owns furnace ticking (fuel consumption / smelting progress) and XML save/load of all block entity data to a separate file from the chunk binaries.
+/// Static registry of all "block entities" in the currently loaded world - chests, double chests,
+/// and furnaces - keyed by their world-space block position. Block entities hold state that a plain
+/// block byte in the chunk data cannot (inventory slots, furnace burn progress, etc). This class is
+/// the single source of truth for that state: chunk meshing/serialization only knows about the block
+/// type/metadata, while this manager tracks the "rich" data attached to specific positions.
+/// Also owns furnace ticking (fuel consumption / smelting progress) and XML save/load of all block
+/// entity data to a separate file from the chunk binaries.
 /// </summary>
 public static class BlockEntityManager
 {
-    // Keyed by world position (not chunk-local) so lookups from raycasts/interactions are O(1) regardless of which chunk the position falls in.
+    // Keyed by world position (not chunk-local) so lookups from raycasts/interactions are O(1)
+    // regardless of which chunk the position falls in.
     private static readonly Dictionary<Vector3i, IBlockEntity> BlockEntities = new();
 
     /// <summary>Returns the chest at <paramref name="pos"/>, creating and registering a new empty one if none exists yet.</summary>
@@ -59,7 +66,8 @@ public static class BlockEntityManager
     }
 
     /// <summary>
-    /// Removes the block entity at <paramref name="pos"/> (e.g. because the block was broken), dropping any items it held into the world first.
+    /// Removes the block entity at <paramref name="pos"/> (e.g. because the block was broken),
+    /// dropping any items it held into the world first.
     /// </summary>
     public static void DestroyAt(Vector3i pos, World world)
     {
@@ -83,7 +91,8 @@ public static class BlockEntityManager
     }
 
     /// <summary>
-    /// Advances a single furnace by one tick: consumes fuel when needed, swaps the world block between lit/unlit furnace variants to match burn state, and progresses/produces smelting output.
+    /// Advances a single furnace by one tick: consumes fuel when needed, swaps the world block between
+    /// lit/unlit furnace variants to match burn state, and progresses/produces smelting output.
     /// </summary>
     private static void TickFurnace(FurnaceData f, World world)
     {
@@ -140,7 +149,9 @@ public static class BlockEntityManager
     }
 
     /// <summary>
-    /// Replaces the world block at <paramref name="pos"/> with <paramref name="to"/> only if it currently matches <paramref name="from"/>, preserving metadata (facing, etc.) across the swap and flagging the owning chunk dirty so it gets remeshed/resaved.
+    /// Replaces the world block at <paramref name="pos"/> with <paramref name="to"/> only if it currently
+    /// matches <paramref name="from"/>, preserving metadata (facing, etc.) across the swap and flagging the
+    /// owning chunk dirty so it gets remeshed/resaved.
     /// </summary>
     private static void SwapBlock(World world, Vector3i pos, BlockType from, BlockType to)
     {
@@ -195,7 +206,9 @@ public static class BlockEntityManager
     public static void Clear() => BlockEntities.Clear();
 
     /// <summary>
-    /// Serializes every registered furnace/chest/double chest to <c>block_entities.xml</c> under the given world save directory. Stored separately from chunk binaries because block entity data (inventory contents, burn state) doesn't fit the compact per-block chunk format.
+    /// Serializes every registered furnace/chest/double chest to <c>block_entities.xml</c> under the
+    /// given world save directory. Stored separately from chunk binaries because block entity data
+    /// (inventory contents, burn state) doesn't fit the compact per-block chunk format.
     /// </summary>
     public static void Save(string worldSavePath)
     {
@@ -252,7 +265,9 @@ public static class BlockEntityManager
     }
 
     /// <summary>
-    /// Clears the current registry and repopulates it from <c>block_entities.xml</c> in the given world save directory. No-op (leaves the registry empty) if the file doesn't exist yet, e.g. a save created before block entities existed, or a world with no chests/furnaces.
+    /// Clears the current registry and repopulates it from <c>block_entities.xml</c> in the given world
+    /// save directory. No-op (leaves the registry empty) if the file doesn't exist yet, e.g. a save created
+    /// before block entities existed, or a world with no chests/furnaces.
     /// </summary>
     public static void Load(string worldSavePath)
     {

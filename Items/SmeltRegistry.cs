@@ -21,7 +21,10 @@ public class SmeltRecipe
 }
 
 /// <summary>
-/// Static registry of furnace smelting recipes and fuel burn-time values. Recipes are matched against a furnace's input slot by stack equality (item/block type only, per <see cref="ItemStack.Equals"/>). Fuel values are keyed by the block/item's enum name string rather than the type itself so both BlockType and ItemType fuels share one dictionary.
+/// Static registry of furnace smelting recipes and fuel burn-time values. Recipes are matched
+/// against a furnace's input slot by stack equality (item/block type only, per
+/// <see cref="ItemStack.Equals"/>). Fuel values are keyed by the block/item's enum name string
+/// rather than the type itself so both BlockType and ItemType fuels share one dictionary.
 /// </summary>
 public static class SmeltRegistry
 {
@@ -67,7 +70,9 @@ public static class SmeltRegistry
         Recipes.Add(new SmeltRecipe(I(ItemType.RawPork),      I(ItemType.CookedPork)));
     }
 
-    // Registers fuel burn durations, in smelt-ticks. Coal burns longest; plank/leaf-derived fuels are shorter, and wood-family blocks that aren't obviously fuel (workbench, chest, stairs) still burn since they're made of wood.
+    // Registers fuel burn durations, in smelt-ticks. Coal burns longest; plank/leaf-derived
+    // fuels are shorter, and wood-family blocks that aren't obviously fuel (workbench, chest,
+    // stairs) still burn since they're made of wood.
     private static void RegisterFuels()
     {
         void Fuel(string key, int ticks) => FuelValues[key] = ticks;

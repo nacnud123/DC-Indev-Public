@@ -8,7 +8,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Passive mob: a pig. Wanders the world via <see cref="PassiveEntityAi"/>, procedurally animates its body/head/legs each tick (no skeletal animation - each part is its own mesh moved with its own transform), and drops raw pork when killed.
+/// Passive mob: a pig. Wanders the world via <see cref="PassiveEntityAi"/>, procedurally
+/// animates its body/head/legs each tick (no skeletal animation - each part is its own
+/// mesh moved with its own transform), and drops raw pork when killed.
 /// </summary>
 public class Pig : Entity
 {
@@ -28,7 +30,8 @@ public class Pig : Entity
     private static readonly Vector3 BackRightLegOffset  = new(-0.125f, 0, -0.0625f);
     private static readonly Vector3 BackLeftLegOffset   = new(-0.125f, 0, 0.0625f);
 
-    // Pivot points (relative to each part's own origin) that rotations are applied around, so the head/legs swing from their joint rather than their mesh center.
+    // Pivot points (relative to each part's own origin) that rotations are applied around,
+    // so the head/legs swing from their joint rather than their mesh center.
     private static readonly Vector3 HeadPivot = new(-0.0625f, 0.0625f, 0f);
     private static readonly Vector3 LegPivot  = new(0.03125f, 0.0875f, 0.03125f);
 
@@ -50,7 +53,8 @@ public class Pig : Entity
     private float mHeadPitch;   // current smoothed head pitch offset (radians)
     private float mIdleSoundTimer; // seconds until next random idle oink; re-randomized each time it fires
 
-    // Fixed stats for pigs: collision box dims, render scale, and movement speed are constants (setters are no-ops because the base Entity exposes these as settable, but Pig intentionally does not allow per-instance variation).
+    // Fixed stats for pigs: collision box dims, render scale, and movement speed are constants (setters are no-ops
+    // because the base Entity exposes these as settable, but Pig intentionally does not allow per-instance variation).
     public override float Width { get => 0.9f; set { } }
     public override float Height { get => 0.9f; set { } }
     public override float Scale { get => 4f; set { } }
@@ -108,7 +112,8 @@ public class Pig : Entity
         }
     }
 
-    // Play the walking animation if the pig is moving. Basically swings the legs back and forth. Also, if the player gets close enough the pig will look at the player. This is purely cosmetic per-tick animation state - it does not affect physics or AI decisions.
+    // Play the walking animation if the pig is moving. Basically swings the legs back and forth. Also, if the player gets close enough the pig will look at the player.
+    // This is purely cosmetic per-tick animation state - it does not affect physics or AI decisions.
     private void UpdateAnimation()
     {
         float dt = TickSystem.TICK_DURATION;
@@ -135,7 +140,8 @@ public class Pig : Entity
 
             if (distSq < HEAD_LOOK_RANGE * HEAD_LOOK_RANGE && distSq > 0.01f)
             {
-                // Yaw needed to face the player, converted into the pig's local space (subtract entity Yaw) and offset by PI/2 because Atan2(X,Z) and the pig's forward axis are 90 degrees apart.
+                // Yaw needed to face the player, converted into the pig's local space (subtract entity Yaw)
+                // and offset by PI/2 because Atan2(X,Z) and the pig's forward axis are 90 degrees apart.
                 float relativeYaw = MathF.Atan2(toPlayer.X, toPlayer.Z) - MathF.PI / 2f - Yaw;
                 // Normalize into [-PI, PI] so the shortest turn direction is used.
                 while (relativeYaw > MathF.PI)
@@ -164,7 +170,9 @@ public class Pig : Entity
     }
 
     /// <summary>
-    /// Renders the pig by drawing each body part with its own model matrix (body, head with yaw/pitch applied at the neck pivot, and four legs mirrored front/back and swung in diagonal pairs like a real quadruped gait).
+    /// Renders the pig by drawing each body part with its own model matrix (body, head with
+    /// yaw/pitch applied at the neck pivot, and four legs mirrored front/back and swung in
+    /// diagonal pairs like a real quadruped gait).
     /// </summary>
     protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {
@@ -173,13 +181,15 @@ public class Pig : Entity
 
         DrawPart(mBodyModel, Matrix4x4.CreateTranslation(BodyOffset) * entityBase * vp);
 
-        // Rotate the head about its pivot (translate to origin, rotate, translate back + offset) rather than the model's own origin, so it swivels naturally from the neck joint.
+        // Rotate the head about its pivot (translate to origin, rotate, translate back + offset) rather
+        // than the model's own origin, so it swivels naturally from the neck joint.
         Matrix4x4 headLocal = Matrix4x4.CreateTranslation(-HeadPivot)
             * Matrix4x4.CreateRotationZ(mHeadPitch) * Matrix4x4.CreateRotationY(mHeadYaw)
             * Matrix4x4.CreateTranslation(HeadPivot + HeadOffset);
         DrawPart(mHeadModel, headLocal * entityBase * vp);
 
-        // Diagonal gait: front-left+back-right swing together (swing1), front-right+back-left swing in antiphase (swing2, offset by PI), mimicking a real quadruped's walk cycle.
+        // Diagonal gait: front-left+back-right swing together (swing1), front-right+back-left
+        // swing in antiphase (swing2, offset by PI), mimicking a real quadruped's walk cycle.
         float swing1 = MathF.Sin(mWalkPhase) * MAX_LEG_SWING * mLegSwing;
         float swing2 = MathF.Sin(mWalkPhase + MathF.PI) * MAX_LEG_SWING * mLegSwing;
         DrawLeg(swing1, FrontLeftLegOffset, entityBase, vp);

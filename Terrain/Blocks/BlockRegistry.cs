@@ -6,10 +6,15 @@ using VoxelEngine.Rendering;
 
 namespace VoxelEngine.Terrain.Blocks;
 
-// Keeps exactly one instance of each Block subclass (one BlockGrass, one BlockStone, etc.) and looks them up by BlockType. Since a Chunk only stores a block's BlockType (a single byte per block, see Chunk.mBlocks), this registry is how code turns that byte back into the actual Block object with its properties/behavior. To add a new block: create the class, register it in the static constructor below, and add a matching value to the BlockType enum.
+// Keeps exactly one instance of each Block subclass (one BlockGrass, one BlockStone, etc.) and
+// looks them up by BlockType. Since a Chunk only stores a block's BlockType (a single byte per
+// block, see Chunk.mBlocks), this registry is how code turns that byte back into the actual
+// Block object with its properties/behavior. To add a new block: create the class, register it
+// in the static constructor below, and add a matching value to the BlockType enum.
 public static class BlockRegistry
 {
-    // One Block instance per BlockType, shared by the entire game - never per-placement. Keyed by the enum value stored in each Chunk's block byte array.
+    // One Block instance per BlockType, shared by the entire game - never per-placement. Keyed by
+    // the enum value stored in each Chunk's block byte array.
     private static readonly Dictionary<BlockType, Block> Blocks = new();
 
     // Runs once automatically, the first time anything touches BlockRegistry.
@@ -123,7 +128,8 @@ public static class BlockRegistry
     /// <summary>Enumerates every registered block instance, e.g. for building the creative inventory list.</summary>
     public static IEnumerable<Block> GetAll() => Blocks.Values;
 
-    // The following are thin BlockType-keyed convenience wrappers around Get(type).<Property>, letting callers avoid an explicit BlockRegistry.Get(type) at every call site.
+    // The following are thin BlockType-keyed convenience wrappers around Get(type).<Property>,
+    // letting callers avoid an explicit BlockRegistry.Get(type) at every call site.
     public static bool IsSolid(BlockType type) => Get(type).IsSolid;
     public static bool IsGravityBlock(BlockType type) => Get(type).GravityBlock;
     public static bool IsBreakable(BlockType type) => Get(type).IsBreakable;

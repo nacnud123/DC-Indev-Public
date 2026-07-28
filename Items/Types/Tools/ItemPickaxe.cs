@@ -6,7 +6,8 @@ public abstract class ItemPickaxe : ItemTool
 {
     public override ToolType ToolType => ToolType.Pickaxe;
 
-    // Note Diamond is slower than Gold here despite being the "best" tier overall — Gold's niche is high mining speed to offset its poor durability (see ItemTool.MaxDurability).
+    // Note Diamond is slower than Gold here despite being the "best" tier overall — Gold's
+    // niche is high mining speed to offset its poor durability (see ItemTool.MaxDurability).
     public override float MiningSpeed => ToolTier switch
     {
         ToolTier.Wood    => 2f,

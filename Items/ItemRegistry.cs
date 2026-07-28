@@ -5,7 +5,11 @@ using VoxelEngine.Rendering;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Static singleton registry mapping each <see cref="ItemType"/> to its single shared <see cref="Item"/> instance (mirrors BlockRegistry for blocks). All item definitions are instantiated once in the static constructor and looked up by type thereafter — items are stateless definitions, with per-slot state (count, durability) tracked separately in <see cref="ItemStack"/>.
+/// Static singleton registry mapping each <see cref="ItemType"/> to its single shared
+/// <see cref="Item"/> instance (mirrors BlockRegistry for blocks). All item definitions are
+/// instantiated once in the static constructor and looked up by type thereafter — items are
+/// stateless definitions, with per-slot state (count, durability) tracked separately in
+/// <see cref="ItemStack"/>.
 /// </summary>
 public static class ItemRegistry
 {

@@ -4,7 +4,9 @@ using System.Linq;
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Describes one painting artwork's size and its pixel offset within the painting texture sheet. SizeX/SizeY are in pixels (each block face is a 16px tile), while OffsetX/OffsetY locate the artwork's top-left corner in that sheet.
+/// Describes one painting artwork's size and its pixel offset within the painting texture
+/// sheet. SizeX/SizeY are in pixels (each block face is a 16px tile), while OffsetX/OffsetY
+/// locate the artwork's top-left corner in that sheet.
 /// </summary>
 public record PaintingDef(string Name, int SizeX, int SizeY, int OffsetX, int OffsetY)
 {

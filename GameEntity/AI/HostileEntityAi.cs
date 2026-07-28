@@ -7,7 +7,14 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity.AI;
 
 /// <summary>
-/// Base AI for hostile mobs (zombies, skeletons, spiders, stalkers, etc). Drives an Idle -> Chasing -> Wandering state machine: the mob wanders aimlessly until it gets line-of-sight on the player within DetectionRange, at which point it paths toward and attacks the player; once LOS is lost it falls back to wandering instead of returning straight to Idle (so it keeps roaming near the player's last known area rather than immediately going idle in place). Subclasses customize behaviour by overriding DetectionRange/AttackRange and OnAttackEntity (called every tick the mob is within attack range with LOS).
+/// Base AI for hostile mobs (zombies, skeletons, spiders, stalkers, etc).
+/// Drives an Idle -> Chasing -> Wandering state machine: the mob wanders aimlessly
+/// until it gets line-of-sight on the player within DetectionRange, at which point it
+/// paths toward and attacks the player; once LOS is lost it falls back to wandering
+/// instead of returning straight to Idle (so it keeps roaming near the player's last
+/// known area rather than immediately going idle in place).
+/// Subclasses customize behaviour by overriding DetectionRange/AttackRange and
+/// OnAttackEntity (called every tick the mob is within attack range with LOS).
 /// </summary>
 public class HostileEntityAi : EntityAi
 {
@@ -30,7 +37,8 @@ public class HostileEntityAi : EntityAi
     protected virtual float AttackRange => 2.5f;
 
     private State mCurrentState = State.Idle;
-    // True for the remainder of this tick once an attack has been triggered, so FaceMovementDirection() doesn't override the yaw set by FacePlayer().
+    // True for the remainder of this tick once an attack has been triggered, so
+    // FaceMovementDirection() doesn't override the yaw set by FacePlayer().
     private bool mSuppressMovement;
 
     // Cached wander heading, refreshed periodically by Wander(); (0,0) means "stand still".
@@ -44,7 +52,8 @@ public class HostileEntityAi : EntityAi
 
     public override void Tick(World world)
     {
-        // Getting hurt always forces an immediate switch to chasing, even without LOS (e.g. player hit the mob through a gap, or it's a ranged/behind-cover hit).
+        // Getting hurt always forces an immediate switch to chasing, even without LOS
+        // (e.g. player hit the mob through a gap, or it's a ranged/behind-cover hit).
         if (WasHurt)
         {
             WasHurt = false;
@@ -67,7 +76,8 @@ public class HostileEntityAi : EntityAi
         }
         else if (mCurrentState == State.Chasing)
         {
-            // Lost sight of the player mid-chase: fall back to wandering near the last known area rather than snapping straight back to Idle.
+            // Lost sight of the player mid-chase: fall back to wandering near the last
+            // known area rather than snapping straight back to Idle.
             mCurrentState = State.Wandering;
             CurrentPath = null;
         }
@@ -78,7 +88,8 @@ public class HostileEntityAi : EntityAi
                 FacePlayer(playerPos);
                 if (hasLos && dist <= AttackRange)
                 {
-                    // In attack range with clear LOS: stop horizontal movement (keep vertical/gravity velocity) and let the subclass perform its attack.
+                    // In attack range with clear LOS: stop horizontal movement (keep
+                    // vertical/gravity velocity) and let the subclass perform its attack.
                     ParentEntity.Velocity = new Vector3(0f, ParentEntity.Velocity.Y, 0f);
                     OnAttackEntity(world, dist);
                     mSuppressMovement = true;
@@ -107,13 +118,18 @@ public class HostileEntityAi : EntityAi
     }
 
     /// <summary>
-    /// Called every tick the entity is within AttackRange with a clear line of sight to the player. Base implementation is a no-op; subclasses (ZombieAi, SkeletonAi, SpiderAi) override this to deal melee damage, fire projectiles, etc. `dist` is the current straight-line distance to the player, useful for range-gated behaviours (e.g. spider's leap attack).
+    /// Called every tick the entity is within AttackRange with a clear line of sight to
+    /// the player. Base implementation is a no-op; subclasses (ZombieAi, SkeletonAi,
+    /// SpiderAi) override this to deal melee damage, fire projectiles, etc. `dist` is the
+    /// current straight-line distance to the player, useful for range-gated behaviours
+    /// (e.g. spider's leap attack).
     /// </summary>
     protected virtual void OnAttackEntity(World world, float dist)
     {
     }
 
-    // Rotates the entity to face the player directly (used while chasing/attacking, as opposed to FaceMovementDirection which faces the current velocity vector).
+    // Rotates the entity to face the player directly (used while chasing/attacking, as
+    // opposed to FaceMovementDirection which faces the current velocity vector).
     private void FacePlayer(Vector3 playerPos)
     {
         float dx = playerPos.X - ParentEntity.Position.X;
@@ -123,7 +139,8 @@ public class HostileEntityAi : EntityAi
             ParentEntity.Yaw = MathF.Atan2(dx, dz) - MathF.PI / 2f;
     }
 
-    // Updates the chase target to the player's current block position and (re)paths to it, throttled by PATH_RECALC_TICKS so A* isn't run every single tick.
+    // Updates the chase target to the player's current block position and (re)paths to it,
+    // throttled by PATH_RECALC_TICKS so A* isn't run every single tick.
     private void ChasePlayer(World world, Vector3 playerPos)
     {
         // Keep path pointed at player, recalculate every N ticks
@@ -142,7 +159,8 @@ public class HostileEntityAi : EntityAi
         MoveAlongPath(world);
     }
 
-    // Advances the entity toward the next waypoint on CurrentPath, popping waypoints as they're reached and jumping when the path climbs a level or an obstacle is detected.
+    // Advances the entity toward the next waypoint on CurrentPath, popping waypoints as
+    // they're reached and jumping when the path climbs a level or an obstacle is detected.
     private void MoveAlongPath(World world)
     {
         if (CurrentPath == null || CurrentPath.Count == 0)
@@ -184,7 +202,8 @@ public class HostileEntityAi : EntityAi
         ParentEntity.Velocity = new Vector3(dx * ParentEntity.WalkSpeed, velY, dz * ParentEntity.WalkSpeed);
     }
 
-    // Random-walk movement used while State.Wandering (no LOS on player). Picks a new heading every 60-120 ticks (~3-6s); 40% chance to stand still instead of moving.
+    // Random-walk movement used while State.Wandering (no LOS on player). Picks a new
+    // heading every 60-120 ticks (~3-6s); 40% chance to stand still instead of moving.
     private void Wander(World world)
     {
         mWanderTimer--;
@@ -223,7 +242,9 @@ public class HostileEntityAi : EntityAi
             mWanderDirZ * ParentEntity.WalkSpeed * 0.5f);
     }
 
-    // Raycasts from the mob's "eye" height toward the player's chest to determine if any solid block obstructs the view. Used to gate detection/aggro on actual visibility rather than just distance.
+    // Raycasts from the mob's "eye" height toward the player's chest to determine if any
+    // solid block obstructs the view. Used to gate detection/aggro on actual visibility
+    // rather than just distance.
     private bool HasLineOfSight(World world, Vector3 playerPos)
     {
         // Eye height approximated as 90% of the mob's model height.

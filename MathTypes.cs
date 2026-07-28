@@ -1,7 +1,10 @@
 namespace VoxelEngine;
 
 /// <summary>
-/// Integer-valued 3D vector, used for block/chunk coordinates where a `System.Numerics.Vector3` (float-based) would introduce rounding error or unwanted implicit fractional positions. Implicitly convertible to `Vector3` so it can be passed anywhere a float vector is expected (e.g. shader uniforms, entity positions) without an explicit cast at every call site.
+/// Integer-valued 3D vector, used for block/chunk coordinates where a `System.Numerics.Vector3`
+/// (float-based) would introduce rounding error or unwanted implicit fractional positions.
+/// Implicitly convertible to `Vector3` so it can be passed anywhere a float vector is expected
+/// (e.g. shader uniforms, entity positions) without an explicit cast at every call site.
 /// </summary>
 public struct Vector3i : IEquatable<Vector3i>
 {
@@ -17,12 +20,15 @@ public struct Vector3i : IEquatable<Vector3i>
     public override int GetHashCode() => HashCode.Combine(X, Y, Z);
     public override string ToString() => $"({X}, {Y}, {Z})";
     public System.Numerics.Vector3 ToVector3() => new(X, Y, Z);
-    // Implicit (not explicit) so Vector3i can be passed directly to APIs expecting a float Vector3 (rendering, physics) without callers needing to write `.ToVector3()` everywhere.
+    // Implicit (not explicit) so Vector3i can be passed directly to APIs expecting a float Vector3
+    // (rendering, physics) without callers needing to write `.ToVector3()` everywhere.
     public static implicit operator System.Numerics.Vector3(Vector3i v) => new(v.X, v.Y, v.Z);
 }
 
 /// <summary>
-/// Integer-valued 2D vector, primarily used for chunk-grid coordinates (chunk X/Z indices) where fractional values would be meaningless. Readonly since chunk coordinates are treated as immutable keys (e.g. dictionary keys, grid indices) rather than mutable state.
+/// Integer-valued 2D vector, primarily used for chunk-grid coordinates (chunk X/Z indices) where
+/// fractional values would be meaningless. Readonly since chunk coordinates are treated as
+/// immutable keys (e.g. dictionary keys, grid indices) rather than mutable state.
 /// </summary>
 public readonly struct Vector2i : IEquatable<Vector2i>
 {

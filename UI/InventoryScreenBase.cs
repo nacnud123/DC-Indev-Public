@@ -12,15 +12,22 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Shared base for every ImGui screen that renders inventory-style slot grids (player inventory, chests, furnace, crafting). Provides slot layout constants, slot/item/cursor drawing, click handling (left = pick-up/place/merge, right = split stack), and slot hit-testing for the player's main grid + hotbar. Screens derive from this to reuse the same visuals/interactions rather than reimplementing drag-and-drop slot logic per screen.
+/// Shared base for every ImGui screen that renders inventory-style slot grids
+/// (player inventory, chests, furnace, crafting). Provides slot layout constants,
+/// slot/item/cursor drawing, click handling (left = pick-up/place/merge, right =
+/// split stack), and slot hit-testing for the player's main grid + hotbar. Screens
+/// derive from this to reuse the same visuals/interactions rather than reimplementing
+/// drag-and-drop slot logic per screen.
 /// </summary>
 public abstract class InventoryScreenBase
 {
-    protected const float SLOT_SIZE = 44f * UIHelper.UI_SCALE;
-    protected const float ITEM_SIZE = 32f * UIHelper.UI_SCALE;
-    protected const float ITEM_PADDING = (SLOT_SIZE - ITEM_SIZE) / 2f;
-    protected const float PADDING = 10f * UIHelper.UI_SCALE;
-    protected const float SECTION_GAP = 10f * UIHelper.UI_SCALE;
+    // Properties (not cached static readonly fields) so these track UIHelper.UI_SCALE live
+    // if the player changes UI scaling in the options menu mid-session.
+    protected static float SLOT_SIZE => 44f * UIHelper.UI_SCALE;
+    protected static float ITEM_SIZE => 32f * UIHelper.UI_SCALE;
+    protected static float ITEM_PADDING => (SLOT_SIZE - ITEM_SIZE) / 2f;
+    protected static float PADDING => 10f * UIHelper.UI_SCALE;
+    protected static float SECTION_GAP => 10f * UIHelper.UI_SCALE;
     protected const int COLS = 9;
     protected const int MAIN_ROWS = 3;
 
@@ -149,7 +156,8 @@ public abstract class InventoryScreenBase
         }
     }
 
-    // Left-click on a slot: pick up the whole stack onto the cursor, place the cursor down, merge like stacks (up to max stack size), or swap stacks if they differ.
+    // Left-click on a slot: pick up the whole stack onto the cursor, place the cursor
+    // down, merge like stacks (up to max stack size), or swap stacks if they differ.
     protected void HandleInvSlotLeft(PlayerInventory inv, int slotIndex)
     {
         var slot = inv.GetSlot(slotIndex);
@@ -193,7 +201,8 @@ public abstract class InventoryScreenBase
         mCursorStack = slot;
     }
 
-    // Right-click on a slot: pick up half the stack, place a single item, or add a single item onto a matching cursor stack.
+    // Right-click on a slot: pick up half the stack, place a single item, or add a
+    // single item onto a matching cursor stack.
     protected void HandleInvSlotRight(PlayerInventory inv, int slotIndex)
     {
         var slot = inv.GetSlot(slotIndex);

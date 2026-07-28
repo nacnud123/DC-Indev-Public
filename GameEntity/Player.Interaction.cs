@@ -10,7 +10,10 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Player half handling world interaction: progressive block breaking (accumulated over multiple frames based on tool/hardness), instant block placement/replacement (including special-case blocks like slabs, torches, stairs, chests/double-chests), and held-item use (food, tools, placeable items). All raycasting against the world goes through World.Raycast from the camera.
+/// Player half handling world interaction: progressive block breaking (accumulated over multiple
+/// frames based on tool/hardness), instant block placement/replacement (including special-case
+/// blocks like slabs, torches, stairs, chests/double-chests), and held-item use (food, tools,
+/// placeable items). All raycasting against the world goes through World.Raycast from the camera.
 /// </summary>
 public partial class Player
 {
@@ -23,7 +26,13 @@ public partial class Player
     public Vector3i? BreakingBlockPos => mBreakingPos;
 
     /// <summary>
-    /// Advances progressive block-breaking. Call every frame with whether the attack/break button is currently held. Handles: resetting progress if the player releases the button, looks away, or switches target block; computing per-second break speed from tool type/mining speed vs. block hardness (Minecraft-style: damage/sec = toolStrength / hardness / divisor, divisor differs for correct-tool/wrong-tool/no-tool); underwater and airborne mining penalties (both -80% speed); periodic dig sound playback; and finally destroying the block once progress reaches 1.0.
+    /// Advances progressive block-breaking. Call every frame with whether the attack/break button
+    /// is currently held. Handles: resetting progress if the player releases the button, looks
+    /// away, or switches target block; computing per-second break speed from tool type/mining
+    /// speed vs. block hardness (Minecraft-style: damage/sec = toolStrength / hardness / divisor,
+    /// divisor differs for correct-tool/wrong-tool/no-tool); underwater and airborne mining
+    /// penalties (both -80% speed); periodic dig sound playback; and finally destroying the block
+    /// once progress reaches 1.0.
     /// </summary>
     public void UpdateBreaking(World world, float dt, bool holdingAttack)
     {
@@ -63,7 +72,9 @@ public partial class Player
         var tool = GetHeldTool();
         bool correctTool = tool != null && tool.ToolType == BlockRegistry.Get(blockType).PreferredTool;
 
-        // damage per tick = toolStrength / hardness / divisor (20 ticks/sec) Divisor is smallest (fastest breaking) for the correct tool, largest for the wrong tool (penalized relative to bare hands), and a middle value for bare hands with no tool held.
+        // damage per tick = toolStrength / hardness / divisor (20 ticks/sec)
+        // Divisor is smallest (fastest breaking) for the correct tool, largest for the wrong tool
+        // (penalized relative to bare hands), and a middle value for bare hands with no tool held.
         float toolStrength = correctTool ? tool!.MiningSpeed : 1f;
         float divisor = correctTool ? 30f : (tool != null ? 100f : 30f);
         float damagePerSecond = toolStrength / hardness / divisor * 20f;
@@ -78,7 +89,8 @@ public partial class Player
         if (!mBreakingPos.HasValue)
         {
             mBreakingPos = blockPos;
-            // mBreakHardness is a normalized target (always 1), not the block's actual hardness value — the hardness/tool math is already baked into damagePerSecond above.
+            // mBreakHardness is a normalized target (always 1), not the block's actual hardness
+            // value — the hardness/tool math is already baked into damagePerSecond above.
             mBreakHardness = 1f;
             mBreakProgress = 0f;
         }
@@ -120,7 +132,13 @@ public partial class Player
     }
 
     /// <summary>
-    /// Destroys the block at blockPos: handles special-case blocks that don't simply become air (double slabs revert to single slabs; furnaces/chests/double-chests close their open UI and tear down their block-entity data, dropping double-chest contents as item entities and re-registering the surviving half as a single chest), then does the generic path — clear to air, spawn break particles/sound, damage the held tool, roll an item drop (gated by tool tier meeting the block's minimum), and finally collapse any gravity blocks (sand/gravel) stacked directly above into the now-empty space.
+    /// Destroys the block at blockPos: handles special-case blocks that don't simply become air
+    /// (double slabs revert to single slabs; furnaces/chests/double-chests close their open UI and
+    /// tear down their block-entity data, dropping double-chest contents as item entities and
+    /// re-registering the surviving half as a single chest), then does the generic path — clear to
+    /// air, spawn break particles/sound, damage the held tool, roll an item drop (gated by tool
+    /// tier meeting the block's minimum), and finally collapse any gravity blocks (sand/gravel)
+    /// stacked directly above into the now-empty space.
     /// </summary>
     private void BreakBlock(World world, Vector3i blockPos)
     {
@@ -166,7 +184,9 @@ public partial class Player
             if (Game.Instance.CurrentState == GameState.DoubleChest)
                 Game.Instance.CloseDoubleChest();
 
-            // A double chest's 54-slot inventory is stored once, keyed by the "canonical" half (see GetDoubleChestCanonical — the lower X, then lower Z, half). Breaking either half requires locating the canonical position to find the shared ChestData.
+            // A double chest's 54-slot inventory is stored once, keyed by the "canonical" half
+            // (see GetDoubleChestCanonical — the lower X, then lower Z, half). Breaking either
+            // half requires locating the canonical position to find the shared ChestData.
             var otherPos = GetDoubleChestNeighbor(world, blockPos);
             var canonicalPos = GetDoubleChestCanonical(blockPos, otherPos);
             bool breakingCanonical = blockPos == canonicalPos;
@@ -174,7 +194,8 @@ public partial class Player
             var dc = BlockEntityManager.GetOrCreateDoubleChest(canonicalPos);
             var center = new Vector3(blockPos.X + 0.5f, blockPos.Y + 0.5f, blockPos.Z + 0.5f);
 
-            // Slots [0,27) belong to the canonical half, [27,54) to the other half. Drop the slots belonging to whichever half is actually being broken.
+            // Slots [0,27) belong to the canonical half, [27,54) to the other half. Drop the
+            // slots belonging to whichever half is actually being broken.
             int dropStart = breakingCanonical ? 0 : 27;
             for (int i = dropStart; i < dropStart + ChestData.CHEST_SLOTS; i++)
             {
@@ -185,7 +206,8 @@ public partial class Player
 
             if (otherPos.HasValue)
             {
-                // The other half survives as a regular single chest; re-key its surviving slots to a fresh single-chest ChestData starting at index 0.
+                // The other half survives as a regular single chest; re-key its surviving slots
+                // to a fresh single-chest ChestData starting at index 0.
                 int surviveStart = breakingCanonical ? 27 : 0;
                 var surviving = new ChestData(otherPos.Value);
                 for (int i = 0; i < ChestData.CHEST_SLOTS; i++)
@@ -228,7 +250,9 @@ public partial class Player
                 Game.Instance.WorldTexture));
         }
 
-        // Handle gravity blocks above: shift each gravity block (sand/gravel) down one position into the newly-emptied space, repeating upward as long as gravity blocks stack directly above — this instantly "collapses" a column rather than spawning falling-block entities.
+        // Handle gravity blocks above: shift each gravity block (sand/gravel) down one position
+        // into the newly-emptied space, repeating upward as long as gravity blocks stack directly
+        // above — this instantly "collapses" a column rather than spawning falling-block entities.
         var checkY = blockPos.Y + 1;
         while (BlockRegistry.IsGravityBlock(world.GetBlock(blockPos.X, checkY, blockPos.Z)))
         {
@@ -241,7 +265,14 @@ public partial class Player
     }
 
     /// <summary>
-    /// Handles a single discrete left-click (break) or right-click (place/use) action against the block the player is looking at (raycast from camera). Unlike UpdateBreaking (which is progressive, called every frame while holding), this performs the action immediately — used for interactable blocks (workbench/furnace/chest UI open) and for placement, which includes special per-block-type placement rules (slabs combining into double slabs, torch wall/ground orientation and support checks, stair/furnace/chest facing from camera direction, chest-pair merging into a double chest, gravity blocks falling to rest on placement, and grass-to-dirt conversion under non-suffocating blocks).
+    /// Handles a single discrete left-click (break) or right-click (place/use) action against the
+    /// block the player is looking at (raycast from camera). Unlike UpdateBreaking (which is
+    /// progressive, called every frame while holding), this performs the action immediately —
+    /// used for interactable blocks (workbench/furnace/chest UI open) and for placement, which
+    /// includes special per-block-type placement rules (slabs combining into double slabs, torch
+    /// wall/ground orientation and support checks, stair/furnace/chest facing from camera
+    /// direction, chest-pair merging into a double chest, gravity blocks falling to rest on
+    /// placement, and grass-to-dirt conversion under non-suffocating blocks).
     /// </summary>
     public void HandleBlockInteraction(World world, bool breakBlock, bool placeBlock)
     {
@@ -329,7 +360,8 @@ public partial class Player
 
             if (mSelectedBlock == BlockType.Chest)
             {
-                // Placing a chest next to an existing single chest merges them into a double chest. Scan the 4 horizontal neighbors for an existing Chest block.
+                // Placing a chest next to an existing single chest merges them into a double
+                // chest. Scan the 4 horizontal neighbors for an existing Chest block.
                 var pp = placePos.Value;
                 Vector3i[] neighbors =
                 {
@@ -346,14 +378,16 @@ public partial class Player
 
                     var canonicalPos = GetDoubleChestCanonical(pp, neighbor);
 
-                    // Migrate the existing single chest's items into the new merged double-chest data before the single-chest block/entity is replaced.
+                    // Migrate the existing single chest's items into the new merged double-chest
+                    // data before the single-chest block/entity is replaced.
                     var oldChest = BlockEntityManager.GetChestIfExists(neighbor);
                     BlockEntityManager.Remove(neighbor);
 
                     var dc = BlockEntityManager.GetOrCreateDoubleChest(canonicalPos);
                     if (oldChest != null)
                     {
-                        // The old chest's contents go into whichever half of the 54-slot double chest corresponds to its own position (canonical = slots [0,27), other = [27,54)).
+                        // The old chest's contents go into whichever half of the 54-slot double
+                        // chest corresponds to its own position (canonical = slots [0,27), other = [27,54)).
                         int destStart = canonicalPos == neighbor ? 0 : 27;
                         for (int i = 0; i < ChestData.CHEST_SLOTS; i++)
                             dc.SetSlot(destStart + i, oldChest.GetSlot(i));
@@ -376,7 +410,9 @@ public partial class Player
             var placeBMax = BlockRegistry.GetBoundsMax(mSelectedBlock);
             var placeVec = new Vector3(placePos.Value.X, placePos.Value.Y, placePos.Value.Z);
             Aabb blockBox = new Aabb(placeVec + placeBMin, placeVec + placeBMax);
-            // Prevent placing a solid block inside the player's own hitbox (would trap/suffocate them); non-solid blocks (torches, slabs the player can walk through space of, etc.) are exempt from this check.
+            // Prevent placing a solid block inside the player's own hitbox (would trap/suffocate
+            // them); non-solid blocks (torches, slabs the player can walk through space of, etc.)
+            // are exempt from this check.
             if (!GetBoundingBox().Intersects(blockBox) || !BlockRegistry.IsSolid(mSelectedBlock))
             {
                 int x = placePos.Value.X, y = placePos.Value.Y, z = placePos.Value.Z;
@@ -391,7 +427,8 @@ public partial class Player
                     if (world.GetBlock(x, y, z) == BlockType.Water)
                         return;
 
-                    // diff = direction from the targeted (existing) block to the empty placement cell, i.e. which face of the target block was clicked.
+                    // diff = direction from the targeted (existing) block to the empty placement
+                    // cell, i.e. which face of the target block was clicked.
                     var diff = placePos.Value - blockPos;
 
                     if (diff.Y == -1)
@@ -437,7 +474,11 @@ public partial class Player
                          || blockToPlace == BlockType.Furnace
                          || blockToPlace == BlockType.Chest)
                 {
-                    // Facing: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X) Facing is derived from where the player is looking (not which face was clicked), so the block faces away from the player as they place it — whichever horizontal axis (X or Z) the camera points along more strongly determines the facing.
+                    // Facing: 0=North(-Z), 1=South(+Z), 2=East(+X), 3=West(-X)
+                    // Facing is derived from where the player is looking (not which face was
+                    // clicked), so the block faces away from the player as they place it —
+                    // whichever horizontal axis (X or Z) the camera points along more strongly
+                    // determines the facing.
                     var front = Camera.Front;
                     float absX = MathF.Abs(front.X);
                     float absZ = MathF.Abs(front.Z);
@@ -455,7 +496,8 @@ public partial class Player
 
                 if (BlockRegistry.IsGravityBlock(blockToPlace))
                 {
-                    // Simulate instant falling: walk the placement position straight down through any air until it lands on solid ground, rather than spawning a falling entity.
+                    // Simulate instant falling: walk the placement position straight down through
+                    // any air until it lands on solid ground, rather than spawning a falling entity.
                     while (y > 0 && world.GetBlock(x, y - 1, z) == BlockType.Air)
                     {
                         y--;
@@ -475,13 +517,15 @@ public partial class Player
                         existing);
                 }
 
-                // Placing a non-suffocating block (e.g. a torch or flower) on top of grass turns the grass to dirt underneath, mirroring how grass dies when covered/shadowed.
+                // Placing a non-suffocating block (e.g. a torch or flower) on top of grass turns
+                // the grass to dirt underneath, mirroring how grass dies when covered/shadowed.
                 if (world.GetBlock(x, y - 1, z) == BlockType.Grass && !BlockRegistry.GetSuffocatesBeneath(blockToPlace))
                 {
                     world.SetBlock(x, y - 1, z, BlockType.Dirt);
                 }
 
-                // Wall torches already set SupportBlockOffset to point sideways at their wall (see the torch branch above); everything else supports from directly below.
+                // Wall torches already set SupportBlockOffset to point sideways at their wall
+                // (see the torch branch above); everything else supports from directly below.
                 if (!isWallTorch)
                     SupportBlockOffset.Y = -1;
 
@@ -500,7 +544,9 @@ public partial class Player
     }
 
     /// <summary>
-    /// Removes one item from the currently-selected hotbar slot after a successful block placement (no-op in creative mode, which has infinite blocks). If the stack is now empty, clears mSelectedBlock to Air so further placement attempts are rejected until a new block is selected.
+    /// Removes one item from the currently-selected hotbar slot after a successful block placement
+    /// (no-op in creative mode, which has infinite blocks). If the stack is now empty, clears
+    /// mSelectedBlock to Air so further placement attempts are rejected until a new block is selected.
     /// </summary>
     private void ConsumeSelectedHotbarItem()
     {
@@ -519,7 +565,11 @@ public partial class Player
     }
 
     /// <summary>
-    /// Right-click handler for the currently held non-block item. Food items heal and consume directly here; other items delegate to their own Item.OnUse (which may or may not need a raycast target block — SkipBlockRaycast lets items like bows/buckets-on-nothing bypass the requirement to be looking at a block). Tools take durability damage on use; non-tool consumables are consumed one-for-one.
+    /// Right-click handler for the currently held non-block item. Food items heal and consume
+    /// directly here; other items delegate to their own Item.OnUse (which may or may not need a
+    /// raycast target block — SkipBlockRaycast lets items like bows/buckets-on-nothing bypass the
+    /// requirement to be looking at a block). Tools take durability damage on use; non-tool
+    /// consumables are consumed one-for-one.
     /// </summary>
     public void UseHeldItem(World world, ItemType itemType)
     {
@@ -612,7 +662,9 @@ public partial class Player
     }
 
     /// <summary>
-    /// Picks a deterministic "canonical" half of a double chest pair (lower X first, then lower Z as a tiebreak for chests aligned along Z) — this is the position under which the shared 54-slot ChestData is keyed in BlockEntityManager, so both halves must agree on it consistently.
+    /// Picks a deterministic "canonical" half of a double chest pair (lower X first, then lower Z
+    /// as a tiebreak for chests aligned along Z) — this is the position under which the shared
+    /// 54-slot ChestData is keyed in BlockEntityManager, so both halves must agree on it consistently.
     /// </summary>
     private Vector3i GetDoubleChestCanonical(Vector3i a, Vector3i? b)
     {

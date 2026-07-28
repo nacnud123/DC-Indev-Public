@@ -3,6 +3,8 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.Terrain.Blocks;
 
+/// <summary>Solid-colored wool-type decoration block (blue). Uses the default Hardness/tool
+/// properties (breaks by hand); the only distinguishing traits are its texture and flammability.</summary>
 public class BlockBlue : Block
 {
     public override BlockType Type => BlockType.Blue;

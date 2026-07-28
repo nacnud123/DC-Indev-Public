@@ -11,16 +11,18 @@ using VoxelEngine.Rendering;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Double-chest UI: same layout/interaction pattern as <see cref="ChestScreen"/> but with a 6x9 (54-slot) grid backed by <see cref="DoubleChestData"/>, for two adjacent chest blocks that were merged into one combined inventory.
+/// Double-chest UI: same layout/interaction pattern as <see cref="ChestScreen"/> but
+/// with a 6x9 (54-slot) grid backed by <see cref="DoubleChestData"/>, for two adjacent
+/// chest blocks that were merged into one combined inventory.
 /// </summary>
 public class DoubleChestScreen : InventoryScreenBase
 {
     private const int CHEST_ROWS = 6;
-    private const float INV_W = COLS * SLOT_SIZE;
-    private const float PANEL_W = INV_W + PADDING * 2;
-    private const float CHEST_BLOCK_H = CHEST_ROWS * SLOT_SIZE;
-    private const float INV_BLOCK_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
-    private const float PANEL_H = CHEST_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
+    private static readonly float INV_W = COLS * SLOT_SIZE;
+    private static readonly float PANEL_W = INV_W + PADDING * 2;
+    private static readonly float CHEST_BLOCK_H = CHEST_ROWS * SLOT_SIZE;
+    private static readonly float INV_BLOCK_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
+    private static readonly float PANEL_H = CHEST_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
 
     private DoubleChestData mChest = null!;
 

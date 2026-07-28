@@ -6,7 +6,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.Saving;
 
 /// <summary>
-/// XML-friendly stand-in for <see cref="ItemStack"/>. ItemStack itself isn't used directly for XML serialization because it stores block/item type as enums tied to game registries rather than stable strings; this type stores the type name as text (<see cref="Type"/>) plus a flag for which enum it belongs to, so saves stay readable/robust across minor enum reordering.
+/// XML-friendly stand-in for <see cref="ItemStack"/>. ItemStack itself isn't used directly for XML
+/// serialization because it stores block/item type as enums tied to game registries rather than
+/// stable strings; this type stores the type name as text (<see cref="Type"/>) plus a flag for which
+/// enum it belongs to, so saves stay readable/robust across minor enum reordering.
 /// </summary>
 [Serializable]
 public class SerializableStack
@@ -71,7 +74,8 @@ public class SerializableDoubleChest
 }
 
 /// <summary>
-/// Root object for the entire <c>block_entities.xml</c> file - the complete set of furnaces, chests, and double chests in a saved world. Written/read by <see cref="VoxelEngine.BlockEntities.BlockEntityManager"/>.
+/// Root object for the entire <c>block_entities.xml</c> file - the complete set of furnaces, chests,
+/// and double chests in a saved world. Written/read by <see cref="VoxelEngine.BlockEntities.BlockEntityManager"/>.
 /// </summary>
 [Serializable]
 public class BlockEntityFile

@@ -11,10 +11,14 @@ using VoxelEngine.Utils;
 
 namespace VoxelEngine.GameEntity;
 
-// Base class for anything that moves around the world and isn't a block: the player, mobs (Pig, Zombie, Stalker...), dropped items, TNT, etc. Handles the stuff they all share - position/velocity, gravity and collision, taking fall/fire damage, and drawing a textured model. Subclasses override Tick/DrawModel for their own behavior and looks.
+// Base class for anything that moves around the world and isn't a block: the player, mobs
+// (Pig, Zombie, Stalker...), dropped items, TNT, etc. Handles the stuff they all share -
+// position/velocity, gravity and collision, taking fall/fire damage, and drawing a textured
+// model. Subclasses override Tick/DrawModel for their own behavior and looks.
 public class Entity
 {
-    // Single shared shader program used to render every entity's model (mobs, dropped items, arrows, etc.) - not per-instance, since they all use the same lit-textured vertex format.
+    // Single shared shader program used to render every entity's model (mobs, dropped items,
+    // arrows, etc.) - not per-instance, since they all use the same lit-textured vertex format.
     internal static Shader? _shader;
     private static bool _shaderInitialized;
 
@@ -57,11 +61,14 @@ public class Entity
 
     protected EntityModel? Model { get; set; }
 
-    // Backing fields for Position/Velocity - kept private so subclasses go through the properties (mirrors the get/set pattern used for Health/Width/etc. above, though here it's a plain non-virtual property since position/velocity aren't meant to be overridden per-subclass).
+    // Backing fields for Position/Velocity - kept private so subclasses go through the properties
+    // (mirrors the get/set pattern used for Health/Width/etc. above, though here it's a plain
+    // non-virtual property since position/velocity aren't meant to be overridden per-subclass).
     private Vector3 mPos;
     private Vector3 mVel;
 
-    // World-space position in blocks. For most entities this is the *feet* position - the AABB (see GetBoundingBox) extends upward from here by Height, not centered on it.
+    // World-space position in blocks. For most entities this is the *feet* position - the AABB
+    // (see GetBoundingBox) extends upward from here by Height, not centered on it.
     public Vector3 Position
     {
         get => mPos;
@@ -77,7 +84,8 @@ public class Entity
 
     public EntityAi? CurrentAI;
 
-    // Lazily compiles/loads the shared entity shader exactly once (idempotent - safe to call repeatedly). Must run after the GL context exists since shader compilation needs a live GL context.
+    // Lazily compiles/loads the shared entity shader exactly once (idempotent - safe to call
+    // repeatedly). Must run after the GL context exists since shader compilation needs a live GL context.
     internal static void InitShader()
     {
         if (_shaderInitialized)
@@ -86,7 +94,8 @@ public class Entity
         _shaderInitialized = true;
     }
 
-    // Runs once per game tick (not once per frame - see TickSystem). Applies gravity, moves the entity while resolving collisions with blocks, and tracks fall damage/fire/footstep sounds.
+    // Runs once per game tick (not once per frame - see TickSystem). Applies gravity, moves the
+    // entity while resolving collisions with blocks, and tracks fall damage/fire/footstep sounds.
     public virtual void Tick(World world)
     {
         float dt = TickSystem.TICK_DURATION; // fixed tick duration in seconds (not variable frame time)
@@ -96,13 +105,16 @@ public class Entity
         mVel.Y -= Physics.GRAVITY * dt;
         mVel.Y = MathF.Max(mVel.Y, -Physics.TERMINAL_VEL);
 
-        // 2) Convert velocity (blocks/second) into this tick's displacement (blocks) and move, resolving collisions against the world. `actual` may differ from the requested `frameVelocity` if something blocked the path.
+        // 2) Convert velocity (blocks/second) into this tick's displacement (blocks) and move,
+        // resolving collisions against the world. `actual` may differ from the requested
+        // `frameVelocity` if something blocked the path.
         float preCollisionVelY = mVel.Y;
         Vector3 frameVelocity = mVel * dt;
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), frameVelocity);
         mPos += actual;
 
-        // If we tried to move down/up but actually moved much less than that, we hit something - treat that as landing (or hitting a ceiling) and stop vertical velocity.
+        // If we tried to move down/up but actually moved much less than that, we hit something -
+        // treat that as landing (or hitting a ceiling) and stop vertical velocity.
         if (MathF.Abs(actual.Y) < MathF.Abs(frameVelocity.Y) * 0.99f)
         {
             if (mVel.Y < 0)
@@ -336,7 +348,9 @@ public class Entity
         return new Aabb(new Vector3(mPos.X - hw, mPos.Y, mPos.Z - hw), new Vector3(mPos.X + hw, mPos.Y + Height, mPos.Z + hw));
     }
 
-    // Ray-vs-box test ("slab method"): for each axis, find where the ray enters/exits the box's range on that axis, then check whether all three axes overlap at once. Used for aiming at entities (e.g. hitting a mob) the same way block raycasting picks a block.
+    // Ray-vs-box test ("slab method"): for each axis, find where the ray enters/exits the box's
+    // range on that axis, then check whether all three axes overlap at once. Used for aiming at
+    // entities (e.g. hitting a mob) the same way block raycasting picks a block.
     public bool IsLookedAt(Vector3 origin, Vector3 dir, float maxDist, out float dist)
     {
         dist = float.MaxValue;

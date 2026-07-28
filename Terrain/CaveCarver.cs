@@ -1,15 +1,23 @@
-// Main cave generation function. | DA | 2/14/26 Caves have four types, Worm, Branching, Cavern, Ravines
+// Main cave generation function. | DA | 2/14/26
+// Caves have four types, Worm, Branching, Cavern, Ravines
 using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.Terrain;
 
 /// <summary>
-/// Carves underground voids (the "caves" phase of TerrainGen) into a single target chunk by scanning a wide radius of neighboring chunk columns for cave "seeds" (deterministic per-column RNG) and, for each seed that rolls a spawn chance, running one of four carve shapes: worm tunnels, branching tunnels, worm-with-caverns, or vertical ravines. Carving from neighboring columns (not just the target chunk) lets tunnels that originate outside the chunk still poke into it, since CarveSphere/CarveBlock silently no-op for any coordinate outside the configured chunk bounds. One CaveCarver instance is scoped to exactly one target chunk (see constructor).
+/// Carves underground voids (the "caves" phase of TerrainGen) into a single target chunk by
+/// scanning a wide radius of neighboring chunk columns for cave "seeds" (deterministic per-column
+/// RNG) and, for each seed that rolls a spawn chance, running one of four carve shapes: worm
+/// tunnels, branching tunnels, worm-with-caverns, or vertical ravines. Carving from neighboring
+/// columns (not just the target chunk) lets tunnels that originate outside the chunk still poke
+/// into it, since CarveSphere/CarveBlock silently no-op for any coordinate outside the configured
+/// chunk bounds. One CaveCarver instance is scoped to exactly one target chunk (see constructor).
 /// </summary>
 internal class CaveCarver
 {
 
-    // How many chunks out (in each direction) from the target chunk to scan for cave seeds - wide enough that long worm tunnels starting several chunks away can still reach into this chunk.
+    // How many chunks out (in each direction) from the target chunk to scan for cave seeds - wide
+    // enough that long worm tunnels starting several chunks away can still reach into this chunk.
     private const int CAVE_SEARCH_RADIUS = 8;
     // Hard floor/ceiling Y that any carve operation is clamped to (keeps caves out of the bedrock layer and near the world height cap).
     private const int CAVE_MIN_Y = 2;
@@ -31,7 +39,8 @@ internal class CaveCarver
     private Chunk? mTargetChunk;
 
     /// <summary>
-    /// Scopes this carver to a single target chunk, given as an inclusive world-space block AABB (min/max X and Z, full chunk height). All carve operations clip to these bounds.
+    /// Scopes this carver to a single target chunk, given as an inclusive world-space block AABB
+    /// (min/max X and Z, full chunk height). All carve operations clip to these bounds.
     /// </summary>
     public CaveCarver(int chunkMinX, int chunkMinZ, int chunkMaxX, int chunkMaxZ)
     {
@@ -42,7 +51,11 @@ internal class CaveCarver
     }
 
     /// <summary>
-    /// Entry point for the caves generation phase for one chunk. Scans every chunk column within <see cref="CAVE_SEARCH_RADIUS"/> of (chunkX, chunkZ), seeds a deterministic RNG per column (via TerrainGen.HashSeed so results are stable/reproducible for a given world seed), and independently rolls each of the four cave types for that column. Carve calls that land outside this carver's target chunk are silently clipped (see CarveSphere/CarveBlock).
+    /// Entry point for the caves generation phase for one chunk. Scans every chunk column within
+    /// <see cref="CAVE_SEARCH_RADIUS"/> of (chunkX, chunkZ), seeds a deterministic RNG per column
+    /// (via TerrainGen.HashSeed so results are stable/reproducible for a given world seed), and
+    /// independently rolls each of the four cave types for that column. Carve calls that land
+    /// outside this carver's target chunk are silently clipped (see CarveSphere/CarveBlock).
     /// </summary>
     public void GenerateCaves(World world, int chunkX, int chunkZ, int seed)
     {
@@ -73,7 +86,10 @@ internal class CaveCarver
         }
     }
 
-    // It's like a sphere or worm sort of thing where it carves a sphere, advance forward, wobble direction, then slightly vary radius. Rolls 0, 1, or 2 worm starts per column (two independent coin flips), each with a random start position/direction/length/radius, then hands each start off to the given carver delegate (CarveWorm, CarveWormBranching, or CarveWormCavern) to actually walk and carve.
+    // It's like a sphere or worm sort of thing where it carves a sphere, advance forward, wobble direction, then slightly vary radius.
+    // Rolls 0, 1, or 2 worm starts per column (two independent coin flips), each with a random
+    // start position/direction/length/radius, then hands each start off to the given carver
+    // delegate (CarveWorm, CarveWormBranching, or CarveWormCavern) to actually walk and carve.
     private void SpawnWorms(World world, int cx, int cz, Random rng, Action<World, float, float, float, float, float, float, int, Random> carver)
     {
         int count = 0;
@@ -98,7 +114,9 @@ internal class CaveCarver
         }
     }
 
-    // Basic worm tunnel: at each step, carve a sphere at the current position, then move forward one unit along (yaw, pitch), randomly perturb the direction slightly ("wobble"), and let the radius drift randomly within [1.0, 4.0]. Stops early if it wanders outside the valid Y range.
+    // Basic worm tunnel: at each step, carve a sphere at the current position, then move forward
+    // one unit along (yaw, pitch), randomly perturb the direction slightly ("wobble"), and let the
+    // radius drift randomly within [1.0, 4.0]. Stops early if it wanders outside the valid Y range.
     private void CarveWorm(World world, float x, float y, float z, float yaw, float pitch, float radius, int steps, Random rng)
     {
         for (int step = 0; step < steps; step++)
@@ -128,7 +146,9 @@ internal class CaveCarver
             TerrainGen.Wobble(rng, ref yaw, ref pitch, 0.7f, 0.3f, 0.5f);
             radius = Math.Clamp(radius + TerrainGen.RandFloat(rng) * 0.3f, 0.8f, 4.0f);
 
-            // After the first 10 steps, each step has a 2% chance to spawn a child branch: a new worm that diverges sharply in yaw/pitch, starts slightly smaller, and recurses with half the remaining step budget (plus jitter) at depth+1, bounded by MAX_BRANCH_DEPTH.
+            // After the first 10 steps, each step has a 2% chance to spawn a child branch: a new
+            // worm that diverges sharply in yaw/pitch, starts slightly smaller, and recurses with
+            // half the remaining step budget (plus jitter) at depth+1, bounded by MAX_BRANCH_DEPTH.
             if (step > 10 && rng.NextDouble() < 0.02)
             {
                 float branchYaw = yaw + TerrainGen.RandFloat(rng) * MathF.PI * 0.8f;
@@ -143,7 +163,11 @@ internal class CaveCarver
         }
     }
 
-    // Worm tunnel that can periodically balloon into a rounded "cavern" chamber. Each step has a small chance (CAVERN_START_CHANCE) to enter a cavern state that lasts 8-19 steps; while active, the carve radius is boosted by a sine-shaped envelope (rises then falls smoothly, peaking mid-cavern) plus extra random bulge, and forward movement speed is halved so the widened carve overlaps itself into a single open chamber rather than a wide tunnel.
+    // Worm tunnel that can periodically balloon into a rounded "cavern" chamber. Each step has a
+    // small chance (CAVERN_START_CHANCE) to enter a cavern state that lasts 8-19 steps; while
+    // active, the carve radius is boosted by a sine-shaped envelope (rises then falls smoothly,
+    // peaking mid-cavern) plus extra random bulge, and forward movement speed is halved so the
+    // widened carve overlaps itself into a single open chamber rather than a wide tunnel.
     private void CarveWormCavern(World world, float x, float y, float z, float yaw, float pitch, float radius, int steps, Random rng)
     {
         bool inCavern = false;
@@ -162,7 +186,8 @@ internal class CaveCarver
 
             if (inCavern)
             {
-                // Sine envelope: 0 at cavern start/end, 1 at the midpoint, so the chamber smoothly swells outward and then closes back down instead of snapping to full size.
+                // Sine envelope: 0 at cavern start/end, 1 at the midpoint, so the chamber smoothly
+                // swells outward and then closes back down instead of snapping to full size.
                 float t = (float)cavernTimer / cavernMaxTimer;
                 effectiveRadius = radius + MathF.Sin(t * MathF.PI) * (3.0f + TerrainGen.RandFloat01(rng) * 3.0f);
                 if (++cavernTimer >= cavernMaxTimer)
@@ -181,7 +206,11 @@ internal class CaveCarver
         }
     }
 
-    // Deep vertical gash, it's like a ravine. Linear path, not worm based. Unlike the worm carvers, this walks a straight-ish 2D path (X/Z only, gentle yaw drift) and for every step carves a full vertical column from bottomY to topY - producing a tall, narrow canyon rather than a rounded tunnel. Column width follows a sine envelope so the ravine is narrow at both ends and widest in the middle.
+    // Deep vertical gash, it's like a ravine. Linear path, not worm based.
+    // Unlike the worm carvers, this walks a straight-ish 2D path (X/Z only, gentle yaw drift) and
+    // for every step carves a full vertical column from bottomY to topY - producing a tall, narrow
+    // canyon rather than a rounded tunnel. Column width follows a sine envelope so the ravine is
+    // narrow at both ends and widest in the middle.
     private void CarveRavine(World world, float startX, float startY, float startZ, Random rng)
     {
         float yaw = TerrainGen.RandAngle(rng);
@@ -218,7 +247,9 @@ internal class CaveCarver
         }
     }
 
-    // Carves a filled sphere of air (subject to CarveBlock's solid/bedrock checks) centered at (cx, cy, cz) with the given radius, clipped to this carver's target chunk bounds and the CAVE_MIN_Y/CAVE_MAX_Y range. Used as the basic carve primitive by every worm-based cave type.
+    // Carves a filled sphere of air (subject to CarveBlock's solid/bedrock checks) centered at
+    // (cx, cy, cz) with the given radius, clipped to this carver's target chunk bounds and the
+    // CAVE_MIN_Y/CAVE_MAX_Y range. Used as the basic carve primitive by every worm-based cave type.
     private void CarveSphere(World world, float cx, float cy, float cz, float radius)
     {
         int minX = (int)MathF.Floor(cx - radius), maxX = (int)MathF.Ceiling(cx + radius);
@@ -257,7 +288,8 @@ internal class CaveCarver
         }
     }
 
-    // Set block at position to air. CarveSphere clamps coordinates to the chunk, so we use direct chunk access here to avoid the full world lookup on every block.
+    // Set block at position to air. CarveSphere clamps coordinates to the chunk, so we
+    // use direct chunk access here to avoid the full world lookup on every block.
     private void CarveBlock(int x, int y, int z)
     {
         int localX = x - mChunkMinX;

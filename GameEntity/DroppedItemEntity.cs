@@ -10,7 +10,11 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// A physical item/block stack sitting in the world after being dropped (block break, death, etc.). Owns its own tiny GL mesh instead of going through ChunkMeshBuilder/EntityModel: block drops get a small cube built from the block's own face textures, everything else gets a 2-triangle billboard quad textured from the item atlas. Ticks its own arcade-style physics (gravity, drag, bounce, ground friction) and despawns either after MAX_AGE ticks or when picked up by the player.
+/// A physical item/block stack sitting in the world after being dropped (block break, death, etc.).
+/// Owns its own tiny GL mesh instead of going through ChunkMeshBuilder/EntityModel: block drops get
+/// a small cube built from the block's own face textures, everything else gets a 2-triangle
+/// billboard quad textured from the item atlas. Ticks its own arcade-style physics (gravity, drag,
+/// bounce, ground friction) and despawns either after MAX_AGE ticks or when picked up by the player.
 /// </summary>
 public class DroppedItemEntity : Entity
 {
@@ -58,7 +62,8 @@ public class DroppedItemEntity : Entity
 
         mBobPhase = (float)(rng.NextDouble() * MathF.PI * 2f);
 
-        // Only cube-like block render types get a 3D cube mesh; other block types (e.g. torches, crops - anything cross-shaped or non-cuboid) fall back to the flat billboard like items.
+        // Only cube-like block render types get a 3D cube mesh; other block types (e.g. torches,
+        // crops - anything cross-shaped or non-cuboid) fall back to the flat billboard like items.
         if (stack.IsBlock)
         {
             var renderType = BlockRegistry.GetRenderType(stack.Block);
@@ -75,7 +80,9 @@ public class DroppedItemEntity : Entity
             BuildBillboardMesh();
     }
 
-    // Stairs get approximated as two stacked half-height boxes (bottom slab + back-top slab) rather than the true L-shaped stair geometry, since it's a small held/dropped-item icon and the silhouette doesn't need to be exact.
+    // Stairs get approximated as two stacked half-height boxes (bottom slab + back-top slab) rather
+    // than the true L-shaped stair geometry, since it's a small held/dropped-item icon and the
+    // silhouette doesn't need to be exact.
     private void BuildCubeMesh()
     {
         var block = BlockRegistry.Get(mStack.Block);
@@ -94,7 +101,9 @@ public class DroppedItemEntity : Entity
         UploadMesh(verts.ToArray());
     }
 
-    // Emits 12 triangles (2 per face x 6 faces) for an axis-aligned box between min/max, using each block's own per-face texture coordinates so the dropped-item cube matches the placed block's appearance. Winding/normals are hand-picked per face for correct backface culling and lighting.
+    // Emits 12 triangles (2 per face x 6 faces) for an axis-aligned box between min/max, using each
+    // block's own per-face texture coordinates so the dropped-item cube matches the placed block's
+    // appearance. Winding/normals are hand-picked per face for correct backface culling and lighting.
     private static void AddBox(List<float> verts, Block block, Vector3 min, Vector3 max)
     {
         var top = block.TopTextureCoords;
@@ -135,7 +144,8 @@ public class DroppedItemEntity : Entity
         V(verts, x0, y0, z1, l_u1, l_v0, -1, 0, 0); V(verts, x0, y1, z0, l_u0, l_v1, -1, 0, 0); V(verts, x0, y0, z0, l_u0, l_v0, -1, 0, 0);
     }
 
-    // A single camera-facing quad (2 triangles) centered on X, sized 0.5x0.5, textured with the item's inventory icon. Actual facing toward the camera is applied at draw time in DrawBillboard.
+    // A single camera-facing quad (2 triangles) centered on X, sized 0.5x0.5, textured with the
+    // item's inventory icon. Actual facing toward the camera is applied at draw time in DrawBillboard.
     private void BuildBillboardMesh()
     {
         var uv = mStack.IsBlock
@@ -208,7 +218,8 @@ public class DroppedItemEntity : Entity
 
         Velocity = new Vector3(Velocity.X, vy, Velocity.Z);
 
-        // Sample the block at the entity's vertical center; if it's lava, give the item a random upward "pop" kick so it doesn't just sit and burn silently in place.
+        // Sample the block at the entity's vertical center; if it's lava, give the item a random
+        // upward "pop" kick so it doesn't just sit and burn silently in place.
         int bx = (int)MathF.Floor(Position.X);
         int by = (int)MathF.Floor(Position.Y + Height * 0.5f);
         int bz = (int)MathF.Floor(Position.Z);
@@ -226,14 +237,17 @@ public class DroppedItemEntity : Entity
         Vector3 actual = Physics.MoveWithCollision(world, GetBoundingBox(), frameVel);
         Position += actual;
 
-        // If collision resolution shortened the Y movement noticeably vs. the requested Y velocity, something was hit vertically (floor or ceiling) - used instead of a direct IsOnGround check because it also detects hitting a ceiling while moving upward.
+        // If collision resolution shortened the Y movement noticeably vs. the requested Y velocity,
+        // something was hit vertically (floor or ceiling) - used instead of a direct IsOnGround
+        // check because it also detects hitting a ceiling while moving upward.
         bool hitY = MathF.Abs(actual.Y) < MathF.Abs(frameVel.Y) * 0.99f;
         if (hitY)
         {
             if (Velocity.Y < 0)
             {
                 IsOnGround = true;
-                // Small bounces (< 0.5 units/sec resulting velocity) are clamped to a full stop instead of bouncing forever with diminishing amplitude.
+                // Small bounces (< 0.5 units/sec resulting velocity) are clamped to a full stop
+                // instead of bouncing forever with diminishing amplitude.
                 float bounce = -Velocity.Y * BOUNCE;
                 Velocity = new Vector3(Velocity.X, bounce < 0.5f ? 0f : bounce, Velocity.Z);
             }
@@ -266,7 +280,8 @@ public class DroppedItemEntity : Entity
 
     protected override void DrawModel(Matrix4x4 view, Matrix4x4 projection)
     {
-        // Oscillates between 0 and 0.2 units of vertical offset; mBobPhase randomizes each drop's starting phase so a pile of items doesn't bob in visible unison.
+        // Oscillates between 0 and 0.2 units of vertical offset; mBobPhase randomizes each drop's
+        // starting phase so a pile of items doesn't bob in visible unison.
         float bob = MathF.Sin(mAge / 10.0f + mBobPhase) * 0.1f + 0.1f;
 
         if (mIsCubeBlock)
@@ -294,7 +309,8 @@ public class DroppedItemEntity : Entity
 
     private void DrawBillboard(Matrix4x4 view, Matrix4x4 projection, float bob)
     {
-        // Y-axis-only billboarding: rotate the quad to face the camera's XZ direction but never tilt it up/down, so it always reads as a flat sprite standing upright on the ground.
+        // Y-axis-only billboarding: rotate the quad to face the camera's XZ direction but never
+        // tilt it up/down, so it always reads as a flat sprite standing upright on the ground.
         float dx = Game.Instance.GetPlayer.Camera.Position.X - Position.X;
         float dz = Game.Instance.GetPlayer.Camera.Position.Z - Position.Z;
 

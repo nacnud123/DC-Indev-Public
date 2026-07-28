@@ -11,16 +11,19 @@ using VoxelEngine.Rendering;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Single-chest UI: a 9x3 chest grid (backed by <see cref="ChestData"/>, keyed to a world position by <c>BlockEntityManager</c>) above the shared player inventory/hotbar. Click handling mirrors <see cref="InventoryScreenBase.HandleInvSlotLeft"/>/Right but targets the chest's own slot storage instead of <see cref="PlayerInventory"/>.
+/// Single-chest UI: a 9x3 chest grid (backed by <see cref="ChestData"/>, keyed to a
+/// world position by <c>BlockEntityManager</c>) above the shared player inventory/hotbar.
+/// Click handling mirrors <see cref="InventoryScreenBase.HandleInvSlotLeft"/>/Right but
+/// targets the chest's own slot storage instead of <see cref="PlayerInventory"/>.
 /// </summary>
 public class ChestScreen : InventoryScreenBase
 {
     private const int CHEST_ROWS = 3;
-    private const float INV_W = COLS * SLOT_SIZE;
-    private const float PANEL_W = INV_W + PADDING * 2;
-    private const float CHEST_BLOCK_H = CHEST_ROWS * SLOT_SIZE;
-    private const float INV_BLOCK_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
-    private const float PANEL_H = CHEST_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
+    private static readonly float INV_W = COLS * SLOT_SIZE;
+    private static readonly float PANEL_W = INV_W + PADDING * 2;
+    private static readonly float CHEST_BLOCK_H = CHEST_ROWS * SLOT_SIZE;
+    private static readonly float INV_BLOCK_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
+    private static readonly float PANEL_H = CHEST_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
 
     private ChestData mChest = null!;
 

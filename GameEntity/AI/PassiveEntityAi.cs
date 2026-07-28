@@ -5,7 +5,10 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity.AI;
 
 /// <summary>
-/// AI for passive mobs (pigs, sheep, etc). Alternates between standing idle and wandering toward a randomly sampled nearby destination, preferring bright/grassy spots. Does not detect or react to the player at all (that's HostileEntityAi's job) - the only player-independent trigger for state changes is elapsed time.
+/// AI for passive mobs (pigs, sheep, etc). Alternates between standing idle and
+/// wandering toward a randomly sampled nearby destination, preferring bright/grassy
+/// spots. Does not detect or react to the player at all (that's HostileEntityAi's job) -
+/// the only player-independent trigger for state changes is elapsed time.
 /// </summary>
 public class PassiveEntityAi : EntityAi
 {
@@ -40,7 +43,8 @@ public class PassiveEntityAi : EntityAi
         FaceMovementDirection();
     }
 
-    // Handles Idle <-> Wandering transitions based on StateTimer expiry, target arrival, or wander timeout.
+    // Handles Idle <-> Wandering transitions based on StateTimer expiry, target arrival,
+    // or wander timeout.
     private void UpdateState(World world)
     {
         switch (mCurrentState)
@@ -80,7 +84,9 @@ public class PassiveEntityAi : EntityAi
         }
     }
 
-    // Samples WANDER_SAMPLES random positions within WANDER_RADIUS/WANDER_Y_RANGE and picks the highest-scored reachable one via ScoreWanderPosition (grass beats light level). Falls back to Idle if no valid ground position was found or no path could be computed.
+    // Samples WANDER_SAMPLES random positions within WANDER_RADIUS/WANDER_Y_RANGE and picks
+    // the highest-scored reachable one via ScoreWanderPosition (grass beats light level).
+    // Falls back to Idle if no valid ground position was found or no path could be computed.
     private void PickWanderTarget(World world)
     {
         int ox = (int)MathF.Floor(ParentEntity.Position.X);
@@ -123,7 +129,9 @@ public class PassiveEntityAi : EntityAi
             mCurrentState = State.Idle;
     }
 
-    // +10 for grass underfoot (strongly preferred, dominates the light-based score); otherwise scores in roughly [-0.5, 0.5] based on max(sky, block) light level out of 15 (Chunk.MAX_LIGHT), so brighter spots are mildly preferred over dark ones.
+    // +10 for grass underfoot (strongly preferred, dominates the light-based score);
+    // otherwise scores in roughly [-0.5, 0.5] based on max(sky, block) light level out of
+    // 15 (Chunk.MAX_LIGHT), so brighter spots are mildly preferred over dark ones.
     private float ScoreWanderPosition(World world, int x, int y, int z)
     {
         if (world.GetBlock(x, y - 1, z) == BlockType.Grass)
@@ -133,7 +141,8 @@ public class PassiveEntityAi : EntityAi
         return light / 15f - 0.5f;
     }
 
-    // Steps the mob along CurrentPath toward CurrentTarget, occasionally abandoning the path early (RANDOM_REWANDER_CHANCE) to make wandering look less mechanical.
+    // Steps the mob along CurrentPath toward CurrentTarget, occasionally abandoning the
+    // path early (RANDOM_REWANDER_CHANCE) to make wandering look less mechanical.
     private void MoveTowardTarget(World world, float speed)
     {
         if (Random.Next(RANDOM_REWANDER_CHANCE) == 0)
@@ -185,7 +194,8 @@ public class PassiveEntityAi : EntityAi
 
         if (ParentEntity.IsOnGround)
         {
-            // In water/lava, mobs periodically hop rather than deterministically jumping, to look like bobbing/swimming instead of a rigid step.
+            // In water/lava, mobs periodically hop rather than deterministically jumping,
+            // to look like bobbing/swimming instead of a rigid step.
             if (IsInFluid(world) && Random.NextSingle() < FLUID_JUMP_CHANCE)
                 velY = Physics.JUMP_VEL;
             else if (waypoint.Y > currentY || ShouldJump(world, dx, dz))

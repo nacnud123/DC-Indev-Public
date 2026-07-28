@@ -12,21 +12,26 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.UI;
 
 /// <summary>
-/// Crafting-table (workbench) UI: a 3x3 crafting grid (larger than the 2x2 grid built into <see cref="InventoryScreen"/>) plus the shared player inventory/hotbar. Recipe matching/result computation lives in <see cref="CraftingGrid"/>, which is re-queried whenever a grid slot changes.
+/// Crafting-table (workbench) UI: a 3x3 crafting grid (larger than the 2x2 grid built
+/// into <see cref="InventoryScreen"/>) plus the shared player inventory/hotbar. Recipe
+/// matching/result computation lives in <see cref="CraftingGrid"/>, which is re-queried
+/// whenever a grid slot changes.
 /// </summary>
 public class CraftingScreen : InventoryScreenBase
 {
     private const int CRAFT_COLS = 3;
     private const int CRAFT_ROWS = 3;
-    private const float CRAFT_GAP = 8f * UIHelper.UI_SCALE;
-    private const float ARROW_W = 24f * UIHelper.UI_SCALE;
-    private const float CRAFT_AREA_W = CRAFT_COLS * SLOT_SIZE + CRAFT_GAP + ARROW_W + CRAFT_GAP + SLOT_SIZE;
+    // Properties (not cached static readonly fields) so these track UIHelper.UI_SCALE live
+    // if the player changes UI scaling in the options menu mid-session.
+    private static float CRAFT_GAP => 8f * UIHelper.UI_SCALE;
+    private static float ARROW_W => 24f * UIHelper.UI_SCALE;
+    private static float CRAFT_AREA_W => CRAFT_COLS * SLOT_SIZE + CRAFT_GAP + ARROW_W + CRAFT_GAP + SLOT_SIZE;
 
-    private const float INV_W = COLS * SLOT_SIZE;
-    private const float PANEL_W = INV_W + PADDING * 2;
-    private const float CRAFT_BLOCK_H = CRAFT_ROWS * SLOT_SIZE;
-    private const float INV_BLOCK_H = (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
-    private const float PANEL_H = CRAFT_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
+    private static float INV_W => COLS * SLOT_SIZE;
+    private static float PANEL_W => INV_W + PADDING * 2;
+    private static float CRAFT_BLOCK_H => CRAFT_ROWS * SLOT_SIZE;
+    private static float INV_BLOCK_H => (MAIN_ROWS + 1) * SLOT_SIZE + SECTION_GAP;
+    private static float PANEL_H => CRAFT_BLOCK_H + SECTION_GAP + INV_BLOCK_H + PADDING * 2;
 
     private CraftingGrid mCraftGrid = new CraftingGrid(CRAFT_COLS, CRAFT_ROWS);
 

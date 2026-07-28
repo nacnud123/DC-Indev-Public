@@ -2,7 +2,10 @@
 namespace VoxelEngine.Items;
 
 /// <summary>
-/// Identifies every non-block item in the game. Each value (other than None) must have a matching concrete <see cref="Item"/> subclass registered in <see cref="ItemRegistry"/>. Grouped by category via comments below purely for readability — the numeric byte values are assigned sequentially and are not meaningful on their own.
+/// Identifies every non-block item in the game. Each value (other than None) must have a
+/// matching concrete <see cref="Item"/> subclass registered in <see cref="ItemRegistry"/>.
+/// Grouped by category via comments below purely for readability — the numeric byte values
+/// are assigned sequentially and are not meaningful on their own.
 /// </summary>
 public enum ItemType : byte
 {

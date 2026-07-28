@@ -4,7 +4,11 @@
 namespace VoxelEngine.GameEntity.AI.Pathfinding;
 
 /// <summary>
-/// Represents a single node in the A* search graph, one per unique block position visited during a search. Instances are created and cached by <see cref="AStarPathfinder"/>'s GetOrCreateNode and are mutated in place as the search progresses (rather than replaced), which is why costs and Parent get overwritten when a cheaper path to the same position is found.
+/// Represents a single node in the A* search graph, one per unique block position
+/// visited during a search. Instances are created and cached by
+/// <see cref="AStarPathfinder"/>'s GetOrCreateNode and are mutated in place as the
+/// search progresses (rather than replaced), which is why costs and Parent get
+/// overwritten when a cheaper path to the same position is found.
 /// </summary>
 public class PathNode
 {
@@ -28,7 +32,10 @@ public class PathNode
         Position = position;
     }
 
-    // Resets search-specific state so a cached node can be reused for a new search without stale cost/parent data leaking in. Note: not currently called by AStarPathfinder (which instead clears its whole node cache per search), but kept available for alternate reuse strategies.
+    // Resets search-specific state so a cached node can be reused for a new search without
+    // stale cost/parent data leaking in. Note: not currently called by AStarPathfinder
+    // (which instead clears its whole node cache per search), but kept available for
+    // alternate reuse strategies.
     public void Reset()
     {
         F = 0;

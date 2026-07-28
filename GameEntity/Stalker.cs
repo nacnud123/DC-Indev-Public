@@ -9,7 +9,8 @@ using VoxelEngine.Terrain.Blocks;
 
 namespace VoxelEngine.GameEntity;
 
-// Hostile mob made of a body + head + 4 legs (separate models glued together each frame in DrawModel). Walks toward the player via StalkerAi, then primes a fuse when close and explodes.
+// Hostile mob made of a body + head + 4 legs (separate models glued together each frame in
+// DrawModel). Walks toward the player via StalkerAi, then primes a fuse when close and explodes.
 public class Stalker : Entity
 {
     private const string BODY_MODEL = "Resources/Entities/Stalker/StalkerBody/StalkerBody.obj";
@@ -119,7 +120,8 @@ public class Stalker : Entity
         UpdateAnimation();
     }
 
-    // Small state machine: idle -> fuse active (player is close) -> either explode or abort (player backs away far enough).
+    // Small state machine: idle -> fuse active (player is close) -> either explode or abort
+    // (player backs away far enough).
     private void UpdateFuse(World world, float distToPlayer, float dt)
     {
         if (!mFuseActive)

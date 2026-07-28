@@ -8,7 +8,11 @@ using System.Threading.Tasks;
 namespace VoxelEngine.Terrain;
 
 /// <summary>
-/// Declarative per-ore-type generation parameters describing how a vein of this ore should be scattered through the world: valid height range, how often it spawns, how many veins per chunk, and the vein's worm-carve radius/length bounds. Note: TerrainGen's current GenerateOreType takes these same knobs (abundance, sizeScale, maxY) as individual parameters per call rather than consuming OreConfig instances directly - this struct documents the shape of that data.
+/// Declarative per-ore-type generation parameters describing how a vein of this ore should be
+/// scattered through the world: valid height range, how often it spawns, how many veins per chunk,
+/// and the vein's worm-carve radius/length bounds. Note: TerrainGen's current GenerateOreType
+/// takes these same knobs (abundance, sizeScale, maxY) as individual parameters per call rather
+/// than consuming OreConfig instances directly - this struct documents the shape of that data.
 /// </summary>
 public struct OreConfig
 {

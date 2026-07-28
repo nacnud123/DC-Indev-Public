@@ -9,7 +9,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity;
 
 /// <summary>
-/// Hostile-at-night, passive-by-day mob (see SpiderAi for the day/night behavior switch). Rendered as three separately-animated OBJ parts (body/head/4 legs reused via 4 offsets) rather than a single skinned mesh, so DrawModel manually composes a transform per part each frame.
+/// Hostile-at-night, passive-by-day mob (see SpiderAi for the day/night behavior switch).
+/// Rendered as three separately-animated OBJ parts (body/head/4 legs reused via 4 offsets) rather
+/// than a single skinned mesh, so DrawModel manually composes a transform per part each frame.
 /// </summary>
 public class Spider : Entity
 {
@@ -35,7 +37,8 @@ public class Spider : Entity
     private static readonly Vector3 Leg4Offset = new(-0.16f, 0.065f, 0.11f);
     private static readonly Vector3 Leg4Rotation = new(0f, -105f, 0f);
 
-    // All offset/rotation constants above were hand-tuned to align the shared leg model against the body mesh at each of the 4 attachment points - not derived from any formula.
+    // All offset/rotation constants above were hand-tuned to align the shared leg model against
+    // the body mesh at each of the 4 attachment points - not derived from any formula.
     private const float MAX_LEG_SWING = MathF.PI / 5f;   // Peak swing angle (radians) at full walk speed.
     private const float WALK_ANIM_SPEED = 8f;            // How fast the walk-cycle phase advances per unit of horizontal speed.
     private const float SWING_DECAY = 0.75f;             // Per-tick multiplier that eases leg swing back to rest once the spider stops.
@@ -90,7 +93,8 @@ public class Spider : Entity
         UpdateAnimation();
     }
 
-    // Advances the walk-cycle phase based on horizontal speed (so faster movement = faster leg animation, independent of tick rate) and eases the swing amplitude back to 0 when stationary.
+    // Advances the walk-cycle phase based on horizontal speed (so faster movement = faster leg
+    // animation, independent of tick rate) and eases the swing amplitude back to 0 when stationary.
     private void UpdateAnimation()
     {
         float dt = TickSystem.TICK_DURATION;
@@ -118,7 +122,8 @@ public class Spider : Entity
         DrawPart(mBodyModel, RotationMatrix(BodyRotation) * Matrix4x4.CreateTranslation(BodyOffset) * entityBase * vp);
         DrawPart(mHeadModel, RotationMatrix(HeadRotation) * Matrix4x4.CreateTranslation(HeadOffset) * entityBase * vp);
 
-        // Legs 1&3 and 2&4 swing in opposite phase (offset by PI) to give an alternating spider gait using only two swing values instead of computing a phase per leg.
+        // Legs 1&3 and 2&4 swing in opposite phase (offset by PI) to give an alternating spider gait
+        // using only two swing values instead of computing a phase per leg.
         float swing1 = MathF.Sin(mWalkPhase) * MAX_LEG_SWING * mLegSwing;
         float swing2 = MathF.Sin(mWalkPhase + MathF.PI) * MAX_LEG_SWING * mLegSwing;
 
@@ -128,7 +133,8 @@ public class Spider : Entity
         DrawLeg(swing2, Leg4Offset, Leg4Rotation, entityBase, vp);
     }
 
-    // Translate to the pivot, apply the leg's fixed rotation (plus animated swing on Z), then translate out to its attachment offset - so the swing rotates the leg about its hip, not the origin.
+    // Translate to the pivot, apply the leg's fixed rotation (plus animated swing on Z), then
+    // translate out to its attachment offset - so the swing rotates the leg about its hip, not the origin.
     private void DrawLeg(float swingAngle, Vector3 offset, Vector3 rotDeg, Matrix4x4 entityBase, Matrix4x4 vp)
     {
         Matrix4x4 legLocal = Matrix4x4.CreateTranslation(-LegPivot)
@@ -163,7 +169,8 @@ public class Spider : Entity
 
         var audio = Game.Instance.AudioManager;
         float dist = (Game.Instance.GetPlayer.Position - Position).Length();
-        // Distance-attenuated volume (falls off over 20 blocks) so hurt sounds don't play at full volume for spiders far from the player.
+        // Distance-attenuated volume (falls off over 20 blocks) so hurt sounds don't play at full
+        // volume for spiders far from the player.
         int vol = Proximity(dist, 20f, audio.SfxVol);
 
         if (vol <= 0)

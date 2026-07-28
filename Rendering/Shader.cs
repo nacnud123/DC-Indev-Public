@@ -6,17 +6,23 @@ using Silk.NET.OpenGL;
 namespace VoxelEngine.Rendering;
 
 /// <summary>
-/// Wraps a linked GLSL shader program (one vertex + one fragment stage). Compiles both stages, links them into a program, caches every active uniform's location up front, and exposes typed setters so callers never have to look up uniform locations themselves. One instance is created per distinct shader program used by the renderer (terrain, entities, sky, UI, etc.).
+/// Wraps a linked GLSL shader program (one vertex + one fragment stage). Compiles both stages,
+/// links them into a program, caches every active uniform's location up front, and exposes typed
+/// setters so callers never have to look up uniform locations themselves. One instance is created
+/// per distinct shader program used by the renderer (terrain, entities, sky, UI, etc.).
 /// </summary>
 public class Shader : IDisposable
 {
     public uint Handle { get; }
 
-    // Uniform name -> GL location, resolved once at link time so per-frame SetX calls are just a dictionary lookup instead of a GetUniformLocation round-trip to the driver every call.
+    // Uniform name -> GL location, resolved once at link time so per-frame SetX calls are just a
+    // dictionary lookup instead of a GetUniformLocation round-trip to the driver every call.
     private readonly Dictionary<string, int> mUniforms = new();
 
     /// <summary>
-    /// Compiles, links, and validates a shader program from GLSL source strings. Throws with the driver's info log if compilation or linking fails, which surfaces GLSL syntax errors immediately at startup rather than as a silent black-screen/no-draw failure later.
+    /// Compiles, links, and validates a shader program from GLSL source strings. Throws with the
+    /// driver's info log if compilation or linking fails, which surfaces GLSL syntax errors immediately
+    /// at startup rather than as a silent black-screen/no-draw failure later.
     /// </summary>
     public Shader(string vertexSrc, string fragmentSrc)
     {
@@ -34,13 +40,16 @@ public class Shader : IDisposable
         if (success == 0)
             throw new Exception(gl.GetProgramInfoLog(Handle));
 
-        // Once linked, the individual shader stage objects are no longer needed - the program keeps its own copy of the compiled code. Detach then delete to let the driver free them immediately instead of leaving them alive (attached) for the lifetime of the program.
+        // Once linked, the individual shader stage objects are no longer needed - the program keeps
+        // its own copy of the compiled code. Detach then delete to let the driver free them immediately
+        // instead of leaving them alive (attached) for the lifetime of the program.
         gl.DetachShader(Handle, vs);
         gl.DetachShader(Handle, fs);
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
 
-        // Enumerate every uniform the linker actually kept (unused uniforms get optimized out and won't appear here) and cache its location so SetInt/SetFloat/etc. never need GetUniformLocation again.
+        // Enumerate every uniform the linker actually kept (unused uniforms get optimized out and won't
+        // appear here) and cache its location so SetInt/SetFloat/etc. never need GetUniformLocation again.
         gl.GetProgram(Handle, ProgramPropertyARB.ActiveUniforms, out int count);
 
         for (uint i = 0; i < (uint)count; i++)
@@ -67,7 +76,9 @@ public class Shader : IDisposable
     /// <summary>Binds this program as the active GL shader for subsequent draw calls.</summary>
     public void Use() => GlContext.Gl.UseProgram(Handle);
 
-    // All SetX methods silently no-op if `name` isn't a known active uniform (e.g. the GLSL compiler optimized it out because it's unused in that particular shader variant), so callers can share one code path across shaders that don't all declare the same uniform set without needing to branch.
+    // All SetX methods silently no-op if `name` isn't a known active uniform (e.g. the GLSL compiler
+    // optimized it out because it's unused in that particular shader variant), so callers can share one
+    // code path across shaders that don't all declare the same uniform set without needing to branch.
     public void SetInt(string name, int v)
     {
         if (mUniforms.TryGetValue(name, out int loc))
@@ -93,7 +104,15 @@ public class Shader : IDisposable
     }
 
     /// <summary>
-    /// Uploads a 4x4 matrix uniform (view/projection/model/MVP, etc.). <see cref="System.Numerics.Matrix4x4"/> stores its 16 components (M11..M44) as sequential fields with no padding, so its in-memory layout is bit-for-bit identical to a flat float[16]. This lets us reinterpret the matrix as a span of floats via <see cref="MemoryMarshal"/> instead of copying it into an intermediate array - no unsafe pointer arithmetic needed, unlike some other GL uniform helpers in this codebase that use `fixed` for the same purpose. `false` for the transpose argument means the data is uploaded as-is; System.Numerics.Matrix4x4 is row-vector/row-major on the CPU side, and GLSL's `mat4` constructor/multiplication conventions in this project's shaders are written to match that layout directly.
+    /// Uploads a 4x4 matrix uniform (view/projection/model/MVP, etc.).
+    /// <see cref="System.Numerics.Matrix4x4"/> stores its 16 components (M11..M44) as sequential fields
+    /// with no padding, so its in-memory layout is bit-for-bit identical to a flat float[16]. This lets
+    /// us reinterpret the matrix as a span of floats via <see cref="MemoryMarshal"/> instead of copying
+    /// it into an intermediate array - no unsafe pointer arithmetic needed, unlike some other GL uniform
+    /// helpers in this codebase that use `fixed` for the same purpose. `false` for the transpose argument
+    /// means the data is uploaded as-is; System.Numerics.Matrix4x4 is row-vector/row-major on the CPU
+    /// side, and GLSL's `mat4` constructor/multiplication conventions in this project's shaders are
+    /// written to match that layout directly.
     /// </summary>
     public void SetMatrix4(string name, Matrix4x4 m)
     {

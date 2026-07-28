@@ -7,7 +7,11 @@ using VoxelEngine.Terrain.Blocks;
 namespace VoxelEngine.Rendering;
 
 /// <summary>
-/// Pre-renders a small isometric 3D icon for every inventory-visible block type, one time at startup, into offscreen FBO textures that are then displayed by ImGui (inventory/hotbar UI) as plain 2D images. This avoids having to render actual 3D block geometry every UI frame. Handles three icon shapes: full cubes (Normal/Slab render types), stairs, and flat sprites (cross-shaped/flat blocks like flowers).
+/// Pre-renders a small isometric 3D icon for every inventory-visible block type, one time at
+/// startup, into offscreen FBO textures that are then displayed by ImGui (inventory/hotbar UI)
+/// as plain 2D images. This avoids having to render actual 3D block geometry every UI frame.
+/// Handles three icon shapes: full cubes (Normal/Slab render types), stairs, and flat sprites
+/// (cross-shaped/flat blocks like flowers).
 /// </summary>
 public class BlockIconRenderer : IDisposable
 {
@@ -17,7 +21,10 @@ public class BlockIconRenderer : IDisposable
     private const string VERT_SHADER = "Shaders/BlockIconVert.glsl";
     private const string FRAG_SHADER = "Shaders/BlockIconFrag.glsl";
 
-    // Per-face brightness multipliers used to fake ambient occlusion / directional lighting on the isometric cube icons, since there's no real lighting pass for this offscreen render. Top is brightest (facing the "sun"), bottom darkest, sides in between - mimics how block faces are shaded in the main world renderer.
+    // Per-face brightness multipliers used to fake ambient occlusion / directional lighting on
+    // the isometric cube icons, since there's no real lighting pass for this offscreen render.
+    // Top is brightest (facing the "sun"), bottom darkest, sides in between - mimics how block
+    // faces are shaded in the main world renderer.
     private const float SHADE_TOP    = 1.0f;
     private const float SHADE_BOTTOM = 0.5f;
     private const float SHADE_FRONT  = 0.8f;
@@ -32,7 +39,13 @@ public class BlockIconRenderer : IDisposable
     private bool mDisposed;
 
     /// <summary>
-    /// Renders one icon texture per inventory-visible block type by drawing a small 3D mesh (cube, stair, or flat sprite depending on the block's render type) into a temporary FBO at <see cref="ICON_SIZE"/> resolution, saving each result as a persistent texture in <see cref="mIconTextures"/>. Must be called once after the world texture atlas is loaded and before any UI code calls <see cref="GetIcon"/>. Carefully saves and restores the previously bound framebuffer/viewport/shader program so it doesn't disturb whatever render state the caller had active.
+    /// Renders one icon texture per inventory-visible block type by drawing a small 3D mesh
+    /// (cube, stair, or flat sprite depending on the block's render type) into a temporary FBO
+    /// at <see cref="ICON_SIZE"/> resolution, saving each result as a persistent texture in
+    /// <see cref="mIconTextures"/>. Must be called once after the world texture atlas is loaded
+    /// and before any UI code calls <see cref="GetIcon"/>. Carefully saves and restores the
+    /// previously bound framebuffer/viewport/shader program so it doesn't disturb whatever
+    /// render state the caller had active.
     /// </summary>
     public void Init(Texture worldTexture)
     {
@@ -59,7 +72,10 @@ public class BlockIconRenderer : IDisposable
         gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, depthRbo);
         gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.DepthComponent24, ICON_SIZE, ICON_SIZE);
 
-        // Save the caller's current framebuffer/viewport/shader program so they can be restored after this offscreen batch - this method is designed to be callable without disturbing whatever the main renderer had bound (important since Init runs once at startup, but defensively avoids leaking GL state either way).
+        // Save the caller's current framebuffer/viewport/shader program so they can be restored
+        // after this offscreen batch - this method is designed to be callable without disturbing
+        // whatever the main renderer had bound (important since Init runs once at startup, but
+        // defensively avoids leaking GL state either way).
         gl.GetInteger(GetPName.DrawFramebufferBinding, out int prevFbo);
         int[] viewport = new int[4];
         unsafe { fixed (int* pv = viewport) { gl.GetInteger(GetPName.Viewport, pv); } }
@@ -69,7 +85,8 @@ public class BlockIconRenderer : IDisposable
         gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment,
             RenderbufferTarget.Renderbuffer, depthRbo);
 
-        // Shared isometric-style MVP for 3D icons (cubes/stairs); flat sprites use an identity MVP instead since they're drawn face-on with pre-defined [-1,1] quad coordinates.
+        // Shared isometric-style MVP for 3D icons (cubes/stairs); flat sprites use an identity MVP
+        // instead since they're drawn face-on with pre-defined [-1,1] quad coordinates.
         var mvp = BuildMvp();
         var flatMvp = Matrix4x4.Identity;
 
@@ -80,7 +97,8 @@ public class BlockIconRenderer : IDisposable
             bool isCube = block.RenderType == RenderingType.Normal
                        || block.RenderType == RenderingType.Slab;
 
-            // Each block gets its own persistent color texture (kept alive for the lifetime of this renderer) that becomes this block's icon; re-attached to the shared FBO below.
+            // Each block gets its own persistent color texture (kept alive for the lifetime of
+            // this renderer) that becomes this block's icon; re-attached to the shared FBO below.
             uint colorTex = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, colorTex);
             unsafe
@@ -99,7 +117,9 @@ public class BlockIconRenderer : IDisposable
             gl.ClearColor(0f, 0f, 0f, 0f);
             gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
             gl.Enable(EnableCap.DepthTest);
-            // Culling off: icon meshes are small and drawn from a single fixed angle, so it's simpler/safer to just draw both winding orders than get face culling exactly right for every block shape (cubes, stairs, flipped-Y stair top half, flat sprites).
+            // Culling off: icon meshes are small and drawn from a single fixed angle, so it's
+            // simpler/safer to just draw both winding orders than get face culling exactly right
+            // for every block shape (cubes, stairs, flipped-Y stair top half, flat sprites).
             gl.Disable(EnableCap.CullFace);
             gl.Enable(EnableCap.Blend);
             gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
@@ -122,14 +142,16 @@ public class BlockIconRenderer : IDisposable
             }
             else
             {
-                // Flat/cross-type blocks (flowers, saplings, etc.) get a simple front-facing quad instead of 3D geometry, using the identity MVP so the [-1,1] quad fills the icon directly.
+                // Flat/cross-type blocks (flowers, saplings, etc.) get a simple front-facing quad
+                // instead of 3D geometry, using the identity MVP so the [-1,1] quad fills the icon directly.
                 mShader.SetMatrix4("mvp", flatMvp);
                 vertices = BuildFlatSprite(block.InventoryTextureCoords);
             }
 
             gl.BindVertexArray(mVao);
             gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);
-            // Re-upload this block's mesh into the shared VBO each iteration (vertex count/shape varies per block/render type, so it can't be a fixed static buffer).
+            // Re-upload this block's mesh into the shared VBO each iteration (vertex count/shape
+            // varies per block/render type, so it can't be a fixed static buffer).
             gl.BufferData<float>(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.DynamicDraw);
             gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)(vertices.Length / 6));
 
@@ -145,13 +167,16 @@ public class BlockIconRenderer : IDisposable
         gl.Enable(EnableCap.CullFace);
         gl.Disable(EnableCap.Blend);
 
-        // The shared depth renderbuffer and temporary FBO are only needed during icon generation; the per-block color textures they rendered into are kept (see mIconTextures) and outlive this cleanup.
+        // The shared depth renderbuffer and temporary FBO are only needed during icon generation;
+        // the per-block color textures they rendered into are kept (see mIconTextures) and outlive this cleanup.
         gl.DeleteRenderbuffer(depthRbo);
         gl.DeleteFramebuffer(fbo);
     }
 
     /// <summary>
-    /// Returns the pre-rendered icon texture handle for a block type, packed as an <see cref="IntPtr"/> the way ImGui.NET's <c>Image()</c> calls expect a texture id. Returns <see cref="IntPtr.Zero"/> if the block has no icon (e.g. <see cref="Init"/> hasn't run yet, or the block isn't inventory-visible).
+    /// Returns the pre-rendered icon texture handle for a block type, packed as an <see cref="IntPtr"/>
+    /// the way ImGui.NET's <c>Image()</c> calls expect a texture id. Returns <see cref="IntPtr.Zero"/>
+    /// if the block has no icon (e.g. <see cref="Init"/> hasn't run yet, or the block isn't inventory-visible).
     /// </summary>
     public IntPtr GetIcon(BlockType type)
     {
@@ -162,26 +187,34 @@ public class BlockIconRenderer : IDisposable
     }
 
     /// <summary>
-    /// Builds the fixed isometric-style camera transform used to render 3D block icons: an orthographic projection (no perspective distortion, matching Minecraft-style inventory icons) looking at a unit cube centered at the origin, tilted -30 deg on X and rotated 45 deg on Y to show the top, front, and right faces simultaneously.
+    /// Builds the fixed isometric-style camera transform used to render 3D block icons: an
+    /// orthographic projection (no perspective distortion, matching Minecraft-style inventory
+    /// icons) looking at a unit cube centered at the origin, tilted -30 deg on X and rotated
+    /// 45 deg on Y to show the top, front, and right faces simultaneously.
     /// </summary>
     private static Matrix4x4 BuildMvp()
     {
-        // Half-extent of the orthographic view volume; 1.1 gives a small margin around the unit cube (which after centering spans roughly [-0.87, 0.87] at this rotation) so it isn't clipped.
+        // Half-extent of the orthographic view volume; 1.1 gives a small margin around the unit
+        // cube (which after centering spans roughly [-0.87, 0.87] at this rotation) so it isn't clipped.
         float orthoSize = 1.1f;
         var projection = Matrix4x4.CreateOrthographic(orthoSize * 2f, orthoSize * 2f, 0.1f, 10f);
-        // Recenter the cube (block-space [0,1]) on the origin before rotating, so it spins in place rather than orbiting around a corner.
+        // Recenter the cube (block-space [0,1]) on the origin before rotating, so it spins in place
+        // rather than orbiting around a corner.
         var translate  = Matrix4x4.CreateTranslation(-0.5f, -0.5f, -0.5f);
-        // -30 deg pitch tilts the camera to look down at the top face; 45 deg yaw shows two side faces - the classic isometric inventory-icon angle.
+        // -30 deg pitch tilts the camera to look down at the top face; 45 deg yaw shows two side
+        // faces - the classic isometric inventory-icon angle.
         var rotationX  = Matrix4x4.CreateRotationX(float.DegreesToRadians(-30f));
         var rotationY  = Matrix4x4.CreateRotationY(float.DegreesToRadians(45f));
         var view       = Matrix4x4.CreateLookAt(new Vector3(0, 0, 5), Vector3.Zero, Vector3.UnitY);
-        // Order matters: translate to origin first, then rotate around Y (yaw), then X (pitch), matching the multiplication order used everywhere else for row-vector transforms.
+        // Order matters: translate to origin first, then rotate around Y (yaw), then X (pitch),
+        // matching the multiplication order used everywhere else for row-vector transforms.
         var model      = translate * rotationY * rotationX;
         return model * view * projection;
     }
 
     /// <summary>
-    /// Builds a single front-facing quad spanning [-1,1] on X/Y at Z=0, used as the icon mesh for flat/cross-shaped blocks (flowers, saplings) which don't have real cube geometry to render.
+    /// Builds a single front-facing quad spanning [-1,1] on X/Y at Z=0, used as the icon mesh for
+    /// flat/cross-shaped blocks (flowers, saplings) which don't have real cube geometry to render.
     /// </summary>
     private static float[] BuildFlatSprite(TextureCoords tex)
     {
@@ -211,7 +244,9 @@ public class BlockIconRenderer : IDisposable
     }
 
     /// <summary>
-    /// Builds a stair-shaped icon mesh out of two stacked boxes (a full-depth bottom slab and a half-depth top slab, mimicking a single stair step), then mirrors the whole mesh across the Y and Z center planes to orient the step correctly for the icon's fixed camera angle.
+    /// Builds a stair-shaped icon mesh out of two stacked boxes (a full-depth bottom slab and a
+    /// half-depth top slab, mimicking a single stair step), then mirrors the whole mesh across
+    /// the Y and Z center planes to orient the step correctly for the icon's fixed camera angle.
     /// </summary>
     private static float[] BuildStairMesh(Block block)
     {
@@ -228,7 +263,8 @@ public class BlockIconRenderer : IDisposable
             block.FrontTextureCoords, block.BackTextureCoords,
             block.RightTextureCoords, block.LeftTextureCoords);
 
-        // Top box: upper half height, and only the back half of Z depth - this is the raised "step" part of the stair sitting on the back half of the bottom box.
+        // Top box: upper half height, and only the back half of Z depth - this is the raised
+        // "step" part of the stair sitting on the back half of the bottom box.
         var b1min = new Vector3(min.X, min.Y + 0.5f * (max.Y - min.Y), min.Z + 0.5f * (max.Z - min.Z));
         var b1max = new Vector3(max.X, max.Y, max.Z);
         AddBox(vertices, b1min, b1max,
@@ -236,7 +272,9 @@ public class BlockIconRenderer : IDisposable
             block.FrontTextureCoords, block.BackTextureCoords,
             block.RightTextureCoords, block.LeftTextureCoords);
 
-        // Mirror every vertex's Y and Z about the block center (0.5, 0.5). This flips the two stacked boxes built above into the actual stair silhouette (step raised toward the camera/front rather than the back) without needing a second, differently-shaped mesh builder.
+        // Mirror every vertex's Y and Z about the block center (0.5, 0.5). This flips the two
+        // stacked boxes built above into the actual stair silhouette (step raised toward the
+        // camera/front rather than the back) without needing a second, differently-shaped mesh builder.
         float centerY = 0.5f;
         float centerZ = 0.5f;
         for (int i = 0; i < vertices.Count; i += 6)
@@ -249,7 +287,9 @@ public class BlockIconRenderer : IDisposable
     }
 
     /// <summary>
-    /// Emits 6 quads (one per axis-aligned face) forming a box from <paramref name="min"/> to <paramref name="max"/>, each face using its own texture coords and a fixed directional shade constant (see the SHADE_* constants) to fake simple per-face lighting.
+    /// Emits 6 quads (one per axis-aligned face) forming a box from <paramref name="min"/> to
+    /// <paramref name="max"/>, each face using its own texture coords and a fixed directional
+    /// shade constant (see the SHADE_* constants) to fake simple per-face lighting.
     /// </summary>
     private static void AddBox(List<float> vertices, Vector3 min, Vector3 max,
         TextureCoords top, TextureCoords bottom,
@@ -288,7 +328,9 @@ public class BlockIconRenderer : IDisposable
     }
 
     /// <summary>
-    /// Triangulates a quad given four corner positions (v0..v3, expected in either clockwise or counter-clockwise winding around the face) into two triangles, mapping the quad corners to the texture's UV rectangle corners and tagging every vertex with the given shade value.
+    /// Triangulates a quad given four corner positions (v0..v3, expected in either clockwise or
+    /// counter-clockwise winding around the face) into two triangles, mapping the quad corners to
+    /// the texture's UV rectangle corners and tagging every vertex with the given shade value.
     /// </summary>
     private static void AddQuad(List<float> vertices,
         Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3,

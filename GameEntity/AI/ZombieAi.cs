@@ -1,4 +1,5 @@
-// Zombie AI chases player and deals melee damage when in range. | DA | 3/2/26 Attack range 2.5 blocks, 20-tick cooldown (1 second), 3 damage per hit.
+// Zombie AI chases player and deals melee damage when in range. | DA | 3/2/26
+// Attack range 2.5 blocks, 20-tick cooldown (1 second), 3 damage per hit.
 
 
 using VoxelEngine.Core;
@@ -7,7 +8,9 @@ using VoxelEngine.Terrain;
 namespace VoxelEngine.GameEntity.AI;
 
 /// <summary>
-/// Hostile AI for the Zombie mob. Simplest hostile AI in the game: pure melee, no special-case behaviour beyond the inherited chase/wander state machine from HostileEntityAi - just deals damage and knockback on a cooldown while in attack range.
+/// Hostile AI for the Zombie mob. Simplest hostile AI in the game: pure melee, no
+/// special-case behaviour beyond the inherited chase/wander state machine from
+/// HostileEntityAi - just deals damage and knockback on a cooldown while in attack range.
 /// </summary>
 public class ZombieAi : HostileEntityAi
 {
