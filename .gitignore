@@ -4,10 +4,10 @@ obj/
 *.user
 *.suo
 *.DotSettings.user
-Building/
+/Building/
 /.idea
 /Properties
-Block Art/
+/Block Art/
 /psudocode/
 /Block Art/
 *.xcf
