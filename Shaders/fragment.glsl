@@ -84,7 +84,7 @@ void main()
 
     // Combine and apply face shading
     vec3 lighting = max(skyContrib, blockContrib) * fragColor.b;
-    lighting = max(lighting, vec3(0.04));  // ← never go fully black
+    lighting = max(lighting, vec3(0.04));  // never go fully black
     vec3 baseColor = texColor.rgb * lighting;
 
     float alpha = alphaOverride > 0.0 ? alphaOverride : texColor.a;
