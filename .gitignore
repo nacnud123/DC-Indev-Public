@@ -5,6 +5,7 @@ obj/
 *.suo
 *.DotSettings.user
 /Building/
+/building/
 /.idea
 /Properties
 Block Art/
@@ -12,6 +13,15 @@ Block Art/
 /Block Art/
 *.xcf
 /.vscode
+
+# Local build output and runtime-generated state - not source.
+/dist/
+/DCIndevSaves/
+/World/
+/imgui.ini
+/servers.txt
+/username.txt
+/server.properties
 
 # Resources/ is game content, not build output - never ignore anything under it.
 #
