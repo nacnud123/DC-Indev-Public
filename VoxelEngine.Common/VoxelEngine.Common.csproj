@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>VoxelEngine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Newtonsoft for structures, that's it. NO Silk.NET, NO ImGui, NO SFML.
+         If you find yourself wanting to add one of those here, the file you're adding
+         doesn't belong in Common. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="VoxelEngine" />
+    <Using Include="System.Numerics" />
+  </ItemGroup>
+
+</Project>

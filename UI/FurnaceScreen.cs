@@ -6,6 +6,7 @@ using VoxelEngine.BlockEntities;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
+using VoxelEngine.Net;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 
@@ -41,6 +42,16 @@ public class FurnaceScreen : InventoryScreenBase
 
     private FurnaceData mFurnace = null!;
 
+    protected override WindowKind Kind => WindowKind.Furnace;
+
+    // Composite order: input, fuel, output - see WindowLayout.
+    protected override ItemStack? LocalContainerSlot(int index) => index switch
+    {
+        0 => mFurnace.InputSlot,
+        1 => mFurnace.FuelSlot,
+        _ => mFurnace.OutputSlot,
+    };
+
     public FurnaceScreen(BlockIconRenderer iconRenderer, Texture itemTexture)
         : base(iconRenderer, itemTexture)
     {
@@ -48,13 +59,14 @@ public class FurnaceScreen : InventoryScreenBase
 
     public void SetFurnace(FurnaceData furnace) => mFurnace = furnace;
 
-    public void OnClose() => ReturnCursorToInventory();
+    public void OnClose() => CloseScreen();
 
     public void Render()
     {
         var inv = Game.Instance.PlayerInventory;
 
-        if (inv == null || mFurnace == null)
+        // In multiplayer there is no local FurnaceData - the snapshot and the progress bars are it.
+        if (inv == null || (!Networked && mFurnace == null))
             return;
 
         var io = ImGui.GetIO();
@@ -86,8 +98,8 @@ public class FurnaceScreen : InventoryScreenBase
             new Vector2(panelX + PANEL_W, panelY + PANEL_H),
             ColorBg, 6f);
 
-        DrawSlot(drawList, mFurnace.InputSlot, inputX, inputY);
-        DrawSlot(drawList, mFurnace.FuelSlot, fuelX, fuelY);
+        DrawSlot(drawList, ContainerSlot(0), inputX, inputY);
+        DrawSlot(drawList, ContainerSlot(1), fuelX, fuelY);
         DrawOutputSlot(drawList, outputX, outputY);
         DrawFlame(drawList, fuelX, flameBotY);
         DrawArrow(drawList, arrowX, arrowY);
@@ -98,48 +110,49 @@ public class FurnaceScreen : InventoryScreenBase
 
         if (HitsSlot(mousePos, inputX, inputY))
         {
-            if (mFurnace.InputSlot.HasValue)
-                DrawTooltip(drawList, mousePos, GetName(mFurnace.InputSlot.Value));
+            if (ContainerSlot(0) is { } input)
+                DrawTooltip(drawList, mousePos, GetName(input));
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(0, false))
                 HandleFurnaceSlotLeft(ref mFurnace.InputSlot);
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right) && !SendContainerClick(0, true))
                 HandleFurnaceSlotRight(ref mFurnace.InputSlot);
         }
 
         if (HitsSlot(mousePos, fuelX, fuelY))
         {
-            if (mFurnace.FuelSlot.HasValue)
-                DrawTooltip(drawList, mousePos, GetName(mFurnace.FuelSlot.Value));
+            if (ContainerSlot(1) is { } fuel)
+                DrawTooltip(drawList, mousePos, GetName(fuel));
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(1, false))
                 HandleFurnaceSlotLeft(ref mFurnace.FuelSlot);
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right) && !SendContainerClick(1, true))
                 HandleFurnaceSlotRight(ref mFurnace.FuelSlot);
         }
 
         if (HitsSlot(mousePos, outputX, outputY))
         {
-            if (mFurnace.OutputSlot.HasValue)
-                DrawTooltip(drawList, mousePos, GetName(mFurnace.OutputSlot.Value));
+            if (ContainerSlot(2) is { } output)
+                DrawTooltip(drawList, mousePos, GetName(output));
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(2, false))
                 HandleOutputClick();
         }
 
         int hoveredSlot = GetInvSlotAtMouse(mousePos, contentX, invY, hotbarY);
         if (hoveredSlot >= 0)
         {
-            var stack = inv.GetSlot(hoveredSlot);
+            var stack = InventorySlot(inv, hoveredSlot);
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, GetName(stack.Value));
+
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                HandleInvSlotLeft(inv, hoveredSlot);
+                ClickInventorySlot(inv, hoveredSlot, false);
 
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-                HandleInvSlotRight(inv, hoveredSlot);
+                ClickInventorySlot(inv, hoveredSlot, true);
         }
 
         DrawCursorStack(drawList, mousePos);
@@ -147,15 +160,16 @@ public class FurnaceScreen : InventoryScreenBase
 
     private void DrawOutputSlot(ImDrawListPtr drawList, float sx, float sy)
     {
+        var output = ContainerSlot(2);
+
         var min = new Vector2(sx, sy);
         var max = new Vector2(sx + SLOT_SIZE, sy + SLOT_SIZE);
         drawList.AddRectFilled(min, max, ColorSlot);
-        drawList.AddRect(min, max, mFurnace.OutputSlot.HasValue ? ColorBorderSel : ColorBorder);
+        drawList.AddRect(min, max, output.HasValue ? ColorBorderSel : ColorBorder);
 
-        if (!mFurnace.OutputSlot.HasValue)
+        if (output is not { } stack)
             return;
 
-        var stack = mFurnace.OutputSlot.Value;
         DrawItem(drawList, stack, sx + ITEM_PADDING, sy + ITEM_PADDING, ITEM_SIZE);
         DrawCount(drawList, stack.Count, sx, sy);
     }
@@ -164,9 +178,13 @@ public class FurnaceScreen : InventoryScreenBase
     // time of whatever fuel item is currently lit, not a constant).
     private void DrawFlame(ImDrawListPtr drawList, float sx, float flameBotY)
     {
-        float flameFrac = mFurnace.CurrentFuelMax > 0
-            ? (float)mFurnace.BurnTimeRemaining / mFurnace.CurrentFuelMax
-            : 0f;
+        var windows = Game.Instance.Windows;
+
+        (int remaining, int fuelMax) = Networked
+            ? (windows.BurnTime, (int)windows.BurnMax)
+            : (mFurnace.BurnTimeRemaining, mFurnace.CurrentFuelMax);
+
+        float flameFrac = fuelMax > 0 ? (float)remaining / fuelMax : 0f;
         float filledH = FLAME_H * flameFrac;
 
         drawList.AddRectFilled(
@@ -188,9 +206,11 @@ public class FurnaceScreen : InventoryScreenBase
     // the input slot can change.
     private void DrawArrow(ImDrawListPtr drawList, float arrowX, float arrowY)
     {
-        var recipe = SmeltRegistry.FindMatch(mFurnace.InputSlot);
+        var recipe = SmeltRegistry.FindMatch(ContainerSlot(0));
+        int smeltProgress = Networked ? Game.Instance.Windows.CookProgress : mFurnace.SmeltProgress;
+
         float progress = (recipe != null && recipe.TicksToSmelt > 0)
-            ? (float)mFurnace.SmeltProgress / recipe.TicksToSmelt
+            ? (float)smeltProgress / recipe.TicksToSmelt
             : 0f;
 
         float centreY = arrowY + SLOT_SIZE / 2f;

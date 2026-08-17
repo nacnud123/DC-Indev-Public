@@ -66,9 +66,7 @@ public class PaintingRenderer : IDisposable
         foreach (var p in paintingList)
             BuildFaces(verts, p);
 
-        var shader = Entity._shader;
-        if (shader == null)
-            return;
+        var shader = GlRenderBackend.Active.EntityShader;
 
         var gl = GlContext.Gl;
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, mVbo);

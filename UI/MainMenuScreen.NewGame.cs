@@ -8,7 +8,7 @@ namespace VoxelEngine.UI;
 public partial class MainMenuScreen
 {
     /// <summary>
-    /// Renders the "Create New World" form (name, type, size, theme, creative toggle) and
+    /// Renders the "Create New World" form (name, theme, creative toggle) and
     /// handles Create/Cancel. On Create, persists a new world via <c>Serialization.CreateWorld</c>
     /// and raises <see cref="OnStartGame"/> to hand off to Game.cs. Only called while
     /// <c>mCurrentState == MainMenuState.NewGame</c>.
@@ -33,8 +33,6 @@ public partial class MainMenuScreen
         float formW = 440f;
         float formH = PANEL_PAD
                       + labelH + inputH + rowGap    // Name
-                      + BUTTON_HEIGHT + rowGap       // Type
-                      + labelH + inputH + rowGap     // Size
                       + BUTTON_HEIGHT + rowGap       // Theme
                       + BUTTON_HEIGHT + bigGap       // Creative + large gap
                       + BUTTON_HEIGHT + rowGap       // Create
@@ -59,44 +57,6 @@ public partial class MainMenuScreen
         ImGui.SetCursorPos(new Vector2(fieldX, y));
         ImGui.SetNextItemWidth(fieldW);
         ImGui.InputText("##worldname", mWorldNameBuffer, (uint)mWorldNameBuffer.Length);
-        y += inputH + rowGap;
-
-        // Type
-        PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        if (ImGui.Button($"Type: {WorldTypes[mWorldType]} >##type", new Vector2(fieldW, BUTTON_HEIGHT)))
-        {
-            ClickSound();
-            mWorldType = (mWorldType + 1) % WorldTypes.Length;
-        }
-        PopBtn();
-        y += BUTTON_HEIGHT + rowGap;
-
-        // World Size
-        ImGui.PushStyleColor(ImGuiCol.Text, ColText);
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.Text("World Size");
-        ImGui.SameLine();
-        ImGui.PushStyleColor(ImGuiCol.Text, ColTextDim);
-        ImGui.Text("(even, 8-4096)");
-        ImGui.PopStyleColor(2);
-        y += labelH;
-        ImGui.SetCursorPos(new Vector2(fieldX, y));
-        ImGui.SetNextItemWidth(fieldW);
-        var previous = mWorldSize;
-        if (ImGui.InputInt("##worldsize", ref mWorldSize))
-        {
-            ClickSound();
-            mWorldSize = Math.Clamp(mWorldSize, MIN_WORLD_SIZE, MAX_WORLD_SIZE);
-            // World size must be even (chunk grid dimension); if the edit produced an odd
-            // value, nudge it by 1 in the direction the value was changing, then re-clamp
-            // in case that nudge pushed it back out of range at either bound.
-            if ((mWorldSize & 1) != 0)
-            {
-                mWorldSize += mWorldSize > previous ? 1 : -1;
-                mWorldSize = Math.Clamp(mWorldSize, MIN_SCREEN_SCALING, MAX_SCREEN_SCALING);
-            }
-        }
         y += inputH + rowGap;
 
         // Theme
@@ -137,8 +97,8 @@ public partial class MainMenuScreen
             if (string.IsNullOrEmpty(worldName))
                 worldName = "New World";
             Serialization.WorldName = worldName;
-            Serialization.CreateWorld(worldName, null, mWorldSize, mWorldType, mWorldTheme, isCreative: mIsCreative);
-            OnStartGame?.Invoke(mWorldSize, mVolSfx, mVolMusic, mWorldType, mWorldTheme, mIsCreative);
+            Serialization.CreateWorld(worldName, null, mWorldTheme, isCreative: mIsCreative);
+            OnStartGame?.Invoke(mVolSfx, mVolMusic, mWorldTheme, mIsCreative);
         }
         PopBtn();
         y += BUTTON_HEIGHT + rowGap;

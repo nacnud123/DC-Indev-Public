@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe, not Exe: this always opens a window, and a stray console beside it on Windows is
+         exactly the split we removed. Crash output goes to the GUI log pane. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- ⚠ Do not rename. Common's AssemblyInfo.cs grants InternalsVisibleTo to this exact name,
+         which is what lets the server call Entity.AssignNetworkId. -->
+    <AssemblyName>voxelengine_server</AssemblyName>
+    <RootNamespace>VoxelEngine.Server</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../VoxelEngine.Common/VoxelEngine.Common.csproj" />
+  </ItemGroup>
+
+  <!-- Linked from the client rather than copied, so a fix in one is a fix in both. These three are
+       the whole bridge: ImGuiController needs GlContext (19 lines) and UIHelper (DPI scale), and
+       neither drags in the world renderer, GlRenderBackend, or Game. -->
+  <ItemGroup>
+    <Compile Include="../UI/ImGuiController.cs" Link="Linked/ImGuiController.cs" />
+    <Compile Include="../UI/UIHelper.cs" Link="Linked/UIHelper.cs" />
+    <Compile Include="../Rendering/GlContext.cs" Link="Linked/GlContext.cs" />
+  </ItemGroup>
+
+  <!-- The server generates terrain, and terrain now contains structures, so it needs the prefabs
+       the client has. Linked from the client's Resources so both read the same files. -->
+  <ItemGroup>
+    <Content Include="../Resources/Structures/**/*" Link="Resources/Structures/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="VoxelEngine" />
+    <Using Include="System.Numerics" />
+  </ItemGroup>
+
+</Project>

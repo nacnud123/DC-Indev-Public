@@ -5,6 +5,7 @@ using ImGuiNET;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
+using VoxelEngine.Net;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
@@ -35,6 +36,12 @@ public class CraftingScreen : InventoryScreenBase
 
     private CraftingGrid mCraftGrid = new CraftingGrid(CRAFT_COLS, CRAFT_ROWS);
 
+    protected override WindowKind Kind => WindowKind.Workbench;
+
+    // Composite slot 0 is the result, 1..9 the grid - see WindowLayout.
+    protected override ItemStack? LocalContainerSlot(int index) =>
+        index == 0 ? mCraftGrid.Result : mCraftGrid.GetSlot(index - 1);
+
     public CraftingScreen(BlockIconRenderer iconRenderer, Texture itemTexture)
         : base(iconRenderer, itemTexture)
     {
@@ -42,12 +49,12 @@ public class CraftingScreen : InventoryScreenBase
 
     public void OnClose()
     {
-        var inv = Game.Instance.PlayerInventory;
+        // The server empties its own grid when it hears the close.
+        if (CloseScreen())
+            return;
 
-        if (inv != null)
+        if (Game.Instance.PlayerInventory is { } inv)
             mCraftGrid.ReturnItemsTo(inv);
-
-        ReturnCursorToInventory();
     }
 
     public void Render()
@@ -96,50 +103,47 @@ public class CraftingScreen : InventoryScreenBase
         int hoveredSlot = GetInvSlotAtMouse(mousePos, contentX, invY, hotbarY);
         if (hoveredSlot >= 0)
         {
-            var stack = inv.GetSlot(hoveredSlot);
+            var stack = InventorySlot(inv, hoveredSlot);
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, GetName(stack.Value));
 
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                HandleInvSlotLeft(inv, hoveredSlot);
+                ClickInventorySlot(inv, hoveredSlot, false);
 
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-                HandleInvSlotRight(inv, hoveredSlot);
+                ClickInventorySlot(inv, hoveredSlot, true);
         }
 
         int hoveredCraft = GetCraftSlotAtMouse(mousePos, craftX, craftY);
         if (hoveredCraft >= 0)
         {
-            var stack = mCraftGrid.GetSlot(hoveredCraft);
+            var stack = ContainerSlot(hoveredCraft + 1);
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, GetName(stack.Value));
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(hoveredCraft + 1, false))
                 HandleCraftLeftClick(hoveredCraft);
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right) && !SendContainerClick(hoveredCraft + 1, true))
                 HandleCraftRightClick(hoveredCraft);
         }
 
         bool mouseOverResult = mousePos.X >= resultX && mousePos.X < resultX + SLOT_SIZE &&
                                mousePos.Y >= resultY && mousePos.Y < resultY + SLOT_SIZE;
 
-        if (mouseOverResult && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        if (mouseOverResult && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(0, false))
             HandleResultClick();
 
         DrawCursorStack(drawList, mousePos);
     }
 
-    private void DrawCraftSlot(ImDrawListPtr drawList, int index, float sx, float sy)
-    {
-        var stack = mCraftGrid.GetSlot(index);
-        DrawSlot(drawList, stack, sx, sy);
-    }
+    private void DrawCraftSlot(ImDrawListPtr drawList, int index, float sx, float sy) =>
+        DrawSlot(drawList, ContainerSlot(index + 1), sx, sy);
 
     private void DrawResultSlot(ImDrawListPtr drawList, float sx, float sy)
     {
-        bool hasResult = mCraftGrid.Result.HasValue;
-        DrawSlot(drawList, mCraftGrid.Result, sx, sy, isSelected: hasResult);
+        var result = ContainerSlot(0);
+        DrawSlot(drawList, result, sx, sy, isSelected: result.HasValue);
     }
 
     private int GetCraftSlotAtMouse(Vector2 mousePos, float craftX, float craftY)
@@ -243,14 +247,20 @@ public class CraftingScreen : InventoryScreenBase
         var cursor = mCursorStack.Value;
         if (cursor == result.Value)
         {
+            // TakeResult has already eaten the ingredients, so a result that won't fit on the
+            // cursor cannot just be dropped on the floor here - it used to vanish along with them.
             int space = GetMaxStackSize(cursor) - cursor.Count;
-            
-            if (space >= result.Value.Count)
-                mCursorStack = cursor.WithCount(cursor.Count + result.Value.Count);
+            int merged = Math.Min(space, result.Value.Count);
+
+            if (merged > 0)
+                mCursorStack = cursor.WithCount(cursor.Count + merged);
+
+            if (merged < result.Value.Count)
+                GiveOrDrop(result.Value.WithCount(result.Value.Count - merged));
         }
         else
         {
-            Game.Instance.PlayerInventory?.TryAdd(result.Value);
+            GiveOrDrop(result.Value);
         }
     }
 }

@@ -3,6 +3,7 @@
 using Silk.NET.OpenGL;
 using VoxelEngine.Rendering;
 using VoxelEngine.Utils;
+using Shader = VoxelEngine.Rendering.Shader;
 
 namespace VoxelEngine.GameEntity;
 
@@ -26,12 +27,17 @@ public class EntityModel : IDisposable
     public int VertexCount { get; }
     public Texture Texture { get; }
 
-    private EntityModel(uint vao, uint vbo, int vertexCount, Texture texture)
+    // False for geometry-only models, which share one placeholder texture between them - disposing
+    // the model must not delete a texture other models are still pointing at.
+    private readonly bool mOwnsTexture;
+
+    private EntityModel(uint vao, uint vbo, int vertexCount, Texture texture, bool ownsTexture)
     {
         Vao = vao;
         Vbo = vbo;
         VertexCount = vertexCount;
         Texture = texture;
+        mOwnsTexture = ownsTexture;
     }
 
     // Loads (or returns the cached instance of) a single-texture .obj model. Used for simple mob
@@ -86,7 +92,7 @@ public class EntityModel : IDisposable
 
     // Creates the VAO/VBO and uploads interleaved vertex data (pos/uv/normal), wiring up the same
     // three vertex attributes (location 0/1/2) used across the engine's other mesh builders.
-    private static EntityModel Upload(float[] vertices, int vertexCount, Texture texture)
+    private static EntityModel Upload(float[] vertices, int vertexCount, Texture texture, bool ownsTexture = true)
     {
         var gl = GlContext.Gl;
         uint vao = gl.GenVertexArray();
@@ -104,7 +110,60 @@ public class EntityModel : IDisposable
         gl.EnableVertexAttribArray(2);
 
         gl.BindVertexArray(0);
-        return new EntityModel(vao, vbo, vertexCount, texture);
+        return new EntityModel(vao, vbo, vertexCount, texture, ownsTexture);
+    }
+
+    /// Draw this mesh with a DIFFERENT texture than the one it was loaded with. This is what makes
+    /// per-player skins possible on a shared mesh.
+    public void DrawWith(Texture texture, Shader shader, Matrix4x4 mvp)
+    {
+        shader.SetMatrix4("mvp", mvp);
+        texture.Use(TextureUnit.Texture0);
+        var gl = GlContext.Gl;
+        gl.BindVertexArray(Vao);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)VertexCount);
+    }
+
+    /// Load geometry only; the caller supplies the texture at draw time via <see cref="DrawWith"/>.
+    /// Cached by model path alone, so all players share one upload of each body part.
+    public static EntityModel LoadGeometry(string modelPath)
+    {
+        // Distinct suffix so this never collides with a Load() of the same model that does carry a
+        // texture - and constant, so the key is effectively the model path.
+        string key = $"{modelPath}|<geometry>";
+
+        if (Cache.TryGetValue(key, out var cached))
+            return cached;
+
+        var loader = new ObjLoader();
+        loader.Load(modelPath);
+
+        var model = Upload(loader.Vertices, loader.VertexCount, PlaceholderTexture(), ownsTexture: false);
+        Cache[key] = model;
+        return model;
+    }
+
+    // Stands in for the model's own texture, which DrawWith always overrides. Built in code rather
+    // than loaded from a file so there's no asset to ship, and shared by every geometry model.
+    private static Texture? sPlaceholder;
+
+    private static Texture PlaceholderTexture()
+    {
+        if (sPlaceholder != null)
+            return sPlaceholder;
+
+        var gl = GlContext.Gl;
+        uint handle = gl.GenTexture();
+
+        gl.ActiveTexture(TextureUnit.Texture0);
+        gl.BindTexture(TextureTarget.Texture2D, handle);
+        gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba, 1, 1, 0,
+                            PixelFormat.Rgba, PixelType.UnsignedByte, new byte[] { 255, 255, 255, 255 });
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+
+        return sPlaceholder = new Texture(handle, 1, 1);
     }
 
     // Frees every cached GPU resource (both single-texture and multi-material caches). Called on
@@ -119,6 +178,10 @@ public class EntityModel : IDisposable
         foreach (var model in parts)
             model.Dispose();
         MtlCache.Clear();
+
+        // Owned by no model, so nothing else would ever free it.
+        sPlaceholder?.Dispose();
+        sPlaceholder = null;
     }
 
     public void Dispose()
@@ -126,6 +189,8 @@ public class EntityModel : IDisposable
         var gl = GlContext.Gl;
         gl.DeleteVertexArray(Vao);
         gl.DeleteBuffer(Vbo);
-        Texture.Dispose();
+
+        if (mOwnsTexture)
+            Texture.Dispose();
     }
 }

@@ -102,7 +102,8 @@ public class PlayerArm
 
     public PlayerArm(Texture worldTexture, Texture itemTexture, string worldAtlasPath, string itemAtlasPath)
     {
-        Entity.InitShader();
+        // The shared entity shader is compiled lazily by the backend on first use now, so
+        // there's nothing to initialise here.
         mArmModel = EntityModel.Load(ARM_MODEL, ARM_TEXTURE);
 
         mWorldTexture = worldTexture;
@@ -250,13 +251,13 @@ public class PlayerArm
 
     private void RenderArm(Matrix4x4 proj, FrameAnim a, float skyLight, float blockLight)
     {
-        Entity._shader?.Use();
-        Entity._shader?.SetVector3("lightDir", Entity.LightDir);
-        Entity._shader?.SetFloat("ambientStrength", Entity.AmbientStrength);
-        Entity._shader?.SetFloat("sunlightLevel", Entity.SunlightLevel);
-        Entity._shader?.SetFloat("skyLight", skyLight);
-        Entity._shader?.SetFloat("blockLight", blockLight);
-        Entity._shader?.SetFloat("uHitFlash", 0f);
+        GlRenderBackend.Active.EntityShader.Use();
+        GlRenderBackend.Active.EntityShader.SetVector3("lightDir", Entity.LightDir);
+        GlRenderBackend.Active.EntityShader.SetFloat("ambientStrength", Entity.AmbientStrength);
+        GlRenderBackend.Active.EntityShader.SetFloat("sunlightLevel", Entity.SunlightLevel);
+        GlRenderBackend.Active.EntityShader.SetFloat("skyLight", skyLight);
+        GlRenderBackend.Active.EntityShader.SetFloat("blockLight", blockLight);
+        GlRenderBackend.Active.EntityShader.SetFloat("uHitFlash", 0f);
 
         Matrix4x4 transform =
             Matrix4x4.CreateScale(ARM_SCALE)
@@ -266,7 +267,7 @@ public class PlayerArm
             * Matrix4x4.CreateTranslation(0.4f + a.BobX, -0.45f + a.SwingY - a.BobY, -0.3f + a.SwingZ)
             * Matrix4x4.CreateRotationZ(float.DegreesToRadians(a.BobTilt));
 
-        Entity._shader?.SetMatrix4("mvp", transform * proj);
+        GlRenderBackend.Active.EntityShader.SetMatrix4("mvp", transform * proj);
         mArmModel.Texture.Use(TextureUnit.Texture0);
         GlContext.Gl.BindVertexArray(mArmModel.Vao);
         GlContext.Gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)mArmModel.VertexCount);

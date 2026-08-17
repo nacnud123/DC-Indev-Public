@@ -43,12 +43,18 @@ public partial class MainMenuScreen
         ImGui.Text(mCurrentSplash);
         ImGui.PopStyleColor();
 
-        // Buttons
+        // Buttons. Each one takes a slot index rather than a hand-written offset - two buttons
+        // sharing an expression is exactly how Options and Multiplayer ended up on top of
+        // each other. The stack is centred on cy, so adding a button doesn't push it off-centre.
+        const int BUTTON_COUNT = 4;
+        float rowH = BUTTON_HEIGHT + BUTTON_SPACING;
         float bx = cx - BUTTON_WIDTH * 0.5f;
-        float by = cy - 30f;
+        float by = cy - (BUTTON_COUNT * rowH - BUTTON_SPACING) * 0.5f + 30f;
+
+        Vector2 Slot(int index) => new(bx, by + rowH * index);
 
         PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by));
+        ImGui.SetCursorPos(Slot(0));
         if (ImGui.Button("Start", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
         {
             ClickSound();
@@ -60,7 +66,19 @@ public partial class MainMenuScreen
         PopBtn();
 
         PushGreenBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by + BUTTON_HEIGHT + BUTTON_SPACING));
+        ImGui.SetCursorPos(Slot(1));
+        if (ImGui.Button("Multiplayer", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
+        {
+            ClickSound();
+            LoadRecentServers();                       // see MainMenuScreen.Multiplayer.cs
+            LoadUsername();
+            mCurrentState = MainMenuState.Multiplayer;
+        }
+
+        PopBtn();
+
+        PushGreenBtn();
+        ImGui.SetCursorPos(Slot(2));
         if (ImGui.Button("Options", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
         {
             ClickSound();
@@ -70,7 +88,7 @@ public partial class MainMenuScreen
         PopBtn();
 
         PushRedBtn();
-        ImGui.SetCursorPos(new Vector2(bx, by + (BUTTON_HEIGHT + BUTTON_SPACING) * 2));
+        ImGui.SetCursorPos(Slot(3));
         if (ImGui.Button("Quit", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
         {
             ClickSound();
@@ -95,7 +113,7 @@ public partial class MainMenuScreen
             $"{KeyName(Keybindings.ToggleFly)}  -  Fly / Instant break",
             $"{KeyName(Keybindings.Inventory)}  -  Inventory",
             $"{KeyName(Keybindings.Jump)}  -  Jump / Fly up",
-            $"{KeyName(Keybindings.FlyDown)}  -  Fly down",
+            $"{KeyName(Keybindings.Sneak)}  -  Sneak / fly down",
             $"{KeyName(Keybindings.Sprint)}  -  Sprint",
             $"{KeyName(Keybindings.RenderDistUp)}/{KeyName(Keybindings.RenderDistDown)}  -  Render distance",
             $"{KeyName(Keybindings.Screenshot)}  -  Take screenshot",

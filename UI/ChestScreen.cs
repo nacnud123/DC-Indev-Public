@@ -6,6 +6,7 @@ using VoxelEngine.BlockEntities;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
+using VoxelEngine.Net;
 using VoxelEngine.Rendering;
 
 namespace VoxelEngine.UI;
@@ -27,6 +28,10 @@ public class ChestScreen : InventoryScreenBase
 
     private ChestData mChest = null!;
 
+    protected override WindowKind Kind => WindowKind.Chest;
+
+    protected override ItemStack? LocalContainerSlot(int index) => mChest.GetSlot(index);
+
     public ChestScreen(BlockIconRenderer iconRenderer, Texture itemTexture)
         : base(iconRenderer, itemTexture)
     {
@@ -35,18 +40,14 @@ public class ChestScreen : InventoryScreenBase
     // Rebinds the screen to whichever chest block entity was just opened.
     public void SetChest(ChestData chest) => mChest = chest;
 
-    public void OnClose()
-    {
-        if (!mCursorStack.HasValue)
-            return;
-
-        ReturnCursorToInventory();
-    }
+    public void OnClose() => CloseScreen();
 
     public void Render()
     {
         var inv = Game.Instance.PlayerInventory;
-        if (inv == null)
+
+        // In multiplayer there is no local ChestData - the snapshot is the chest.
+        if (inv == null || (!Networked && mChest == null))
             return;
 
         var io = ImGui.GetIO();
@@ -69,7 +70,7 @@ public class ChestScreen : InventoryScreenBase
         {
             for (int col = 0; col < COLS; col++)
             {
-                DrawSlot(drawList, mChest.GetSlot(row * COLS + col), contentX + col * SLOT_SIZE,
+                DrawSlot(drawList, ContainerSlot(row * COLS + col), contentX + col * SLOT_SIZE,
                     chestY + row * SLOT_SIZE);
             }
         }
@@ -81,29 +82,29 @@ public class ChestScreen : InventoryScreenBase
         int hoveredChest = GetGridSlotAtMouse(mousePos, contentX, chestY, CHEST_ROWS);
         if (hoveredChest >= 0)
         {
-            var stack = mChest.GetSlot(hoveredChest);
+            var stack = ContainerSlot(hoveredChest);
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, GetName(stack.Value));
-            
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) 
+
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !SendContainerClick(hoveredChest, false))
                 HandleChestLeft(hoveredChest);
-            
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right)) 
+
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right) && !SendContainerClick(hoveredChest, true))
                 HandleChestRight(hoveredChest);
         }
 
         int hoveredInv = GetInvSlotAtMouse(mousePos, contentX, invY, hotbarY);
         if (hoveredInv >= 0)
         {
-            var stack = inv.GetSlot(hoveredInv);
+            var stack = InventorySlot(inv, hoveredInv);
             if (stack.HasValue)
                 DrawTooltip(drawList, mousePos, GetName(stack.Value));
-            
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) 
-                HandleInvSlotLeft(inv, hoveredInv);
-            
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right)) 
-                HandleInvSlotRight(inv, hoveredInv);
+
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                ClickInventorySlot(inv, hoveredInv, false);
+
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+                ClickInventorySlot(inv, hoveredInv, true);
         }
 
         DrawCursorStack(drawList, mousePos);

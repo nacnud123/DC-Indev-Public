@@ -29,13 +29,10 @@ public partial class MainMenuScreen
         WorldSelection,
         NewGame,
         Options,
-        Keybindings
+        Keybindings,
+        Multiplayer
     }
 
-    // World size input is clamped/rounded to an even number within this range (see NewGame screen).
-    private const int MIN_WORLD_SIZE = 8;
-    private const int MAX_WORLD_SIZE = 4096;   
-    
     private const int MIN_SCREEN_SCALING = 1;
     private const int MAX_SCREEN_SCALING = 4;
 
@@ -87,9 +84,8 @@ public partial class MainMenuScreen
     private static readonly Vector4 ColScrollbarAct = new(0.25f, 0.55f, 0.25f, 1f);
     private static readonly Vector4 ColSeparator = new(0.15f, 0.30f, 0.15f, 0.4f);
 
-    // Display labels for world generation dropdowns in the New Game screen; index corresponds
-    // to the value stored in mWorldType/mWorldTheme, not a WorldGenSettings enum directly.
-    private static readonly string[] WorldTypes = ["Island", "Inland", "Floating", "Flat"];
+    // Display labels for the theme dropdown in the New Game screen; index corresponds to the
+    // value stored in mWorldTheme, not a WorldGenSettings enum directly.
     private static readonly string[] WorldThemes = ["Normal", "Hell", "Paradise", "Woods"];
 
     // Ordered list of (display label, action) pairs driving the Keybindings screen's rows;
@@ -102,7 +98,7 @@ public partial class MainMenuScreen
         ("Move Right", Keybindings.Action.MoveRight),
         ("Jump", Keybindings.Action.Jump),
         ("Sprint", Keybindings.Action.Sprint),
-        ("Fly Down", Keybindings.Action.FlyDown),
+        ("Sneak", Keybindings.Action.Sneak),
         ("Toggle Fly", Keybindings.Action.ToggleFly),
         ("Inventory", Keybindings.Action.Inventory),
         ("Drop Item", Keybindings.Action.DropItem),
@@ -114,13 +110,16 @@ public partial class MainMenuScreen
         ("Render Dist Down", Keybindings.Action.RenderDistDown),
     ];
 
-    // New Game form state (indices into WorldTypes/WorldThemes for the two int fields).
-    private int mWorldSize = 64;
-    private int mWorldType = 0;
+    // New Game form state (mWorldTheme is an index into WorldThemes).
     private int mWorldTheme = 0;
     // Options screen slider state (0-100), mirrored into AudioManager on change.
     private int mVolSfx = 85;
     private int mVolMusic = 25;
+
+    // Singleplayer gets these through OnStartGame; joining a server has no equivalent, so the
+    // multiplayer session reads them here instead of starting silent.
+    internal int SfxVolume => mVolSfx;
+    internal int MusicVolume => mVolMusic;
     private int mScreenScale = 2;
     private bool mIsCreative = false;
     private bool mAsciiEnabled = false;
@@ -131,12 +130,27 @@ public partial class MainMenuScreen
     public event Action OnTitleQuitGame = null!;
     /// <summary>
     /// Raised when the New Game / world-load flow finishes and gameplay should start.
-    /// Parameters, in order: world size, SFX volume, music volume, world type index
-    /// (into <see cref="WorldTypes"/>), world theme index (into <see cref="WorldThemes"/>),
-    /// and whether creative mode is enabled. Game.cs wires this up to actually build/load
-    /// the World and switch GameState to Playing.
+    /// Parameters, in order: SFX volume, music volume, world theme index (into
+    /// <see cref="WorldThemes"/>), and whether creative mode is enabled. Game.cs wires this up
+    /// to actually build/load the World and switch GameState to Playing.
     /// </summary>
-    public event Action<int, int, int, int, int, bool> OnStartGame = null!;
+    public event Action<int, int, int, bool> OnStartGame = null!;
+
+    public event Action<string>? OnJoinServer;
+    private readonly byte[] mServerAddressBuffer = new byte[128];
+    private readonly byte[] mUsernameBuffer = new byte[32];
+    private List<string> mRecentServers = new();
+
+    /// Read by Game when joining. The server rejects duplicate names, so two clients on one LAN
+    /// must not both send the default.
+    internal string PlayerName
+    {
+        get
+        {
+            string name = GetStringFromBuffer(mUsernameBuffer).Trim();
+            return name.Length > 0 ? name : "Player";
+        }
+    }
 
     // Random flavor text shown under the title, Minecraft-style; one is picked per menu visit.
     private List<string> mSplashText = new()
@@ -226,6 +240,9 @@ public partial class MainMenuScreen
                 break;
             case MainMenuState.Keybindings:
                 RenderKeybindingsScreen(windowFlags);
+                break;
+            case MainMenuState.Multiplayer:
+                RenderMultiplayerScreen(windowFlags);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();

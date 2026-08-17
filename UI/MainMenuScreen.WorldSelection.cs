@@ -72,7 +72,7 @@ public partial class MainMenuScreen
                 var dl = ImGui.GetWindowDrawList();
 
                 dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 6f), ImGui.ColorConvertFloat4ToU32(ColText), world.WorldName);
-                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim), $"Last played: {lastPlayed} - {world.WorldSize}x{world.WorldSize}");
+                dl.AddText(new Vector2(itemMin.X + 12f, itemMin.Y + 26f), ImGui.ColorConvertFloat4ToU32(ColTextDim), $"Last played: {lastPlayed}");
 
                 if (i < mAvailableWorlds.Count - 1)
                 {
@@ -95,9 +95,8 @@ public partial class MainMenuScreen
         float totalW = BUTTON_WIDTH * 4 + BUTTON_SPACING * 3;
         float bx = cx - totalW * 0.5f;
 
-        // Play - loads the currently selected saved world. World type/theme (0, 0) are unused
-        // for an existing world (only relevant during generation of a brand new one), so they're
-        // passed as placeholders; the actual terrain is read back from the save data instead.
+        // Play - loads the currently selected saved world. The theme (0) is a placeholder: it only
+        // matters when generating a brand new world, and the real one is read back from the save.
         PushDisableableBtn(hasSel, false);
         ImGui.SetCursorPos(new Vector2(bx, btnY));
         if (ImGui.Button("Play", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)) && hasSel)
@@ -105,7 +104,7 @@ public partial class MainMenuScreen
             ClickSound();
             Serialization.WorldName = mAvailableWorlds[mSelectedWorld].WorldName;
             var selWorld = mAvailableWorlds[mSelectedWorld];
-            OnStartGame?.Invoke(Serialization.GetWorldSize(selWorld.WorldName), mVolSfx, mVolMusic, 0, 0, selWorld.IsCreative);
+            OnStartGame?.Invoke(mVolSfx, mVolMusic, 0, selWorld.IsCreative);
         }
         PopDisableableBtn(hasSel, false);
 
@@ -125,8 +124,6 @@ public partial class MainMenuScreen
         if (ImGui.Button("New World", new Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)))
         {
             ClickSound();
-            mWorldSize = 16;
-            mWorldType = 0;
             mWorldTheme = 0;
             mIsCreative = false;
             SetInputBuffer(mWorldNameBuffer, "New World");

@@ -26,7 +26,7 @@ public static class Keybindings
         MoveRight,
         Jump,
         Sprint,
-        FlyDown,
+        Sneak,
         ToggleFly,
         Inventory,
         DropItem,
@@ -47,7 +47,7 @@ public static class Keybindings
         [Action.MoveRight] = SilkKey.D,
         [Action.Jump] = SilkKey.Space,
         [Action.Sprint] = SilkKey.ShiftLeft,
-        [Action.FlyDown] = SilkKey.ControlLeft,
+        [Action.Sneak] = SilkKey.ControlLeft,
         [Action.ToggleFly] = SilkKey.F,
         [Action.Inventory] = SilkKey.E,
         [Action.DropItem] = SilkKey.Q,
@@ -72,7 +72,7 @@ public static class Keybindings
     public static SilkKey MoveRight => Get(Action.MoveRight);
     public static SilkKey Jump => Get(Action.Jump);
     public static SilkKey Sprint => Get(Action.Sprint);
-    public static SilkKey FlyDown => Get(Action.FlyDown);
+    public static SilkKey Sneak => Get(Action.Sneak);
     public static SilkKey ToggleFly => Get(Action.ToggleFly);
     public static SilkKey Inventory => Get(Action.Inventory);
     public static SilkKey DropItem => Get(Action.DropItem);

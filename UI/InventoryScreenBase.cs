@@ -5,6 +5,7 @@ using ImGuiNET;
 using VoxelEngine.Core;
 using VoxelEngine.GameEntity;
 using VoxelEngine.Items;
+using VoxelEngine.Net;
 using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
@@ -43,6 +44,83 @@ public abstract class InventoryScreenBase
     protected readonly Texture mItemTexture;
     protected ItemStack? mCursorStack;
 
+    // --- server-owned windows (Stage 10) -------------------------------------------------------
+    //
+    // On a server the client renders the snapshot and asks permission for everything else; nothing
+    // below mutates a container. In singleplayer all of this falls through to the local path.
+
+    protected static bool Networked => Game.Instance.IsMultiplayer;
+
+    /// Which window this screen is, so the shared code can map slots onto the composite layout.
+    protected abstract WindowKind Kind { get; }
+
+    /// This screen's own storage for a container slot, in the composite order (result first where
+    /// the window crafts). Only called in singleplayer.
+    protected abstract ItemStack? LocalContainerSlot(int index);
+
+    /// The cursor stack. Server-owned in multiplayer, local otherwise.
+    protected ItemStack? Cursor => Networked ? Game.Instance.Windows.Cursor : mCursorStack;
+
+    /// A container slot, from the snapshot or the local container.
+    protected ItemStack? ContainerSlot(int index) =>
+        Networked ? Game.Instance.Windows.SlotAt(index) : LocalContainerSlot(index);
+
+    /// A player-inventory slot, from the snapshot or the local inventory.
+    protected ItemStack? InventorySlot(PlayerInventory inv, int index) =>
+        Networked
+            ? Game.Instance.Windows.SlotAt(WindowLayout.FromInventoryIndex(Kind, index))
+            : inv.GetSlot(index);
+
+    /// Sends a click on a container slot. Returns false in singleplayer so the caller runs its own.
+    protected bool SendContainerClick(int index, bool rightClick) =>
+        SendClick(index, rightClick, ShiftHeld);
+
+    /// Routes a player-inventory click: to the server, or to the local handler in singleplayer.
+    protected void ClickInventorySlot(PlayerInventory inv, int index, bool rightClick)
+    {
+        int composite = WindowLayout.FromInventoryIndex(Kind, index);
+
+        if (composite >= 0 && SendClick(composite, rightClick, ShiftHeld))
+            return;
+
+        if (rightClick)
+            HandleInvSlotRight(inv, index);
+        else
+            HandleInvSlotLeft(inv, index);
+    }
+
+    /// Screens call this from OnClose. The server owns the cursor and any crafting grid, so in
+    /// multiplayer closing is a request, not a local tidy-up.
+    protected bool CloseScreen()
+    {
+        if (!Networked)
+        {
+            ReturnCursorToInventory();
+            return false;
+        }
+
+        Game.Instance.CloseServerWindow();
+        return true;
+    }
+
+    private static bool SendClick(int composite, bool rightClick, bool shift)
+    {
+        if (!Networked)
+            return false;
+
+        var click = (rightClick, shift) switch
+        {
+            (_, true) => ClickType.ShiftLeftClick,
+            (true, false) => ClickType.RightClick,
+            (false, false) => ClickType.LeftClick,
+        };
+
+        Game.Instance.Windows.SendClick(composite, click, Game.Instance.Network!);
+        return true;
+    }
+
+    protected static bool ShiftHeld => ImGui.GetIO().KeyShift;
+
     protected InventoryScreenBase(BlockIconRenderer iconRenderer, Texture itemTexture)
     {
         mIconRenderer = iconRenderer;
@@ -55,8 +133,33 @@ public abstract class InventoryScreenBase
         if (!mCursorStack.HasValue)
             return;
 
-        Game.Instance.PlayerInventory?.TryAdd(mCursorStack.Value);
+        GiveOrDrop(mCursorStack.Value);
         mCursorStack = null;
+    }
+
+    /// <summary>
+    /// Puts a stack in the player's inventory, throwing whatever doesn't fit at their feet. Every
+    /// caller here used TryAdd and then dropped the stack on the floor of the abstraction: TryAdd
+    /// reports true when only PART of a stack fit, so closing an inventory screen with a full
+    /// inventory and a stack on the cursor quietly deleted most of it.
+    /// </summary>
+    protected static void GiveOrDrop(ItemStack stack)
+    {
+        // Not `?.AddGetRemainder(stack) ?? stack`: a null remainder means the whole stack fit, and
+        // the ?? would turn that into "none of it fit" and duplicate it onto the floor.
+        var inventory = Game.Instance.PlayerInventory;
+        ItemStack? leftover = inventory == null ? stack : inventory.AddGetRemainder(stack);
+
+        if (leftover is not { } rest)
+            return;
+
+        var world = GameContext.Current.GetWorld;
+        var player = GameContext.Current.GetPlayer;
+
+        if (world == null || player == null)
+            return;                                   // nowhere to put it; keeping it beats crashing
+
+        world.AddEntity(new DroppedItemEntity(player.Position + new Vector3(0f, 0.5f, 0f), rest));
     }
 
     // Draws the 9x3 main grid + hotbar row for the player inventory.
@@ -81,17 +184,17 @@ public abstract class InventoryScreenBase
     // Draws the cursor item following the mouse.
     protected void DrawCursorStack(ImDrawListPtr drawList, Vector2 mousePos)
     {
-        if (!mCursorStack.HasValue)
+        if (Cursor is not { } cursor)
             return;
 
         float cx = mousePos.X - ITEM_SIZE / 2f;
         float cy = mousePos.Y - ITEM_SIZE / 2f;
 
-        DrawItem(drawList, mCursorStack.Value, cx, cy, ITEM_SIZE);
+        DrawItem(drawList, cursor, cx, cy, ITEM_SIZE);
 
-        if (mCursorStack.Value.Count > 1)
+        if (cursor.Count > 1)
         {
-            var countStr = mCursorStack.Value.Count.ToString();
+            var countStr = cursor.Count.ToString();
             var textSize = ImGui.CalcTextSize(countStr);
             DrawShadowedText(drawList, new Vector2(cx + ITEM_SIZE - textSize.X - 2f, cy + ITEM_SIZE - textSize.Y - 1f), countStr);
         }
@@ -104,7 +207,7 @@ public abstract class InventoryScreenBase
         drawList.AddRectFilled(min, max, ColorSlot);
         drawList.AddRect(min, max, isSelected ? ColorBorderSel : ColorBorder, 0f, ImDrawFlags.None, isSelected ? 2f : 1f);
 
-        var stack = inv.GetSlot(slotIndex);
+        var stack = InventorySlot(inv, slotIndex);
         if (!stack.HasValue)
             return;
 

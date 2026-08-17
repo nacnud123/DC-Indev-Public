@@ -18,6 +18,9 @@ public class DeathScreen
     /// <summary>Raised when the player clicks "Main Menu"; Game.cs handles the actual state change.</summary>
     public event Action OnReturnToMainMenu;
 
+    /// <summary>Raised when the player clicks "Respawn". Multiplayer only - the server decides where.</summary>
+    public event Action? OnRespawn;
+
     /// <summary>Draws the fullscreen death overlay and handles the Main Menu button click. Called once per frame while dead.</summary>
     public void Render()
     {
@@ -60,7 +63,24 @@ public class DeathScreen
         // state transition (e.g. tearing down the world, showing MainMenuScreen).
         var buttonWidth = 180f;
         var buttonHeight = 44f;
-        ImGui.SetCursorPos(new Vector2(centerX - buttonWidth * 0.5f, centerY + 20f));
+        float buttonY = centerY + 20f;
+
+        // Singleplayer has no respawn - dying ends the run.
+        if (Game.Instance.IsMultiplayer)
+        {
+            ImGui.SetCursorPos(new Vector2(centerX - buttonWidth * 0.5f, buttonY));
+
+            if (ImGui.Button("Respawn", new Vector2(buttonWidth, buttonHeight)))
+            {
+                Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg",
+                    Game.Instance.AudioManager.SfxVol, false);
+                OnRespawn?.Invoke();
+            }
+
+            buttonY += buttonHeight + 12f;
+        }
+
+        ImGui.SetCursorPos(new Vector2(centerX - buttonWidth * 0.5f, buttonY));
 
         if (ImGui.Button("Main Menu", new Vector2(buttonWidth, buttonHeight)))
         {

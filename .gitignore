@@ -7,8 +7,17 @@ obj/
 /Building/
 /.idea
 /Properties
-/Block Art/
+Block Art/
 /psudocode/
 /Block Art/
 *.xcf
 /.vscode
+
+# Resources/ is game content, not build output - never ignore anything under it.
+#
+# The parent .gitignore (Games/.gitignore:77) has `*.obj`, the Visual Studio rule for
+# compiled object files. That pattern also matches the entity 3D *models* under
+# Resources/Entities/, which is why none of them were ever committed. This negation is
+# last and lives in a nested .gitignore, so it overrides both the rules above and the
+# parent's - without un-ignoring real build output in your other projects.
+!Resources/**

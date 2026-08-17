@@ -8,6 +8,8 @@ using VoxelEngine.Rendering;
 using VoxelEngine.Terrain;
 using VoxelEngine.Terrain.Blocks;
 
+using VoxelEngine.Core;
+
 namespace VoxelEngine.UI;
 
 /// <summary>
@@ -17,7 +19,7 @@ namespace VoxelEngine.UI;
 /// through <c>PlayerInventory</c>'s hotbar range and tracks which slot is currently selected
 /// for use as the active block/item.
 /// </summary>
-internal class Hotbar
+internal class Hotbar : IHotbar
 {
     private const int HOTBAR_SLOTS = PlayerInventory.HOTBAR_SLOTS;
     private const int HOTBAR_START = PlayerInventory.HOTBAR_START;

@@ -43,6 +43,11 @@ public class GameRenderer : IDisposable
     private Texture mPaintingsTexture = null!;
     private ParticleSystem mParticleSystem = null!;
 
+    // Drives the water/lava texture scroll in fragment.glsl. Advanced once per game tick rather
+    // than per frame, because that's the rate vanilla animates its textures at - and it keeps the
+    // animation speed identical regardless of framerate.
+    private float mFluidAnimTime;
+
     // Per-session references (set after world load, cleared on teardown)
     private World? mWorld;
     private Player? mPlayer;
@@ -101,7 +106,13 @@ public class GameRenderer : IDisposable
     }
 
     /// <summary>Advances cloud scroll animation by one fixed game tick; forwarded to the tick system.</summary>
-    public void TickClouds() => mCloudRenderer?.Tick();
+    public void TickClouds()
+    {
+        mCloudRenderer?.Tick();
+
+        // Wrapped so a long session doesn't erode the float's precision into a visible stutter.
+        mFluidAnimTime = (mFluidAnimTime + TickSystem.TICK_DURATION) % 3600f;
+    }
     /// <summary>Resets cloud scroll animation (e.g. on world load) so clouds don't jump.</summary>
     public void ResetCloudOffset() => mCloudRenderer?.ResetOffset();
 
@@ -252,36 +263,41 @@ public class GameRenderer : IDisposable
         int fluidType = mPlayer.IsUnderWater ? 1 : mPlayer.IsUnderLava ? 2 : 0;
         mWorldShader.SetInt("fluidType", fluidType);
 
+        mWorldShader.SetFloat("uTime", mFluidAnimTime);
+
         mWorldTexture.Use(TextureUnit.Texture0);
         mWorldShader.SetInt("blockTexture", 0);
 
         // Pass 1: opaque geometry. alphaOverride=0 tells the shader to use each block's native alpha
-        // (effectively opaque) rather than a forced blend value.
+        // (effectively opaque) rather than a forced blend value. depthNudge=0 leaves vertices alone.
         mWorldShader.SetFloat("alphaOverride", 0.0f);
+        mWorldShader.SetFloat("depthNudge", 0.0f);
         mWorld!.Render(mPlayer.Camera);
 
         // Pass 2: transparent geometry (water, glass, etc). Standard alpha blending is enabled;
         // depth writes are disabled so overlapping transparent faces don't occlude each other based
         // on draw order, while depth testing against the opaque pass remains active. Backface
         // culling is disabled so the far side of transparent volumes (e.g. water) still renders.
-        // A small negative polygon offset pushes transparent faces slightly toward the camera to
-        // avoid z-fighting with coincident opaque faces (e.g. water surface flush with a shoreline block).
+        // depthNudge pushes transparent vertices slightly along their normal (toward the camera-facing
+        // side) to avoid z-fighting with coincident opaque faces (e.g. water surface flush with a
+        // shoreline block) - a fixed world-space nudge in the vertex shader rather than
+        // GL_POLYGON_OFFSET, which biases in depth-buffer units and, thanks to the non-linear depth
+        // buffer, punched water through solid terrain dozens of blocks away.
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-        gl.Enable(EnableCap.PolygonOffsetFill);
-        gl.PolygonOffset(-1f, -1f);
         gl.DepthMask(false);
         gl.Disable(EnableCap.CullFace);
 
         mWorldShader.SetFloat("alphaOverride", 0.7f);
+        mWorldShader.SetFloat("depthNudge", 0.015f);
         mWorld.RenderTransparent(mPlayer.Camera);
 
         // Restore GL state back to the defaults the rest of the frame (and other renderers) expect.
         gl.Enable(EnableCap.CullFace);
         gl.DepthMask(true);
-        gl.Disable(EnableCap.PolygonOffsetFill);
         gl.Disable(EnableCap.Blend);
         mWorldShader.SetFloat("alphaOverride", 0.0f);
+        mWorldShader.SetFloat("depthNudge", 0.0f);
     }
 
     // Interpolates the directional light (sun/moon) color across the day cycle:

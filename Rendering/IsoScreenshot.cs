@@ -42,8 +42,32 @@ public class IsoScreenshot
     {
         mAtlasRgba = LoadAtlas("Resources/world.png");
 
-        int worldW = mWorld.SizeInChunks * Chunk.WIDTH;
-        int worldL = mWorld.SizeInChunks * Chunk.DEPTH;
+        // "The whole world" is now whatever has streamed in, so the capture is the bounding box of
+        // the resident chunks rather than a fixed grid starting at the origin.
+        int minChunkX = int.MaxValue, minChunkZ = int.MaxValue;
+        int maxChunkX = int.MinValue, maxChunkZ = int.MinValue;
+
+        foreach (var chunk in mWorld.LoadedChunks)
+        {
+            minChunkX = Math.Min(minChunkX, chunk.ChunkX);
+            minChunkZ = Math.Min(minChunkZ, chunk.ChunkZ);
+            maxChunkX = Math.Max(maxChunkX, chunk.ChunkX);
+            maxChunkZ = Math.Max(maxChunkZ, chunk.ChunkZ);
+        }
+
+        if (minChunkX > maxChunkX)
+        {
+            Console.WriteLine("[IsoScreenshot] No chunks loaded; nothing to capture.");
+            return;
+        }
+
+        // Origin of the captured region in world blocks; sampling is offset by it, the canvas
+        // projection stays 0-based.
+        int originX = minChunkX * Chunk.WIDTH;
+        int originZ = minChunkZ * Chunk.DEPTH;
+
+        int worldW = (maxChunkX - minChunkX + 1) * Chunk.WIDTH;
+        int worldL = (maxChunkZ - minChunkZ + 1) * Chunk.DEPTH;
         int worldH = Chunk.HEIGHT;
 
         // 2:1 dimetric ("Minecraft map style") projection: each world column contributes a 2px-wide,
@@ -66,11 +90,11 @@ public class IsoScreenshot
         {
             for (int worldZ = 0; worldZ < worldL; worldZ++)
             {
-                int topY = FindTopBlock(worldX, worldZ, worldH);
+                int topY = FindTopBlock(originX + worldX, originZ + worldZ, worldH);
                 if (topY < 0)
                     continue;
 
-                var block = mWorld.GetBlock(worldX, topY, worldZ);
+                var block = mWorld.GetBlock(originX + worldX, topY, originZ + worldZ);
                 (byte r, byte g, byte b) = SampleTopColor(block);
 
                 // Higher terrain is brighter; lower terrain is darker

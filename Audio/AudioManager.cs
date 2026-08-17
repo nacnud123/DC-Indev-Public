@@ -16,7 +16,7 @@ namespace VoxelEngine.Audio
     /// currently-playing `Sound` instances so they can be volume-adjusted, stopped, or garbage
     /// collected once they finish. All playback methods no-op once `Dispose` has run.
     /// </summary>
-    public class AudioManager : IDisposable
+    public class AudioManager : IDisposable, IAudioManager
     {
         // Decoded audio data, one entry per unique file path ever played (never evicted).
         private Dictionary<string, SoundBuffer> mSoundBuffers;
@@ -31,6 +31,15 @@ namespace VoxelEngine.Audio
 
         private Sound? mBackgroundMusic;
 
+        // Minecraft never loops its music back-to-back: a track plays, then there is a long,
+        // randomised silence before the next one. That silence is most of why the music reads as
+        // atmosphere rather than as a soundtrack, so the gap is modelled rather than looping.
+        private const float MUSIC_GAP_MIN_SECONDS = 250f;
+        private const float MUSIC_GAP_MAX_SECONDS = 600f;
+        private readonly Random mMusicRandom = new();
+        private float mMusicGapRemaining;
+        private bool mMusicEnabled;
+
         public AudioManager()
         {
             mSoundBuffers = new Dictionary<string, SoundBuffer>();
@@ -38,12 +47,48 @@ namespace VoxelEngine.Audio
             Console.WriteLine("SFML Audio initialized");
         }
 
-        /// <summary>Starts looping background music if it isn't already playing. Safe to call repeatedly - no-ops if music is already active.</summary>
+        /// <summary>
+        /// Enables background music and starts the first track. From then on <see cref="TickMusic"/>
+        /// drives it: one play-through, then a long randomised silence, then another. Safe to call
+        /// repeatedly - no-ops if music is already enabled.
+        /// </summary>
         public void PlayBackgroundMusic()
         {
-            if (mDisposed || mBackgroundMusic != null)
+            if (mDisposed || mMusicEnabled)
                 return;
 
+            mMusicEnabled = true;
+            StartMusicTrack();
+        }
+
+        /// <summary>
+        /// Advances the music schedule. Once a track finishes, the player is torn down and a gap of
+        /// several minutes is rolled before the next one starts.
+        /// </summary>
+        public void TickMusic(float deltaTime)
+        {
+            if (mDisposed || !mMusicEnabled)
+                return;
+
+            if (mBackgroundMusic != null)
+            {
+                if (mBackgroundMusic.Status != SoundStatus.Stopped)
+                    return;
+
+                mBackgroundMusic.Dispose();
+                mBackgroundMusic = null;
+                mMusicGapRemaining = MUSIC_GAP_MIN_SECONDS
+                    + (float)mMusicRandom.NextDouble() * (MUSIC_GAP_MAX_SECONDS - MUSIC_GAP_MIN_SECONDS);
+                return;
+            }
+
+            mMusicGapRemaining -= deltaTime;
+            if (mMusicGapRemaining <= 0f)
+                StartMusicTrack();
+        }
+
+        private void StartMusicTrack()
+        {
             try
             {
                 const string path = "Resources/Audio/Background.ogg";
@@ -52,7 +97,7 @@ namespace VoxelEngine.Audio
 
                 mBackgroundMusic = new Sound(mSoundBuffers[path])
                 {
-                    IsLooping = true,
+                    IsLooping = false,
                     Volume = MusicVol,
                     Pitch = 1f
                 };
@@ -61,6 +106,7 @@ namespace VoxelEngine.Audio
             catch (Exception ex)
             {
                 Console.WriteLine($"Error playing background music: {ex.Message}");
+                mMusicEnabled = false;
             }
         }
 
@@ -127,6 +173,8 @@ namespace VoxelEngine.Audio
             if (mDisposed)
                 return;
 
+            // Also clears the enabled flag, so TickMusic doesn't restart a track after Stop().
+            mMusicEnabled = false;
             if (mBackgroundMusic != null)
             {
                 mBackgroundMusic.Stop();
@@ -151,7 +199,9 @@ namespace VoxelEngine.Audio
         }
 
         // Play break, walk, dig, or place sounds for a block material.
-        public void PlayBlockBreakSound(BlockBreakMaterial material)
+        // volumeScale is how another player's mining is attenuated by distance (Stage 11); local
+        // breaks pass 1.
+        public void PlayBlockBreakSound(BlockBreakMaterial material, float volumeScale = 1f)
         {
             if (mDisposed) 
                 return;
@@ -159,7 +209,7 @@ namespace VoxelEngine.Audio
             string? path = GetBreakSoundPath(material);
             
             if (path != null)
-                PlayAudio(path, SfxVol, false);
+                PlayAudio(path, (int)(SfxVol * Math.Clamp(volumeScale, 0f, 1f)), false);
         }
 
         public void PlayBlockContactSound(BlockBreakMaterial material, int volume = -1)

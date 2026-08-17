@@ -25,7 +25,7 @@ namespace VoxelEngine.Particles;
 /// render order (see Core/Game.cs) particles are drawn after entities and
 /// paintings, but before the block highlight outline and HUD.
 /// </summary>
-public class ParticleSystem : IDisposable
+public class ParticleSystem : IDisposable, IParticleSpawner
 {
     // Fixed capacity for each particle type's instance buffer - both the CPU-side
     // array and the GPU buffer are sized to this; spawning beyond it is either

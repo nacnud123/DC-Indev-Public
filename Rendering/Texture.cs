@@ -1,6 +1,7 @@
 // Main texture class, does GL stuff to make texture | DA | 2/5/26
 using Silk.NET.OpenGL;
 using StbImageSharp;
+using VoxelEngine.Rendering;
 
 /// <summary>
 /// Wraps a single GL 2D texture object. Handles loading image files from disk via StbImageSharp,
@@ -81,6 +82,47 @@ public class Texture : IDisposable
         }
 
         return new Texture(handle, width, height);
+    }
+    
+    public static Texture LoadFromMemory(byte[] pngBytes, bool repeat = false, bool mipmaps = false)
+    {
+        var image = ImageResult.FromMemory(pngBytes, ColorComponents.RedGreenBlueAlpha);
+
+        var gl = GlContext.Gl;
+        uint handle = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, handle);
+        
+         // Image files are typically stored top-left-origin, but OpenGL's texture (0,0) is bottom-left.
+        // Flipping on load means UV (0,0) in shaders correctly maps to the visual bottom-left of the image.
+        StbImage.stbi_set_flip_vertically_on_load(1);
+
+        // Nearest (not Linear) filtering keeps the game's pixel-art textures crisp instead of blurring
+        // them when magnified/minified - critical for a blocky voxel aesthetic.
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS,
+            repeat ? (int)TextureWrapMode.Repeat : (int)TextureWrapMode.ClampToEdge);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT,
+            repeat ? (int)TextureWrapMode.Repeat : (int)TextureWrapMode.ClampToEdge);
+
+        // Transparent black border color; only relevant if a sampler ever uses ClampToBorder, but set
+        // defensively here for consistency across all textures loaded by this method.
+        float[] borderColor = [0f, 0f, 0f, 0f];
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBorderColor, borderColor);
+
+        if (mipmaps)
+        {
+            gl.GenerateMipmap(TextureTarget.Texture2D);
+        }
+        else
+        {
+            // Explicitly clamp to a single mip level (0) when mipmaps aren't generated, so the driver
+            // doesn't treat the texture as incomplete (which would otherwise sample as black).
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, 0);
+        }
+        
+        return new Texture(handle, image.Width, image.Height);
     }
 
     /// <summary>Binds this texture to the given texture unit for use by the next draw call(s).</summary>

@@ -11,7 +11,9 @@ using VoxelEngine.Particles;
 using VoxelEngine.Rendering;
 using VoxelEngine.Saving;
 using VoxelEngine.Terrain;
+using VoxelEngine.Terrain.Infinite;
 using VoxelEngine.Items;
+using VoxelEngine.Net;
 using ImGuiNET;
 using VoxelEngine.UI;
 using VoxelEngine.Utils;
@@ -22,26 +24,8 @@ using Shader = VoxelEngine.Rendering.Shader;
 
 namespace VoxelEngine.Core;
 
-/// <summary>
-/// Drives which per-frame update/render path <see cref="Game"/> runs. Every state has a
-/// corresponding branch in the update and render dispatch (see the switch statements in
-/// OnUpdateFrame/OnRenderFrame region below) and typically its own ImGui screen instance.
-/// Only one state is active at a time; UI screens like Inventory/Crafting/Furnace/Chest are
-/// "paused-but-visible" states layered over the (frozen) world rather than separate scenes.
-/// </summary>
-public enum GameState
-{
-    Playing,
-    Paused,
-    MainMenu,
-    Inventory,
-    Crafting,
-    Furnace,
-    Chest,
-    DoubleChest,
-    Loading,
-    Died
-}
+// GameState moved to VoxelEngine.Common/Core/GameState.cs - shared interaction code
+// branches on it, so it can't live in the client. Same namespace, so nothing else changed.
 
 /// <summary>
 /// Top-level owner of every engine subsystem: window/input, world/player, rendering,
@@ -52,7 +36,7 @@ public enum GameState
 /// passed references directly, so this class effectively acts as the service locator /
 /// composition root for the whole engine.
 /// </summary>
-public class Game : IDisposable
+public partial class Game : IDisposable, IGameContext
 {
     // Process-wide singleton, set at the top of OnLoad() once the window/GL context exist.
     // Other systems (blocks, entities, UI) reach through this rather than holding direct
@@ -104,9 +88,30 @@ public class Game : IDisposable
     private ChestScreen mChestScreen = null!;
     private DoubleChestScreen mDoubleChestScreen = null!;
     private DeathScreen mDeathScreen = null!;
+    private ChatScreen mChatScreen = null!;
+    private ConnectingScreen mConnectingScreen = null!;
+    private DisconnectedScreen mDisconnectedScreen = null!;
     private Hotbar mHotbar = null!;
     private HudScreen mHudScreen = null!;
     private PlayerInventory mInventory = null!;
+
+    // Null in singleplayer - that null is the "am I on a server?" test the rest of the client uses.
+    // Only ever set once the connection is live AND the session is built, so anything that sees it
+    // non-null can use it without further checks.
+    private ClientNetwork? mNetwork;
+
+    // The connection while ConnectAsync is still in flight. Separate from mNetwork because a
+    // half-connected socket must not look like a live one.
+    private ClientNetwork? mConnecting;
+
+    // Set on the connect thread, consumed on the main thread - see PumpArrivingChunks.
+    private volatile bool mLoginComplete;
+
+    // The World owns it; we keep a handle so the MapChunk/PreChunk handlers can feed it.
+    private NetworkChunkSource? mChunkSource;
+
+    /// Name sent at login, from the Multiplayer screen's box. Beta had no auth: any name, any client.
+    public string PlayerName => mMainMenuScreen?.PlayerName ?? "Player";
 
     internal Hotbar Hotbar => mHotbar;
     public PlayerInventory? PlayerInventory => mInventory;
@@ -121,9 +126,8 @@ public class Game : IDisposable
     private int mFrameCount;
     private int mTickCount;
 
-    private int mNewWorldSize = 64;
     private int mLoadingFrames;
-    private WorldGenSettings mWorldGenSettings = WorldGenSettings.Build(0, 0);
+    private WorldGenSettings mWorldGenSettings = WorldGenSettings.Build(0);
 
     public WorldGenSettings GetWorldGenSettings => mWorldGenSettings;
 
@@ -136,15 +140,33 @@ public class Game : IDisposable
     // 0.75=midnight. Advances by (deltaTime / DAY_LENGTH) each update and wraps via modulo.
     private float mTimeOfDay = 0.0f; // 0=dawn, 0.25=noon, 0.5=dusk, 0.75=midnight
     private const float DAY_LENGTH = 1200f; // 10 minutes full cycle, in seconds
+
+    // Melee damage dealt with an empty hand or while holding a block, matching Item.AttackDamage's
+    // default for items that aren't weapons.
+    private const int BARE_HAND_DAMAGE = 1;
     public float TimeOfDay => mTimeOfDay;
+
+    /// Server-authoritative clock (Stage 11). Wrapped into [0,1) because the packet counts ticks.
+    public void SetTimeOfDay(float t) => mTimeOfDay = t - MathF.Floor(t);
 
     // Player
     private Vector3 mSpawnPos;
+
+    // Movement intent waiting to be consumed by the next simulation tick, and whether this frame
+    // sampled the keyboard at all (it doesn't while a screen is open - the player should stand
+    // still and keep falling, not carry on walking from the last sample). See AccumulatePlayerInput.
+    private PlayerInput mPendingInput;
+    private bool mInputSampledThisFrame;
+
+    // Rate limits for held mouse buttons, in seconds. Vanilla places a block every 4 ticks while
+    // right-click is held and swings the arm on a 6-tick cycle; both used to fire once per frame,
+    // which made building click-per-block and the swing animation framerate-dependent.
+    private const float PLACE_INTERVAL = 4f / TickSystem.TPS;
+    private const float SWING_INTERVAL = 6f / TickSystem.TPS;
+    private float mPlaceCooldown;
+    private float mSwingCooldown;
     private PlayerArm? mPlayerArm;
     public Player GetPlayer => mPlayer;
-
-    // Structures
-    private readonly StructureLoader mStructureLoader = new();
 
     // Structure export selection corners
     // F1/F2 set these two block-space corners in-game to mark a region for exporting to a
@@ -182,6 +204,47 @@ public class Game : IDisposable
 
     // Game State
     public GameState CurrentState { get; private set; }
+
+    /// <summary>
+    /// Samples the keyboard into <see cref="mPendingInput"/> for the next tick to consume.
+    ///
+    /// Jump is sampled twice on purpose: held (IsKeyDown) for rising while flying or swimming,
+    /// and edge-triggered (IsKeyPressed) for ground jumps, which must not repeat while the key
+    /// is held. ToggleFly is edge-triggered for the same reason.
+    ///
+    /// The edge-triggered flags are OR-ed in rather than assigned, because frames and ticks no
+    /// longer line up: a frame can produce zero ticks (at high framerates, most do), and a jump
+    /// pressed and released across two such frames would otherwise never reach the simulation.
+    /// They latch here until a tick actually consumes them.
+    /// </summary>
+    private void AccumulatePlayerInput()
+    {
+        mPendingInput.MoveForward = IsKeyDown(Keybindings.MoveForward);
+        mPendingInput.MoveBack    = IsKeyDown(Keybindings.MoveBack);
+        mPendingInput.MoveLeft    = IsKeyDown(Keybindings.MoveLeft);
+        mPendingInput.MoveRight   = IsKeyDown(Keybindings.MoveRight);
+        mPendingInput.Jump        = IsKeyDown(Keybindings.Jump);
+        mPendingInput.Sprint      = IsKeyDown(Keybindings.Sprint);
+        // One key for both: sneaking on the ground, descending while flying - as in Minecraft.
+        mPendingInput.Sneak       = IsKeyDown(Keybindings.Sneak);
+        mPendingInput.Descend     = IsKeyDown(Keybindings.Sneak);
+
+        mPendingInput.JumpPressed |= IsKeyPressed(Keybindings.Jump);
+        mPendingInput.ToggleFly   |= IsKeyPressed(Keybindings.ToggleFly);
+
+        mInputSampledThisFrame = true;
+    }
+
+    #region IGameContext
+
+    // Explicit implementations: shared code in Common sees the narrow interfaces, while client
+    // code keeps calling Game.Instance.AudioManager / .ParticleSystem / .Hotbar and getting the
+    // concrete types back, with their full APIs. Nothing in the client had to change.
+    IAudioManager IGameContext.AudioManager => mAudioManager;
+    IParticleSpawner IGameContext.ParticleSystem => ParticleSystem;
+    IHotbar? IGameContext.Hotbar => mHotbar;
+
+    #endregion
 
     #endregion
 
@@ -244,6 +307,12 @@ public class Game : IDisposable
         Instance = this;
 
         GlContext.Gl = GL.GetApi(mWindow);
+
+        // Bind the two seams shared code reaches through, before anything in Common runs.
+        // GameContext.Current throws if it's unbound, and RenderBackend silently draws nothing,
+        // so getting these in early - right after the GL context exists - matters.
+        GameContext.Bind(this);
+        RenderBackend.Bind(GlRenderBackend.Active);
 
         // Must run before any UI class (Hotbar, HudScreen, InventoryScreenBase-derived screens,
         // ImGuiController) is constructed, since their pixel-size fields are computed from
@@ -402,26 +471,24 @@ public class Game : IDisposable
         mRenderer = new GameRenderer();
         mRenderer.Init(mShader, WorldTexture, PaintingsTexture, ParticleSystem);
 
-        Entity.SharedWorldTexture = WorldTexture;
+        // Hand the atlases to the render backend. Entity.SharedWorldTexture is gone: a GL
+        // texture can't be a static on a Common type any more.
+        GlRenderBackend.Active.SetAtlases(WorldTexture, ItemTexture);
         Entity.SharedRandom = mGameRandom;
         Entity.PlayStepSoundCallback = mAudioManager.PlayBlockContactSound;
     }
 
     // Loads or creates the current save (Serialization.WorldName), constructs the World,
-    // Player, inventory, and dependent systems, restores saved state (position, health,
-    // inventory, paintings, entities, block entities), and — for a brand-new world only —
-    // places starting structures. Called when transitioning from MainMenu/Loading into
-    // Playing.
+    // Player, inventory, and dependent systems, and restores saved state (position, health,
+    // inventory, paintings, entities, block entities). Called when transitioning from
+    // MainMenu/Loading into Playing. Structures are no longer stamped in here - they come out of
+    // the chunk generator now, so they exist everywhere rather than in one patch around spawn.
     private void InitWorld()
     {
-        bool isNewWorld = !Serialization.HasSavedChunks(Serialization.WorldName);
-
         var worldData = Serialization.LoadWorldData(Serialization.WorldName)
                         ?? Serialization.CreateWorld(
                             Serialization.WorldName,
                             customSeed: null,
-                            worldSize: mNewWorldSize,
-                            worldType: (int)mWorldGenSettings.Type,
                             worldTheme: (int)mWorldGenSettings.Theme
                         );
 
@@ -434,22 +501,35 @@ public class Game : IDisposable
         if (mTimeOfDay < 0f)
             mTimeOfDay += 1f;
 
-        mWorldGenSettings = WorldGenSettings.Build(worldData.WorldType, worldData.WorldTheme);
+        mWorldGenSettings = WorldGenSettings.Build(worldData.WorldTheme);
 
         mRenderer.ResetCloudOffset();
 
-        mWorld = new World(mNewWorldSize, worldData.Seed, mWorldGenSettings);
-        mWorld.BuildAllMeshes();
+        mWorld = new World(worldData.Seed, mWorldGenSettings);
 
-        int spawnX = mWorld.SizeInChunks * Chunk.WIDTH / 2;
-        int spawnZ = mWorld.SizeInChunks * Chunk.DEPTH / 2;
-        mSpawnPos = mWorld.FindSpawnPosition(spawnX, spawnZ);
+        // Terrain now streams in asynchronously, so the spawn column is empty at this point.
+        // Block until it exists, or FindSpawnPosition hits its "nothing here" fallback and drops
+        // the player through the world.
+        Vector3 spawnColumn = new(0, 0, 0);
+        mWorld.PrimeAround(spawnColumn, radiusChunks: 2);
+        mSpawnPos = mWorld.FindSpawnPosition(0, 0);
 
         Vector3 playerPos = mSpawnPos;
         if (worldData.HasPlayerPosition)
+        {
             playerPos = new Vector3(worldData.PlayerX, worldData.PlayerY, worldData.PlayerZ);
+            // Returning to a saved position: stream that area in too, or the player falls before
+            // the ground under them arrives.
+            mWorld.PrimeAround(playerPos, radiusChunks: 2);
+        }
 
         mPlayer = new Player(playerPos, mWindow.Size.X / (float)mWindow.Size.Y);
+
+        // Singleplayer is the one-player case of the general list. Registering here keeps
+        // World.Players truthful, so code written against it works unchanged under a server.
+        mWorld.Players.Clear();
+        mWorld.Players.Add(mPlayer);
+
         mPlayerArm = new PlayerArm(WorldTexture, ItemTexture, "Resources/world.png", "Resources/Items.png");
 
         if (worldData.HasPlayerPosition)
@@ -485,37 +565,6 @@ public class Game : IDisposable
 
         mMobSpawner = new MobSpawner(mWorld, mGameRandom);
         mRenderer.SetSession(mWorld, mPlayer, mTickSystem, mPlayerArm, mHotbar, mHudScreen);
-
-        if (isNewWorld)
-        {
-            mStructureLoader.SeedRandom(worldData.Seed + 77777);
-
-            var house = mStructureLoader.Load("SpawnHouse.json");
-            mStructureLoader.Place(mWorld, house, (int)mSpawnPos.X - (house.SizeX / 2), (int)mSpawnPos.Y - 1,
-                (int)mSpawnPos.Z - (house.SizeZ / 2));
-
-            var tower = mStructureLoader.Load("tower.json");
-            mStructureLoader.PlaceRandomly(mWorld, tower, Vector3i.Zero);
-
-            var pyramid = mStructureLoader.Load("pyramid.json");
-            mStructureLoader.PlaceRandomly(mWorld, pyramid, Vector3i.Zero);
-
-            var obelisk = mStructureLoader.Load("obelisk.json");
-            mStructureLoader.PlaceRandomly(mWorld, obelisk, Vector3i.Zero);
-
-            var fountain = mStructureLoader.Load("fountain.json");
-            mStructureLoader.PlaceRandomly(mWorld, fountain, new Vector3i(0, 2, 0));
-
-            var dungeon = mStructureLoader.Load("dungeon.json");
-            mStructureLoader.PlaceUnderground(mWorld, dungeon, changeRandomBlocks: true,
-                rndOriginalType: BlockType.CobbleStone, rndNewType: BlockType.MossyCobblestone, rndChance: .5f);
-
-            // Newly-placed structures make many chunks dirty; force all of them to be
-            // treated as modified so they get written out by the save system rather than
-            // being silently regenerated from the seed (which would lose the placement)
-            // on next load.
-            mWorld.MarkAllChunksWithBlocksAsModified();
-        }
     }
 
     // Creates the ImGuiController and every UI screen instance up front (screens are cheap
@@ -535,15 +584,25 @@ public class Game : IDisposable
         mDoubleChestScreen = new DoubleChestScreen(mBlockIconRenderer, ItemTexture);
         mHudScreen = new HudScreen(IconsTexture);
         mDeathScreen = new DeathScreen();
+        mChatScreen = new ChatScreen();
+        mConnectingScreen = new ConnectingScreen();
+        mDisconnectedScreen = new DisconnectedScreen();
 
         mPauseScreen.OnPauseQuitGame += ReturnToMainMenu;
         mPauseScreen.OnResumeGame += ResumeGame;
         mPauseScreen.OnSaveGame += SaveGame;
 
         mDeathScreen.OnReturnToMainMenu += ReturnToMainMenuNoSave;
+        mDeathScreen.OnRespawn += RequestRespawn;
 
         mMainMenuScreen.OnTitleQuitGame += Close;
         mMainMenuScreen.OnStartGame += StartGame;
+        mMainMenuScreen.OnJoinServer += JoinServer;
+
+        // Cancelling a connect and dismissing a kick do the same two things.
+        mChatScreen.OnSendMessage += SendChatMessage;
+        mConnectingScreen.OnCancel += LeaveServer;
+        mDisconnectedScreen.OnBackToMenu += LeaveServer;
     }
 
     #endregion
@@ -558,6 +617,13 @@ public class Game : IDisposable
     {
         float dt = (float)deltaTime;
         mImGuiController.Update(dt, mMouse, mKeyboard);
+
+        // Drives the play/silence/play cycle; outside any state, so the gap keeps counting down
+        // while paused or in a menu rather than stalling there.
+        mAudioManager.TickMusic(dt);
+
+        // Before the switch, so a kick changes CurrentState before this frame picks what to draw.
+        PumpNetwork();
 
         switch (CurrentState)
         {
@@ -588,11 +654,29 @@ public class Game : IDisposable
                     break;
                 }
 
+                // Pausing only stops the world in singleplayer. On a server the world keeps going
+                // whether this client is looking at a menu or not, so keep simulating - otherwise
+                // entities freeze, chunks stop arriving, and everything snaps on resume.
+                if (mNetwork != null)
+                {
+                    UpdateGameLogic(dt);
+                    if (CurrentState == GameState.Died) break;
+                }
+
                 mPauseScreen?.Render();
                 break;
 
             case GameState.Died:
                 mDeathScreen?.Render();
+                break;
+
+            case GameState.Connecting:
+                PumpArrivingChunks();
+                mConnectingScreen?.Render();
+                break;
+
+            case GameState.Disconnected:
+                mDisconnectedScreen?.Render();
                 break;
 
             case GameState.Inventory:
@@ -663,6 +747,19 @@ public class Game : IDisposable
                 break;
 
             case GameState.Playing:
+                // Chat takes the keyboard first: Escape must close the input, not pause the game,
+                // and typing "s" must not walk you backwards.
+                if (mChatScreen.IsOpen)
+                {
+                    UpdateGameLogic(dt);
+                    if (CurrentState == GameState.Died) break;
+
+                    RenderMultiplayerOverlays(dt);
+                    mHotbar?.Render();
+                    mRenderer.RenderHudOverlay();
+                    break;
+                }
+
                 if (IsKeyPressed(SilkKey.Escape))
                 {
                     PauseGame();
@@ -675,9 +772,17 @@ public class Game : IDisposable
                     break;
                 }
 
+                if (mNetwork != null)
+                {
+                    if (IsKeyPressed(SilkKey.T)) mChatScreen.Open(withSlash: false);
+                    if (IsKeyPressed(SilkKey.Slash)) mChatScreen.Open(withSlash: true);
+                }
+
                 ProcessInput(dt);
                 UpdateGameLogic(dt);
                 if (CurrentState == GameState.Died) break;
+
+                RenderMultiplayerOverlays(dt);
                 mHotbar?.Render();
                 mRenderer.RenderHudOverlay();
                 break;
@@ -686,6 +791,7 @@ public class Game : IDisposable
         // Clear per-frame input state
         mPressedThisFrame.Clear();
         mMouseButtonsPressed.Clear();
+        mInputSampledThisFrame = false;
     }
 
     // Handles all per-frame input for the Playing state: debug toggles/hotkeys, mouse-look,
@@ -707,16 +813,21 @@ public class Game : IDisposable
             GlContext.Gl.PolygonMode(TriangleFace.FrontAndBack, mWireframeMode ? PolygonMode.Line : PolygonMode.Fill);
         }
 
-        if (IsKeyPressed(Keybindings.ResetPosition))
-            mPlayer.ResetPosition();
-
-        if (IsKeyPressed(SilkKey.F9))
-            mTimeOfDay = 0.75f;
-
-        if (IsKeyPressed(SilkKey.F10))
+        // Debug keys are singleplayer only: teleporting and the clock are the server's business
+        // there, and mobs spawned here would exist for nobody else.
+        if (mNetwork == null)
         {
-            int spawned = mMobSpawner.DebugSpawnHostilesNow(candidateCount: 2000, ignoreCap: true);
-            mWindow.Title = $"Spawn test: spawned {spawned} hostiles (F9=midnight, F10=burst)";
+            if (IsKeyPressed(Keybindings.ResetPosition))
+                mPlayer.ResetPosition();
+
+            if (IsKeyPressed(SilkKey.F9))
+                mTimeOfDay = 0.75f;
+
+            if (IsKeyPressed(SilkKey.F10))
+            {
+                int spawned = mMobSpawner.DebugSpawnHostilesNow(candidateCount: 2000, ignoreCap: true);
+                mWindow.Title = $"Spawn test: spawned {spawned} hostiles (F9=midnight, F10=burst)";
+            }
         }
 
         if (IsKeyPressed(Keybindings.ToggleCursor))
@@ -798,52 +909,111 @@ public class Game : IDisposable
 
         if (IsKeyPressed(Keybindings.DropItem))
         {
-            var selected = mHotbar.GetSelectedStack();
-            if (selected.HasValue)
+            // On a server this is a request: it owns the inventory and the entity that comes out
+            // of it, so dropping locally would spawn an item only this client can see.
+            if (mNetwork != null)
+            {
+                SendDropHeld();
+            }
+            else if (mHotbar.GetSelectedStack() is { } selected)
             {
                 mInventory.ConsumeOne(PlayerInventory.HOTBAR_START + mHotbar.SelectedSlotIndex);
                 if (!mHotbar.GetSelectedStack().HasValue)
                     mPlayer.SelectedBlock = BlockType.Air;
 
-                var thrown = selected.Value.WithCount(1);
+                var thrown = selected.WithCount(1);
                 var spawnPos = mPlayer.Camera.Position + mPlayer.Camera.Front * 0.5f;
                 var vel = mPlayer.Camera.Front * 5f + new Vector3(0f, 2f, 0f);
-                var drop = new DroppedItemEntity(spawnPos, thrown, WorldTexture);
+                var drop = new DroppedItemEntity(spawnPos, thrown);
                 drop.Velocity = vel;
                 mWorld.AddEntity(drop);
             }
         }
 
-        mPlayer.Update(mWorld, dt);
+        // Player no longer reads the keyboard itself - it consumes intent, so the same movement
+        // code can be driven by packets on a server. Translating keys to intent is the host's job,
+        // and this is the only place in the client that does it. The player itself is moved by
+        // UpdateGameLogic's fixed-tick loop, not here.
+        AccumulatePlayerInput();
+
         mPlayerArm?.Update(dt, mPlayer.HorizontalSpeed);
+
+        if (mPlaceCooldown > 0f) mPlaceCooldown -= dt;
+        if (mSwingCooldown > 0f) mSwingCooldown -= dt;
 
         bool holdingAttack = IsMouseButtonDown(SilkMouseButton.Left) && mCursorGrabbed;
         mPlayer.UpdateBreaking(mWorld, dt, holdingAttack);
 
-        if (holdingAttack)
+        // A held mouse button re-swings on a fixed cadence rather than every frame, which is both
+        // what the animation is timed for and what stops a swing packet going out per frame.
+        if (holdingAttack && mSwingCooldown <= 0f)
+        {
             mPlayerArm?.TriggerSwing();
+            SendSwing();
+            mSwingCooldown = SWING_INTERVAL;
+        }
+        else if (!holdingAttack)
+        {
+            mSwingCooldown = 0f;
+        }
 
         if (IsMouseButtonPressed(SilkMouseButton.Left))
         {
             var hit = mWorld.Raycast(mPlayer.Camera.Position, mPlayer.Camera.Front);
             if (hit.Type == RaycastHitType.Entity)
             {
-                hit.Entity!.TakeDamage(10);
+                // On a server the hit is a request: it checks reach, works out the damage from the
+                // held slot it already knows about, and answers with health and knockback.
+                if (mNetwork != null)
+                {
+                    SendAttack(hit.Entity!.Id);
+                }
+                else
+                {
+                    // Damage comes from whatever is held: every tool defines AttackDamage per tier
+                    // (see ItemSword/ItemAxe/etc). Blocks and an empty hand fall back to
+                    // BARE_HAND_DAMAGE, matching Item.AttackDamage's default for non-weapon items.
+                    var held = mHotbar?.GetSelectedStack();
+                    int damage = held is { IsBlock: false } heldItem
+                        ? ItemRegistry.Get(heldItem.Item).AttackDamage
+                        : BARE_HAND_DAMAGE;
 
-                var knockDir = hit.Entity.Position - mPlayer.Position;
-                knockDir.Y = 0;
-                if (knockDir.LengthSquared() > 0.001f)
-                    knockDir = Vector3.Normalize(knockDir);
-                hit.Entity.Velocity += new Vector3(knockDir.X, 0.7f, knockDir.Z) * 14f;
+                    hit.Entity!.TakeDamage(damage);
+
+                    var knockDir = hit.Entity.Position - mPlayer.Position;
+                    knockDir.Y = 0;
+                    if (knockDir.LengthSquared() > 0.001f)
+                        knockDir = Vector3.Normalize(knockDir);
+                    hit.Entity.Velocity += new Vector3(knockDir.X, 0.7f, knockDir.Z) * 14f;
+                }
             }
         }
 
-        if (IsMouseButtonPressed(SilkMouseButton.Right))
+        // Holding right-click lays a run of blocks instead of one per click. The first block goes
+        // down on the press itself; the rest follow at the vanilla 4-tick interval.
+        bool usePressed = IsMouseButtonPressed(SilkMouseButton.Right);
+        bool useHeld = IsMouseButtonDown(SilkMouseButton.Right) && mCursorGrabbed;
+
+        if (!useHeld)
+            mPlaceCooldown = 0f;
+
+        if (usePressed || (useHeld && mPlaceCooldown <= 0f))
         {
+            mPlaceCooldown = PLACE_INTERVAL;
             mPlayerArm?.TriggerSwing();
+            SendSwing();
             var selected = mHotbar.GetSelectedStack();
             mPlayer.HandleBlockInteraction(mWorld, false, true);
-            if (selected.HasValue && !selected.Value.IsBlock)
+
+            if (selected is not { IsBlock: false })
+                return;
+
+            // Buckets, food, bows, paintings: the effect is a world or inventory change, both of
+            // which the server owns. Running it locally would eat the item twice and spawn things
+            // only this client can see.
+            if (mNetwork != null)
+                SendUseItem();
+            else
                 mPlayer.UseHeldItem(mWorld, selected.Value.Item);
         }
     }
@@ -876,31 +1046,72 @@ public class Game : IDisposable
         Entity.ListenerPosition = mPlayer.Position;
         Entity.SfxVol = mAudioManager.SfxVol;
 
-        // Day/night advances continuously with real elapsed time (not per-tick), so it stays
-        // smooth even if the fixed-tick loop below runs zero or many ticks this frame.
+        // With a screen open ProcessInput never runs, so nothing sampled the keyboard this frame.
+        // The player still has to tick (opening the inventory mid-fall must not leave you hanging
+        // in the air) - just with no movement intent.
+        if (!mInputSampledThisFrame)
+            mPendingInput = default;
+
+        // Advances continuously with real elapsed time, not per-tick, so it stays smooth regardless
+        // of the fixed-tick loop below. Also runs when connected - TimeUpdate (every 5s) only
+        // corrects drift now, since relying on it alone froze the clock between packets.
         mTimeOfDay += dt / DAY_LENGTH;
         if (mTimeOfDay >= 1f)
             mTimeOfDay -= 1f;
 
         // Everything in this loop runs at a fixed 20 Hz regardless of framerate (see
         // TickSystem). Order matters: entities tick before mob spawning (so newly-dead
-        // entities are removed before spawn caps are counted), world block/light updates
-        // happen before scheduled/random ticks (so e.g. water flow this tick sees freshly
-        // placed/removed blocks), and furnace ticking is last so it reflects this tick's
-        // world state.
+        // entities are removed before spawn caps are counted), chunk streaming happens before
+        // scheduled/random ticks (so those iterate this tick's resident set), and furnace
+        // ticking is last so it reflects this tick's world state.
         int ticks = mTickSystem.Accumulate(dt);
         for (int i = 0; i < ticks; i++)
         {
             mTickCount++;
+
+            // The player now simulates on the same 20 Hz clock as everything else. Every friction
+            // and gravity constant in Player is a per-tick multiplier, so this is the only rate at
+            // which they mean what they're supposed to.
+            mPlayer.Input = mPendingInput;
+            mPlayer.Tick(mWorld);
+
+            // The latched edges have been consumed; clear them so one press is one jump.
+            mPendingInput.JumpPressed = false;
+            mPendingInput.ToggleFly = false;
+
             mWorld.TickEntities();
-            mMobSpawner.Tick();
-            mWorld.Update();
+
+            // The server owns spawning; running this too would fill the world with mobs only
+            // this client can see.
+            if (mNetwork == null)
+                mMobSpawner.Tick();
+            mWorld.TickStreaming(mPlayer.Position);
+            SendLocalPosition();
+            SendHeldSlotIfChanged();
             mWorld.RandomDisplayUpdates(mPlayer.Position);
-            mWorld.DoScheduledTick();
-            mWorld.DoRandomTick();
+
+            // Fluids, gravity, growth and decay are the server's simulation; it sends the results
+            // as block changes. Running them here too would flow water the server never flowed.
+            if (mNetwork == null)
+            {
+                mWorld.DoScheduledTick();
+                mWorld.DoRandomTick();
+            }
             mRenderer.TickClouds();
-            BlockEntityManager.TickFurnaces();
+
+            if (mNetwork == null)
+                BlockEntityManager.TickFurnaces();
         }
+
+        // Light and mesh rebuilds are presentation, not simulation, so they run every frame. Inside
+        // the loop above they inherited the tick's 50 ms granularity, and on a frame that produced
+        // no tick at all a block you had just placed simply wasn't drawn yet.
+        mWorld.Update(mPlayer.Position);
+
+        // Camera placement, view bob and the FOV kick are presentation, so they run every frame and
+        // interpolate between the last two ticks - that partial-tick lerp is what lets a 20 Hz
+        // simulation still look smooth at 144 fps.
+        mPlayer.UpdateVisual(dt, mTickSystem.GetPartialTick());
 
         ParticleSystem.Update(dt, mWorld);
         ParticleSystem.UpdateSmoke(dt, mWorld);
@@ -1185,11 +1396,9 @@ public class Game : IDisposable
     // OnClose() before returning control to Playing.
     #region Game State
 
-    private void StartGame(int worldSize, int volumeSFX, int volumeMusic, int worldType = 0, int worldTheme = 0,
-        bool isCreative = false)
+    private void StartGame(int volumeSFX, int volumeMusic, int worldTheme = 0, bool isCreative = false)
     {
-        mNewWorldSize = worldSize;
-        mWorldGenSettings = WorldGenSettings.Build(worldType, worldTheme);
+        mWorldGenSettings = WorldGenSettings.Build(worldTheme);
         IsCreative = isCreative;
         mAudioManager.SfxVol = volumeSFX;
         mAudioManager.MusicVol = volumeMusic;
@@ -1298,7 +1507,7 @@ public class Game : IDisposable
         WorldEntitySerializer.Save(mWorld.Entities);
 
     private void LoadWorldEntities(List<SavedEntity> saved) =>
-        WorldEntitySerializer.Load(saved, mWorld, WorldTexture);
+        WorldEntitySerializer.Load(saved, mWorld);
 
     // Writes the current save to disk: only chunks flagged HasChunkBeenModified are
     // rewritten (unmodified chunks can always be regenerated identically from the seed, so
@@ -1306,17 +1515,14 @@ public class Game : IDisposable
     // entities, player state, inventory, paintings, and world entities via XML metadata.
     private void SaveWorldToDisk()
     {
+        // Only resident chunks - the streamer already saved any modified chunk it unloaded.
         int savedCount = 0;
-        for (int x = 0; x < mWorld.GetChunks().GetLength(0); x++)
+        foreach (var chunk in mWorld.LoadedChunks)
         {
-            for (int z = 0; z < mWorld.GetChunks().GetLength(1); z++)
+            if (chunk.HasChunkBeenModified)
             {
-                var tempChunk = mWorld.GetChunks()[x, z];
-                if (tempChunk.HasChunkBeenModified)
-                {
-                    Serialization.SaveChunk(tempChunk);
-                    savedCount++;
-                }
+                Serialization.SaveChunk(chunk);
+                savedCount++;
             }
         }
 
@@ -1381,11 +1587,262 @@ public class Game : IDisposable
 
     private void ReturnToMainMenu()
     {
+        // On a server the world isn't ours to save - drop the connection instead.
+        if (IsMultiplayer)
+        {
+            LeaveServer();
+            return;
+        }
+
         SaveWorldToDisk();
         TeardownWorld();
     }
 
     private void ReturnToMainMenuNoSave() => TeardownWorld();
+
+    #endregion
+
+    #region Networking
+
+    // `async void` is safe here: it's an event handler, and ConnectAsync reports failure as `false`
+    // rather than throwing.
+    private async void JoinServer(string address)
+    {
+        mConnectingScreen.ServerAddress = address;
+        mConnectingScreen.CurrentPhase = ConnectingScreen.Phase.Connecting;
+        CurrentState = GameState.Connecting;
+
+        var network = new ClientNetwork();
+        mConnecting = network;
+        mLoginComplete = false;
+
+        bool ok = await network.ConnectAsync(address, PlayerName);
+
+        // Cancel is on screen throughout the await; if it was used, this result is for a socket
+        // nobody wants any more.
+        if (!ReferenceEquals(mConnecting, network))
+        {
+            network.Disconnect();
+            return;
+        }
+
+        if (!ok)
+        {
+            mDisconnectedScreen.Reason = network.DisconnectReason ?? "Could not connect";
+            CurrentState = GameState.Disconnected;
+            mConnecting = null;
+            return;
+        }
+
+        mConnectingScreen.CurrentPhase = ConnectingScreen.Phase.DownloadingTerrain;
+
+        // Hand off rather than build here: everything past this point runs on a thread-pool thread,
+        // and the session needs the main thread (see BuildNetworkSession).
+        mLoginComplete = true;
+    }
+
+    // The multiplayer counterpart of InitWorld: an empty world fed by packets, and just enough
+    // session state for the renderer. No terrain generation, no saved data, no structures.
+    //
+    // MAIN THREAD ONLY. PlayerArm and Hotbar create GL objects (VAOs, shaders, textures), and the
+    // GL context belongs to the main thread - building them on JoinServer's continuation silently
+    // produces dead handles.
+    private void BuildNetworkSession(ClientNetwork network)
+    {
+        // Captured out of the factory because World owns the source but the packet handlers need it.
+        // The factory form is required: the source needs the World that doesn't exist until the
+        // constructor returns.
+        NetworkChunkSource? source = null;
+        mWorld = new World(seed: 0, settings: default, w => source = new NetworkChunkSource(w));
+        mChunkSource = source;
+        mWorld.Streamer.ChunkIntegrated = OnChunkIntegrated;
+
+        mPlayer = new Player(Vector3.Zero, mWindow.Size.X / (float)mWindow.Size.Y);
+        mPlayer.AssignNetworkId(network.LocalEntityId);
+
+        mWorld.Players.Clear();
+        mWorld.Players.Add(mPlayer);
+
+        mPlayerArm = new PlayerArm(WorldTexture, ItemTexture, "Resources/world.png", "Resources/Items.png");
+        mInventory = new PlayerInventory();
+        mHotbar = new Hotbar(mBlockIconRenderer, ItemTexture, mInventory);
+        mPlayer.SelectedBlock = mHotbar.GetSelectedBlock() ?? BlockType.Grass;
+
+        // Constructed so the debug spawn key doesn't NRE; its Tick is skipped in multiplayer.
+        mMobSpawner = new MobSpawner(mWorld, mGameRandom);
+
+        // Audio. StartGame does this for singleplayer, and AudioManager's volumes default to 0,
+        // so without it every sound in a multiplayer session plays silently.
+        mAudioManager.SfxVol = mMainMenuScreen.SfxVolume;
+        mAudioManager.MusicVol = mMainMenuScreen.MusicVolume;
+        mAudioManager.PlayBackgroundMusic();
+
+        // InitWorld's wiring - block and footstep sounds go through this callback.
+        Entity.PlayStepSoundCallback = mAudioManager.PlayBlockContactSound;
+
+        mChatScreen.Clear();
+        mDeferredBlocks.Clear();
+        mDeferredBlockCount = 0;
+        ClearRemotePlayers();
+        HookLocalBlockEdits();
+        mPlayer.ServerOwnsHealth = true;
+        mWorld.ServerDrivenBlockTicks = true;
+
+        mRenderer.SetSession(mWorld, mPlayer, mTickSystem, mPlayerArm, mHotbar, mHudScreen);
+    }
+
+    // Draining on the MAIN thread is what lets handlers touch the world without locking.
+    private void PumpNetwork()
+    {
+        if (mNetwork == null)
+            return;
+
+        // mNetwork is only non-null once the session is fully built, so no null-checking here.
+        while (mNetwork.Inbox.TryDequeue(out var packet))
+            HandleServerPacket(packet);
+
+        // A dropped socket arrives as Connected going false, not as a packet, so it must be polled.
+        if (!mNetwork.Connected && CurrentState is GameState.Playing or GameState.Connecting)
+        {
+            mDisconnectedScreen.Reason = mNetwork.DisconnectReason ?? "Connection lost";
+            CurrentState = GameState.Disconnected;
+            mNetwork = null;
+        }
+    }
+
+    // Stage 5 handles almost nothing; later stages add cases here (chunks 6, entities 7, chat 8).
+    private void HandleServerPacket(Packet packet)
+    {
+        var r = packet.OpenBody();
+
+        switch (packet.Id)
+        {
+            case PacketId.KeepAlive:
+                mNetwork!.Send(PacketId.KeepAlive, _ => { });   // beta echoes it straight back
+                break;
+
+            case PacketId.DisconnectKick:
+                mDisconnectedScreen.Reason = r.ReadString();
+                CurrentState = GameState.Disconnected;
+                mNetwork = null;
+                break;
+
+            // Beta allocated a chunk before sending its data. We only care about the drop case;
+            // the allocate is implied by the MapChunk that follows.
+            case PacketId.PreChunk:
+            {
+                int chunkX = r.ReadInt();
+                int chunkZ = r.ReadInt();
+                if (!r.ReadBool())
+                    mChunkSource?.OnChunkUnload(chunkX, chunkZ);
+                break;
+            }
+
+            case PacketId.MapChunk:
+            {
+                int blockX = r.ReadInt();
+                r.ReadShort();                                  // y - always 0, we send whole columns
+                int blockZ = r.ReadInt();
+                r.ReadByte(); r.ReadByte(); r.ReadByte();        // size-1 fields, fixed for us
+                var blob = r.ReadBytes(r.ReadInt());
+
+                // >> 4 not / 16: the shift floors toward negative infinity, which negative chunk
+                // coordinates need.
+                mChunkSource?.OnMapChunk(blockX >> 4, blockZ >> 4, blob);
+                break;
+            }
+
+            // Sent once during login. Without it the player sits at (0,0,0), inside the ground.
+            case PacketId.PlayerPositionLook:
+            {
+                float x = (float)r.ReadDouble();
+                r.ReadDouble();                                 // stance (eye height)
+                float y = (float)r.ReadDouble();
+                float z = (float)r.ReadDouble();
+                float yaw = r.ReadFloat();
+                float pitch = r.ReadFloat();
+
+                mPlayer.Position = new Vector3(x, y, z);
+                mPlayer.Velocity = Vector3.Zero;                // or you respawn still falling
+                mPlayer.Camera.SetRotation(pitch, yaw);
+                break;
+            }
+
+            case PacketId.NamedEntitySpawn:   OnNamedEntitySpawn(r); break;
+            case PacketId.EntityTeleport:     OnEntityTeleport(r); break;
+            case PacketId.EntityRelativeMove: OnEntityRelativeMove(r, withLook: false); break;
+            case PacketId.EntityLookRelMove:  OnEntityRelativeMove(r, withLook: true); break;
+            case PacketId.EntityLook:         OnEntityLook(r); break;
+            case PacketId.DestroyEntity:      OnDestroyEntity(r); break;
+            case PacketId.Animation:          OnEntityAnimation(r); break;
+            case PacketId.EntityEquipment:    OnEntityEquipment(r); break;
+            case PacketId.ChatMessage:        OnChatMessage(r); break;
+            case PacketId.OpenWindow:         OnOpenWindow(r); break;
+            case PacketId.WindowItems:        OnWindowItems(r); break;
+            case PacketId.SetSlot:            OnSetSlot(r); break;
+            case PacketId.UpdateProgressBar:  OnProgressBar(r); break;
+            case PacketId.BlockChange:        OnBlockChange(r); break;
+            case PacketId.MultiBlockChange:   OnMultiBlockChange(r); break;
+            case PacketId.TimeUpdate:         OnTimeUpdate(r); break;
+            case PacketId.SoundEffect:        OnSoundEffect(r); break;
+            case PacketId.UpdateHealth:       OnUpdateHealth(r); break;
+            case PacketId.Respawn:            OnRespawn(r); break;
+            case PacketId.EntityVelocity:     OnEntityVelocity(r); break;
+            case PacketId.MobSpawn:           OnMobSpawn(r); break;
+            case PacketId.AddObject:          OnAddObject(r); break;
+            case PacketId.EntityPainting:     OnEntityPainting(r); break;
+            case PacketId.PickupSpawn:        OnPickupSpawn(r); break;
+            case PacketId.CollectItem:        OnCollectItem(r); break;
+
+            // Safe to ignore only here: PacketLayout already consumed the packet's exact bytes off
+            // the socket, so the stream is still aligned.
+            default:
+                break;
+        }
+    }
+
+    // UpdateGameLogic doesn't run while Connecting, so nothing would tick the streamer and the
+    // chunks the server is sending would sit in the source's queue forever.
+    private void PumpArrivingChunks()
+    {
+        // Login finished on the connect thread; the session gets built here, where GL works.
+        if (mLoginComplete && mConnecting is { } ready)
+        {
+            mLoginComplete = false;
+            mConnecting = null;
+
+            BuildNetworkSession(ready);
+            mNetwork = ready;          // only now does PumpNetwork treat it as live
+        }
+
+        if (mWorld == null || mPlayer == null)
+            return;
+
+        mWorld.TickStreaming(mPlayer.Position);
+        mWorld.Update(mPlayer.Position);
+
+        // Start playing once the ground under our feet exists; the rest streams in around us.
+        var here = ChunkMath.ToChunkCoord(mPlayer.Position);
+        if (mWorld.Streamer.GetChunk(here.X, here.Z) != null)
+        {
+            CurrentState = GameState.Playing;
+            SetCursorGrabbed(true);
+        }
+    }
+
+    // TeardownWorld is null-safe on mWorld, so this works before Stage 6 makes one and after.
+    private void LeaveServer()
+    {
+        // Both, because Cancel can land while a connect is still in flight.
+        mConnecting?.Disconnect();
+        mNetwork?.Disconnect();
+        mConnecting = null;
+        mNetwork = null;
+        mLoginComplete = false;
+        mChunkSource = null;
+
+        TeardownWorld();
+    }
 
     #endregion
 }

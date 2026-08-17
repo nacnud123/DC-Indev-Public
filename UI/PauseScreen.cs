@@ -59,15 +59,18 @@ public class PauseScreen
 
         ImGui.PopFont();
 
-        // Buttons — 3 stacked vertically, each buttonHeight + buttonSpacing apart from the last
+        // Buttons stacked vertically, each buttonHeight + buttonSpacing apart from the last.
+        // Save Game is singleplayer-only (the server owns the world in multiplayer), so the
+        // row index is tracked rather than hard-coded.
         var buttonWidth = 180f;
         var buttonHeight = 40f;
         var buttonSpacing = 12f;
         var buttonX = centerX - buttonWidth * 0.5f;
         var buttonY = centerY - 10f;
+        var row = 0;
 
         // Resume button
-        ImGui.SetCursorPos(new Vector2(buttonX, buttonY));
+        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * row++));
         if (ImGui.Button("Resume Game", new Vector2(buttonWidth, buttonHeight)))
         {
             Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
@@ -75,16 +78,19 @@ public class PauseScreen
         }
 
         // Save Game button
-        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + buttonHeight + buttonSpacing));
-        if (ImGui.Button("Save Game", new Vector2(buttonWidth, buttonHeight)))
+        if (!Game.Instance.IsMultiplayer)
         {
-            Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
-            OnSaveGame?.Invoke();
+            ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * row++));
+            if (ImGui.Button("Save Game", new Vector2(buttonWidth, buttonHeight)))
+            {
+                Game.Instance.AudioManager.PlayAudio("Resources/Audio/UI/Click1.ogg", Game.Instance.AudioManager.SfxVol, false);
+                OnSaveGame?.Invoke();
+            }
         }
 
         // Quit button - styled red/destructive via pushed Button/Hovered/Active colors,
         // popped together below (PopStyleColor(3)) once the button is drawn.
-        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * 2f));
+        ImGui.SetCursorPos(new Vector2(buttonX, buttonY + (buttonHeight + buttonSpacing) * row++));
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.9f, 0.3f, 0.3f, 1.0f));
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.7f, 0.1f, 0.1f, 1.0f));
